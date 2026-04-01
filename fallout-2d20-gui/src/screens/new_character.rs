@@ -44,12 +44,10 @@ pub struct NewCharacterState {
 
 impl NewCharacterState {
     pub fn has_gifted_trait(&self) -> bool {
-        for (i, t) in self.traits.iter().enumerate() {
-            if t.name.eq_ignore_ascii_case("Gifted") {
-                return true;
-            }
-        }
-        false
+        self.traits.iter().enumerate().any(|(i, t)| {
+            t.name.eq_ignore_ascii_case("Gifted")
+                && self.selected_traits.get(i).copied().unwrap_or(false)
+        })
     }
     pub fn mutant_type(&self) -> MutantType {
         if self.origins.is_empty() { return MutantType::None; }

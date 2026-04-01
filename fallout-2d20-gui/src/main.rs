@@ -308,11 +308,11 @@ fn main() -> Result<()> {
             ui.separator();
             ui.spacing();
 
-            ui.text("Fallout 2d20 Character Manager");
+            ui.text("fallout 2d20 character manager");
             ui.spacing();
             render_text_wrapped(true, false, ui, "v0.1.3", 16.0, aw - 32.0);
             ui.spacing();
-            ui.text_wrapped("A character creation and management tool for the Fallout 2D20 tabletop RPG system.");
+            ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
             ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
             ui.spacing();
             ui.separator();
@@ -329,7 +329,7 @@ fn main() -> Result<()> {
             AppScreen::NewCharacter => {
                 let state = new_char_state.get_or_insert_with(|| NewCharacterState::load(&db));
                 render_new_character(&ui, &window, state, &mut screen, &db);
-                if screen != AppScreen::NewCharacter {
+                if screen == AppScreen::MainMenu {
                     new_char_state = None;
                 }
             }
@@ -350,6 +350,14 @@ fn main() -> Result<()> {
                 let state = special_state.get_or_insert_with(|| {
                     SpecialState::new(is_gifted, mutant_type)
                 });
+
+                state.is_gifted = is_gifted;
+                state.mutant_type = mutant_type;
+
+                if !is_gifted {
+                    state.gifted_selected = [false; 7];
+                }
+
                 render_special(&ui, &window, state, &mut screen);
                 if screen != AppScreen::Special {
                     special_state = None;
