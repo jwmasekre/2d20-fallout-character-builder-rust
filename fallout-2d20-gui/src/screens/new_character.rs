@@ -247,7 +247,7 @@ fn build_origin_labels(origins: &[OriginRow]) -> (Vec<String>, Vec<Option<usize>
     for (i, origin) in origins.iter().enumerate() {
         if origin.sourcebook != current_book {
             current_book = origin.sourcebook.clone();
-            labels.push(format!("── {} ──", current_book));
+            labels.push(format!("-- {} --", current_book));
             label_map.push(None); // header — not selectable
         }
         labels.push(format!("  {}", origin.name));

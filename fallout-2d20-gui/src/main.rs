@@ -166,7 +166,7 @@ fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScr
             imgui::Condition::Always,
         )
         .build(|| {
-            ui.text(format!("{} — coming soon", title));
+            ui.text(format!("{} -- coming soon", title));
             ui.spacing();
             ui.separator();
             ui.spacing();
