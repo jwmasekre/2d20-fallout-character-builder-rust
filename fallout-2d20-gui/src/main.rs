@@ -14,6 +14,9 @@ use glow::HasContext;
 use screens::main_menu::render_main_menu;
 use screens::new_character::{NewCharacterState, render_new_character};
 use screens::special::{ render_special, SpecialState, MutantType };
+use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
+
+use crate::screens::new_character::render_text_wrapped;
 
 struct Theme {
     name: &'static str,
@@ -147,6 +150,7 @@ enum AppScreen {
     LoadCharacter,
     ImportCharacter,
     Special,
+    Skills,
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -164,7 +168,7 @@ fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScr
             imgui::Condition::Always,
         )
         .build(|| {
-            ui.text(format!("{} — coming soon", title));
+            ui.text(format!("{} -- coming soon", title));
             ui.spacing();
             ui.separator();
             ui.spacing();
@@ -217,8 +221,10 @@ fn main() -> Result<()> {
     
     let mut pending_theme: Option<usize> = Some(0);
 
+    let mut show_about = false;
     let mut new_char_state: Option<NewCharacterState> = None;
     let mut special_state: Option<SpecialState> = None;
+    let mut skills_state: Option<SkillsState> = None;
     
     let db_path = config::db_path();
     std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -263,7 +269,60 @@ fn main() -> Result<()> {
                         ui.same_line();
                     }
                 }
+                // About button, right-aligned
+                let button_w = 60.0_f32;
+                let button_x = win_w as f32 - button_w - 8.0;
+                ui.set_cursor_pos([button_x, 4.0]);
+                if ui.button("About") {
+                    show_about = true; // open or re-center
+                }
             });
+
+        if show_about {
+    let (win_w, win_h) = window.size();
+    let aw = 400.0_f32;
+    let ah = 220.0_f32;
+    let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
+
+    // Only force position when first opened or re-centered (not every frame)
+    let condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
+        imgui::Condition::Appearing
+    } else {
+        imgui::Condition::Appearing
+    };
+
+    ui.window("##about")
+        .title_bar(false)
+        .resizable(false)
+        .movable(true)          // draggable
+        .collapsible(false)
+        .size([aw, ah], imgui::Condition::Always)
+        .position(center, imgui::Condition::Once) // Once = only set pos on first appear
+        //.bring_current_window_to_display_front()  // always on top
+        .bring_to_front_on_focus(true)
+        .build(|| {
+            // Title row with X button
+            let close_x = aw - 28.0;
+            ui.text("About");
+            ui.same_line_with_pos(close_x);
+            if ui.button("X##about_close") {
+                show_about = false;
+            }
+            ui.separator();
+            ui.spacing();
+
+            ui.text("fallout 2d20 character manager");
+            ui.spacing();
+            render_text_wrapped(true, false, ui, "v0.1.4, 20260401", 16.0, aw - 32.0);
+            ui.spacing();
+            ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
+            ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+            render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0, aw - 32.0);
+        });
+}
 
         // ── Screen content (offset below the bar) ────────────────────────────────────
         match screen {
@@ -273,7 +332,7 @@ fn main() -> Result<()> {
             AppScreen::NewCharacter => {
                 let state = new_char_state.get_or_insert_with(|| NewCharacterState::load(&db));
                 render_new_character(&ui, &window, state, &mut screen, &db);
-                if screen != AppScreen::NewCharacter {
+                if screen == AppScreen::MainMenu {
                     new_char_state = None;
                 }
             }
@@ -294,9 +353,43 @@ fn main() -> Result<()> {
                 let state = special_state.get_or_insert_with(|| {
                     SpecialState::new(is_gifted, mutant_type)
                 });
+
+                state.is_gifted = is_gifted;
+                state.mutant_type = mutant_type;
+
+                if !is_gifted {
+                    state.gifted_selected = [false; 7];
+                }
+
                 render_special(&ui, &window, state, &mut screen);
-                if screen != AppScreen::Special {
+                if screen == AppScreen::MainMenu {
                     special_state = None;
+                }
+            }
+            AppScreen::Skills => {
+                // Sync intelligence from completed SPECIAL state
+                let intelligence = special_state
+                    .as_ref()
+                    .map(|s| s.display_value(crate::screens::special::I))
+                    .unwrap_or(5);
+                let level = new_char_state.as_ref().map(|s| s.level).unwrap_or(1);
+
+                let state = skills_state.get_or_insert_with(|| {
+                    SkillsState::new(intelligence, level)
+                });
+
+                // Sync trait effects each frame
+                if let Some(nc) = &new_char_state {
+                    let selected_ids: Vec<i32> = nc.traits.iter().enumerate()
+                        .filter(|(i, _)| nc.selected_traits.get(*i).copied().unwrap_or(false))
+                        .map(|(_, t)| t.id as i32)
+                        .collect();
+                    sync_trait_effects(state, &selected_ids, nc.is_ghoul);
+                }
+
+                render_skills(&ui, &window, state, &mut screen);
+                if screen == AppScreen::MainMenu {
+                    skills_state = None;
                 }
             }
         }

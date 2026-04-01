@@ -44,12 +44,10 @@ pub struct NewCharacterState {
 
 impl NewCharacterState {
     pub fn has_gifted_trait(&self) -> bool {
-        for (i, t) in self.traits.iter().enumerate() {
-            if t.name.eq_ignore_ascii_case("Gifted") {
-                return true;
-            }
-        }
-        false
+        self.traits.iter().enumerate().any(|(i, t)| {
+            t.name.eq_ignore_ascii_case("Gifted")
+                && self.selected_traits.get(i).copied().unwrap_or(false)
+        })
     }
     pub fn mutant_type(&self) -> MutantType {
         if self.origins.is_empty() { return MutantType::None; }
@@ -249,7 +247,7 @@ fn build_origin_labels(origins: &[OriginRow]) -> (Vec<String>, Vec<Option<usize>
     for (i, origin) in origins.iter().enumerate() {
         if origin.sourcebook != current_book {
             current_book = origin.sourcebook.clone();
-            labels.push(format!("── {} ──", current_book));
+            labels.push(format!("-- {} --", current_book));
             label_map.push(None); // header — not selectable
         }
         labels.push(format!("  {}", origin.name));

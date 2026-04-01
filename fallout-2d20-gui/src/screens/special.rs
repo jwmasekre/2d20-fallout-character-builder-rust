@@ -44,13 +44,13 @@ pub enum MutantType {
 }
 
 // ── SPECIAL stat indices
-const S: usize = 0; // Strength
-const P: usize = 1; // Perception
-const E: usize = 2; // Endurance
-const C: usize = 3; // Charisma
-const I: usize = 4; // Intelligence
-const A: usize = 5; // Agility
-const L: usize = 6; // Luck
+pub const S: usize = 0; // Strength
+pub const P: usize = 1; // Perception
+pub const E: usize = 2; // Endurance
+pub const C: usize = 3; // Charisma
+pub const I: usize = 4; // Intelligence
+pub const A: usize = 5; // Agility
+pub const L: usize = 6; // Luck
 
 const STAT_LABELS: [&str; 7] = [
     "Strength", "Perception", "Endurance",
@@ -185,12 +185,10 @@ pub fn render_special(
     ui.spacing();
 
     // ── Array selector ────────────────────────────────────────────
-    ui.text("Array:");
+    ui.text("Select Array:");
     ui.same_line();
     ui.set_next_item_width(260.0);
-    //let current_label = state.selected_array.label();
     if let Some(_cb) = ui.begin_combo("##array_select", state.selected_array.label()) {
-        //ui.text("COMBO BOX OPEN");
         for variant in [
             SpecialArray::Balanced,
             SpecialArray::Focused,
@@ -198,12 +196,8 @@ pub fn render_special(
             SpecialArray::Custom,
         ] {
             let selected = state.selected_array == variant;
-            let clicked = ui.selectable_config(variant.label()).selected(selected).build();
-            ui.same_line();
-            //ui.text(if clicked { "CLICKED" } else { "." });
-            //let item_id = format!("{}##arr_{:?}", variant.label(), variant);
-            //if ui.selectable_config(variant.label()).selected(selected).build() {
-            if clicked {
+
+            if ui.selectable_config(variant.label()).selected(selected).build() {
                 state.selected_array = variant;
                 // Reset assignments when switching arrays
                 state.preset_assignments = [None; 7];
@@ -219,7 +213,7 @@ pub fn render_special(
 
     if state.selected_array == SpecialArray::None {
         ui.text_disabled("Select an array to continue.");
-        render_footer(ui, h, screen);
+        render_footer(ui, h, screen, false);
         return;
     }
 
@@ -248,7 +242,12 @@ pub fn render_special(
         _ => render_preset_stats(ui, state, label_w, val_w, w),
     }
 
-    render_footer(ui, h, screen);
+    let special_complete = match state.selected_array {
+        SpecialArray::None => false,
+        SpecialArray::Custom => state.remaining_points() == 0,
+        _ => state.preset_assignments.iter().all(|v| v.is_some()),
+    };
+    render_footer(ui, h, screen, special_complete);
 
     /*
     ui.window("##special")
@@ -391,12 +390,12 @@ fn render_custom_stats(
         let mod_val = state.modifier(si);
         let mod_state = mod_val > 0;
         
-        render_text_wrapped(!mod_state, mod_state, ui, &format!("→ {} (+{})", display, mod_val), label_w, label_w + val_w);
+        render_text_wrapped(!mod_state, mod_state, ui, &format!("-> {} (+{})", display, mod_val), label_w, label_w + win_w);
 
         // Cap warning
         if display > max {
             ui.same_line();
-            render_text_wrapped(true, false, ui, &format!("[cap: {}]", max), label_w, label_w + val_w);
+            render_text_wrapped(true, false, ui, &format!("[cap: {}]", max), label_w, label_w + win_w);
         }
 
         ui.spacing();
@@ -426,7 +425,7 @@ fn render_preset_stats(
         .collect();
 
     // Instruction
-    render_text_wrapped(true, false, ui, "Assign each value to a SPECIAL stat:", label_w, label_w + _val_w);
+    ui.text_disabled("Assign each value to a SPECIAL stat:");
     ui.spacing();
 
     // Available values pool (sorted descending, show counts)
@@ -440,7 +439,7 @@ fn render_preset_stats(
         let remaining = total_count - used_count;
         if remaining > 0 {
             ui.same_line();
-            render_text_wrapped(false, true, ui, &format!("[{}]", v), label_w, label_w + _val_w);
+            render_text_wrapped(false, true, ui, &format!("[{}]", v), label_w, label_w + _win_w);
         }
     }
     ui.spacing();
@@ -516,9 +515,9 @@ fn render_preset_stats(
 
         if assigned.is_some() {
             let mod_state = mod_val > 0;
-            render_text_wrapped(!mod_state, mod_state, ui, &format!("→ {} (+{})", display, mod_val), label_w, label_w + _val_w);
+            render_text_wrapped(!mod_state, mod_state, ui, &format!("-> {} (+{})", display, mod_val), label_w, label_w + _win_w);
         } else {
-            ui.text_disabled("→ ?");
+            ui.text_disabled("-> ?");
         }
 
         ui.spacing();
@@ -528,20 +527,22 @@ fn render_preset_stats(
     let all_assigned = state.preset_assignments.iter().all(|v| v.is_some());
     if !all_assigned {
         ui.spacing();
-        render_text_wrapped(true, false, ui, "Assign all 7 stats to continue.", label_w, label_w + _val_w);
+        ui.text_disabled("Assign all 7 stats to continue.");
     }
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 
-fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen) {
+// In render_footer for special.rs, pass validation state:
+fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, special_complete: bool) {
     let footer_y = win_h - 48.0;
     ui.set_cursor_pos([16.0, footer_y]);
     if ui.button("< Back") {
         *screen = AppScreen::NewCharacter;
     }
     ui.same_line();
+    let _g = (!special_complete).then(|| ui.begin_disabled(true));
     if ui.button("Next >") {
-        // TODO: advance to next step
+        *screen = AppScreen::Skills;
     }
 }
