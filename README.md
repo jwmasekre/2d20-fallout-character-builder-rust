@@ -9,10 +9,10 @@ this project isn't even remotely close to functional, if you can't tell what's g
 ## roadmap
 
 * 0.1 - base functionality development
-    ~~* 0.1.0 - initial setup~~
-        ~~* 0.1.1 - themes, main menu, db setup (postgres -> sqlite)~~
-        ~~* 0.1.2 - new_character page (origin/trait select)~~
-        ~~* 0.1.3 - special stat assignment~~ **<- YOU ARE HERE**
+    * ~~0.1.0 - initial setup~~
+        * ~~0.1.1 - themes, main menu, db setup (postgres -> sqlite)~~
+        * ~~0.1.2 - new_character page (origin/trait select)~~
+        * ~~0.1.3 - special stat assignment~~ `<- YOU ARE HERE`
         * ...
     * 0.2.0 - full character build pages/logic
     * 0.3.0 - view character sheet, character saving, loading, importing, exporting
