@@ -185,7 +185,7 @@ pub fn render_special(
     ui.spacing();
 
     // ── Array selector ────────────────────────────────────────────
-    ui.text("Array:");
+    ui.text("Select Array:");
     ui.same_line();
     ui.set_next_item_width(260.0);
     if let Some(_cb) = ui.begin_combo("##array_select", state.selected_array.label()) {
