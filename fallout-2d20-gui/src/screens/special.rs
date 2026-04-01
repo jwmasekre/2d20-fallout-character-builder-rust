@@ -420,7 +420,7 @@ fn render_preset_stats(
         .collect();
 
     // Instruction
-    render_text_wrapped(true, false, ui, "Assign each value to a SPECIAL stat:", label_w, label_w + _val_w);
+    ui.text_disabled("Assign each value to a SPECIAL stat:");
     ui.spacing();
 
     // Available values pool (sorted descending, show counts)
@@ -434,7 +434,7 @@ fn render_preset_stats(
         let remaining = total_count - used_count;
         if remaining > 0 {
             ui.same_line();
-            render_text_wrapped(false, true, ui, &format!("[{}]", v), label_w, label_w + _val_w);
+            render_text_wrapped(false, true, ui, &format!("[{}]", v), label_w, label_w + _win_w);
         }
     }
     ui.spacing();
@@ -510,7 +510,7 @@ fn render_preset_stats(
 
         if assigned.is_some() {
             let mod_state = mod_val > 0;
-            render_text_wrapped(!mod_state, mod_state, ui, &format!("-> {} (+{})", display, mod_val), label_w, label_w + _val_w);
+            render_text_wrapped(!mod_state, mod_state, ui, &format!("-> {} (+{})", display, mod_val), label_w, label_w + _win_w);
         } else {
             ui.text_disabled("-> ?");
         }
@@ -522,7 +522,7 @@ fn render_preset_stats(
     let all_assigned = state.preset_assignments.iter().all(|v| v.is_some());
     if !all_assigned {
         ui.spacing();
-        render_text_wrapped(true, false, ui, "Assign all 7 stats to continue.", label_w, label_w + _val_w);
+        ui.text_disabled("Assign all 7 stats to continue.");
     }
 }
 
