@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT t.id, ot.origin_id, t.name, t.description,\n                ot.is_ghoul_trait\n            FROM origin_traits ot\n            JOIN traits t ON t.id = ot.trait_id\n            WHERE ot.origin_id = ?\n            ORDER BY ot.is_ghoul_trait, t.name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "origin_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_ghoul_trait",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "19b8bdc614ff32dc23c73a07c3c03bc04ae5d9a4345394de1f6282c364f1e643"
+}

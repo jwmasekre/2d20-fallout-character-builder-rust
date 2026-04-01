@@ -1,0 +1,11 @@
+[package]
+name = "fallout-2d20-core"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+sqlx = { version = "0.8.6", feature = ["sqlite"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"
+toml = "0.8"

@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT o.id, o.name, o.description, o.can_ghoul,\n                s.name AS sourcebook\n            FROM origins o\n            JOIN sourcebooks s ON s.id = o.sourcebook_id\n            ORDER BY s.id, o.name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "can_ghoul",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "sourcebook",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "93143fc4b30cc7fdbacaa6a457fb2954db0beb2c86855227f84d255e494b8421"
+}

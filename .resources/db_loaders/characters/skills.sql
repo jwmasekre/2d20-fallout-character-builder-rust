@@ -1,0 +1,18 @@
+INSERT INTO skills (name, special, examples, description) VALUES
+('Athletics','1','Lifting, pushing, pulling, jumping, running, and swimming','Athletics describes your ability to apply your physical strength and agility, know you rlimits, but also how to focus during physical exertion'),
+('Barter','4','Buying and selling','Barter describes your skill with money: how savvy you are with your wealth, how easily you can make deals, or how easily you can negotiate someone down on price'),
+('Big Guns','3','Using heavy weapons such as miniguns, Fat Mans, gatling lasers, and gauss weapons','Big Guns is the skill that describes the training to use large weapons, from Fat Mans to gatling lasers, and everything in between'),
+('Energy Weapons','2','Using energy weapons such as laser guns, plasma guns, and gauss weapons','Energy Weapons is the skill to use any time you fire energy-base firearms like laser guns, plasma guns, gauss weaponry, and any other small arm that fires a bolt of energy'),
+('Explosives','2','Blowing things up, or stopping them from doing that','Whether you throw them, place them as a trap, or remotely detonate them, you use the Explosives skill with any kind of explosive device'),
+('Lockpick','2','Opening locks without the key','The Lockpick skill reflects your knowledge of manipulating physical locks and opening them without a key'),
+('Medicine','5','Healing people and stabilizing the dying','Medicine is the skill that covers all medical application and knowledge, from first aid to pharmacology, surgery, and healing radiation poisoning'),
+('Melee Weapons','1','Fighting people with bats, clubs, knives, boards, wrenches, and sledges','the Melee Weapons skill describes how able you are to inflict damage and deflect blows with one-handed and two-handed melee weapons'),
+('Pilot','2','Flying and driving','The pilot skill covers your ability to operate vehicles, from buggies and motorcycles to Vertibirds and tanks'),
+('Repair','5','Fixing stuff, crafting things, and building machines','Building and repairing items, from guns to buildings, simple traps to complex mechanisms, fall under the Repair skill'),
+('Science','5','Hacking, programming, and brewing chems','The Science skill covers academic and practical knoweldge, but is practically applied in the wasateland through computer coding, robotic programming, and brewing chems'),
+('Small Guns','6','Shooting people with pistols, rifles, and shotguns','The Small Guns skill describes your accuracy and working knowledge of single-shot and automatic pistols, rifles, and shotguns'),
+('Sneak','6','Moving quietly and staying hidden','The Sneak skill covers stealthy movement and any physical actions you take not to be noticed'),
+('Speech','4','Making friends, influencing people, and lying to them if you have to','The Speech skill covers the techniques you’ve learned to communicate with other people, convincing them with strong arguments, or lying to them and not getting caught'),
+('Survival','3','Foraging, hunting, cooking, and enduring the wastes','The Survival skill covers all manner of practical bush craft, like hunting, foraging, fishing, building makeshift shelters, and lighting fires'),
+('Throwing','6','Launching weapons from your hands, like spears or knives','The Throwing skill describes your ability to effectively make attacks with thrown weapons like javelins, knives, and improvised weapons'),
+('Unarmed','1','Fighting without a weapon by making unarmed attacks','The Unarmed skill covers your ability to fight with your fists');

@@ -1,0 +1,1 @@
+INSERT INTO players (username, auth) VALUES ('public','none');

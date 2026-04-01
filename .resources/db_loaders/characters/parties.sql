@@ -1,0 +1,1 @@
+INSERT INTO parties (name,ap_players,ap_gm) VALUES ('test','0','0');

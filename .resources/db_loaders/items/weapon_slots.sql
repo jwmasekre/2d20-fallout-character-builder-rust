@@ -1,0 +1,16 @@
+INSERT INTO weapon_slots (name) VALUES
+('Receiver'),
+('Barrel'),
+('Stock'),
+('Grip'),
+('Magazine'),
+('Sights'),
+('Muzzle'),
+('Capacitors'),
+('Dish'),
+('Fuel'),
+('Tank'),
+('Nozzle'),
+('Blade'),
+('Blunt'),
+('Frame');

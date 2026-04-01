@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "fallout-2d20-core",
+    "fallout-2d20-gui",
+]
+resolver = "2"
