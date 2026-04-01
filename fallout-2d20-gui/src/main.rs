@@ -15,6 +15,8 @@ use screens::main_menu::render_main_menu;
 use screens::new_character::{NewCharacterState, render_new_character};
 use screens::special::{ render_special, SpecialState, MutantType };
 
+use crate::screens::new_character::render_text_wrapped;
+
 struct Theme {
     name: &'static str,
     text: [f32; 4],
@@ -217,6 +219,7 @@ fn main() -> Result<()> {
     
     let mut pending_theme: Option<usize> = Some(0);
 
+    let mut show_about = false;
     let mut new_char_state: Option<NewCharacterState> = None;
     let mut special_state: Option<SpecialState> = None;
     
@@ -263,7 +266,60 @@ fn main() -> Result<()> {
                         ui.same_line();
                     }
                 }
+                // About button, right-aligned
+                let button_w = 60.0_f32;
+                let button_x = win_w as f32 - button_w - 8.0;
+                ui.set_cursor_pos([button_x, 4.0]);
+                if ui.button("About") {
+                    show_about = true; // open or re-center
+                }
             });
+
+        if show_about {
+    let (win_w, win_h) = window.size();
+    let aw = 400.0_f32;
+    let ah = 220.0_f32;
+    let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
+
+    // Only force position when first opened or re-centered (not every frame)
+    let condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
+        imgui::Condition::Appearing
+    } else {
+        imgui::Condition::Appearing
+    };
+
+    ui.window("##about")
+        .title_bar(false)
+        .resizable(false)
+        .movable(true)          // draggable
+        .collapsible(false)
+        .size([aw, ah], imgui::Condition::Always)
+        .position(center, imgui::Condition::Once) // Once = only set pos on first appear
+        //.bring_current_window_to_display_front()  // always on top
+        .bring_to_front_on_focus(true)
+        .build(|| {
+            // Title row with X button
+            let close_x = aw - 28.0;
+            ui.text("About");
+            ui.same_line_with_pos(close_x);
+            if ui.button("X##about_close") {
+                show_about = false;
+            }
+            ui.separator();
+            ui.spacing();
+
+            ui.text("Fallout 2d20 Character Manager");
+            ui.spacing();
+            render_text_wrapped(true, false, ui, "v0.1.3", 16.0, aw - 32.0);
+            ui.spacing();
+            ui.text_wrapped("A character creation and management tool for the Fallout 2D20 tabletop RPG system.");
+            ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+            render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0, aw - 32.0);
+        });
+}
 
         // ── Screen content (offset below the bar) ────────────────────────────────────
         match screen {
