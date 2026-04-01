@@ -510,9 +510,9 @@ fn render_preset_stats(
 
         if assigned.is_some() {
             let mod_state = mod_val > 0;
-            render_text_wrapped(!mod_state, mod_state, ui, &format!("→ {} (+{})", display, mod_val), label_w, label_w + _val_w);
+            render_text_wrapped(!mod_state, mod_state, ui, &format!("-> {} (+{})", display, mod_val), label_w, label_w + _val_w);
         } else {
-            ui.text_disabled("→ ?");
+            ui.text_disabled("-> ?");
         }
 
         ui.spacing();
