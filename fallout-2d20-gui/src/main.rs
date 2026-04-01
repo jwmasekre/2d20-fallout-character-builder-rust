@@ -14,6 +14,7 @@ use glow::HasContext;
 use screens::main_menu::render_main_menu;
 use screens::new_character::{NewCharacterState, render_new_character};
 use screens::special::{ render_special, SpecialState, MutantType };
+use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
 
 use crate::screens::new_character::render_text_wrapped;
 
@@ -149,6 +150,7 @@ enum AppScreen {
     LoadCharacter,
     ImportCharacter,
     Special,
+    Skills,
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -222,6 +224,7 @@ fn main() -> Result<()> {
     let mut show_about = false;
     let mut new_char_state: Option<NewCharacterState> = None;
     let mut special_state: Option<SpecialState> = None;
+    let mut skills_state: Option<SkillsState> = None;
     
     let db_path = config::db_path();
     std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -310,7 +313,7 @@ fn main() -> Result<()> {
 
             ui.text("fallout 2d20 character manager");
             ui.spacing();
-            render_text_wrapped(true, false, ui, "v0.1.3", 16.0, aw - 32.0);
+            render_text_wrapped(true, false, ui, "v0.1.4, 20260401", 16.0, aw - 32.0);
             ui.spacing();
             ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
             ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
@@ -359,8 +362,34 @@ fn main() -> Result<()> {
                 }
 
                 render_special(&ui, &window, state, &mut screen);
-                if screen != AppScreen::Special {
+                if screen == AppScreen::MainMenu {
                     special_state = None;
+                }
+            }
+            AppScreen::Skills => {
+                // Sync intelligence from completed SPECIAL state
+                let intelligence = special_state
+                    .as_ref()
+                    .map(|s| s.display_value(crate::screens::special::I))
+                    .unwrap_or(5);
+                let level = new_char_state.as_ref().map(|s| s.level).unwrap_or(1);
+
+                let state = skills_state.get_or_insert_with(|| {
+                    SkillsState::new(intelligence, level)
+                });
+
+                // Sync trait effects each frame
+                if let Some(nc) = &new_char_state {
+                    let selected_ids: Vec<i32> = nc.traits.iter().enumerate()
+                        .filter(|(i, _)| nc.selected_traits.get(*i).copied().unwrap_or(false))
+                        .map(|(_, t)| t.id as i32)
+                        .collect();
+                    sync_trait_effects(state, &selected_ids, nc.is_ghoul);
+                }
+
+                render_skills(&ui, &window, state, &mut screen);
+                if screen == AppScreen::MainMenu {
+                    skills_state = None;
                 }
             }
         }
