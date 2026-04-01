@@ -188,9 +188,7 @@ pub fn render_special(
     ui.text("Array:");
     ui.same_line();
     ui.set_next_item_width(260.0);
-    //let current_label = state.selected_array.label();
     if let Some(_cb) = ui.begin_combo("##array_select", state.selected_array.label()) {
-        //ui.text("COMBO BOX OPEN");
         for variant in [
             SpecialArray::Balanced,
             SpecialArray::Focused,
@@ -198,12 +196,8 @@ pub fn render_special(
             SpecialArray::Custom,
         ] {
             let selected = state.selected_array == variant;
-            let clicked = ui.selectable_config(variant.label()).selected(selected).build();
-            ui.same_line();
-            //ui.text(if clicked { "CLICKED" } else { "." });
-            //let item_id = format!("{}##arr_{:?}", variant.label(), variant);
-            //if ui.selectable_config(variant.label()).selected(selected).build() {
-            if clicked {
+
+            if ui.selectable_config(variant.label()).selected(selected).build() {
                 state.selected_array = variant;
                 // Reset assignments when switching arrays
                 state.preset_assignments = [None; 7];
