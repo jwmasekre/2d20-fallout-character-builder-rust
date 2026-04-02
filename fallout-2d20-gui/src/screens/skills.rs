@@ -297,7 +297,7 @@ pub fn render_skills(
                 &format!("Select {} more extra tag skill(s) to continue.",
                     state.extra_tag_count - state.extra_tags.len()),
                 0.0, w);
-            render_footer(ui, h, screen);
+            render_footer(ui, h, screen, remaining, total_tagged, tag_slots, state.extra_tag_count, state.extra_tags_complete());
             return;
         }
 
@@ -402,12 +402,12 @@ pub fn render_skills(
         }
     }
 
-    render_footer(ui, h, screen);
+    render_footer(ui, h, screen, remaining, total_tagged, tag_slots, state.extra_tag_count, state.extra_tags_complete());
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 
-fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen) {
+fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, remaining: i32, total_tagged: usize, tag_slots: usize, extra_tag_count: usize, extra_tags_complete: bool) {
     let footer_y = win_h - 48.0;
     ui.set_cursor_pos([16.0, footer_y]);
     if ui.button("< Back") {
@@ -415,9 +415,25 @@ fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen) {
     }
     ui.same_line();
 
+    let skills_complete = remaining == 0
+        && total_tagged == tag_slots
+        && (extra_tag_count == 0 || extra_tags_complete);
+
+    let _next_gate = (!skills_complete).then(|| ui.begin_disabled(true));
     // Next is only enabled when points and tags are satisfied
     // (caller should pass validation state, for now gated by button label)
     if ui.button("Next >") {
-        // TODO: advance
+        * screen = AppScreen::Perks;
+    }
+    if !skills_complete {
+        ui.same_line();
+        let hint = if remaining != 0 {
+            format!("{} skill point(s) unspent", remaining.abs())
+        } else if total_tagged < tag_slots {
+            format!("{} tag skill(s) unselected", tag_slots - total_tagged)
+        } else {
+            "Select extra tag skills first".to_string()
+        };
+        render_text_wrapped(true, false, ui, &hint, 0.0, win_h);
     }
 }

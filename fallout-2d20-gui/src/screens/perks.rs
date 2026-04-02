@@ -1,6 +1,9 @@
 use imgui::Ui;
 use sdl2::video::Window;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use crate::{AppScreen, BAR_HEIGHT};
+use crate::db::Db;
 use crate::screens::new_character::render_text_wrapped;
 use crate::screens::special::SpecialState;
 
@@ -11,11 +14,12 @@ pub struct PerkRow {
     pub id: i64,
     pub name: String,
     pub description: String,
-    pub level_req: i32,
-    pub ranks: i32,
-    pub rank_range: i32,   // additional levels required per rank
+    pub level_req: i64,
+    pub ranks: i64,
+    pub rank_range: i64,   // additional levels required per rank
     pub reqs: Vec<String>, // e.g. "strength: 6", "book"
     pub limits: Vec<String>, // e.g. "no ghoul", "no robot"
+    pub sourcebook: String,
 }
 
 #[derive(Debug, Clone)]
@@ -31,13 +35,13 @@ pub struct PerksState {
     pub char_perks: Vec<CharPerk>,  // taken perks
 
     // Character context
-    pub level: i32,
-    pub special: [i32; 7],         // display values (post-modifier)
+    pub level: i64,
+    pub special: [i64; 7],         // display values (post-modifier)
     pub is_ghoul: bool,
     pub is_robot: bool,
     pub is_super_mutant: bool,
     pub has_companion: bool,
-    pub has_trait_swift_learner: bool, // trait 10 = +1 perk slot
+    pub perk_trait: bool, // trait 10 = +1 perk slot
 
     // Filter state
     pub show_eligible_only: bool,
@@ -47,46 +51,47 @@ pub struct PerksState {
 impl PerksState {
     pub fn new(
         all_perks: Vec<PerkRow>,
-        level: i32,
-        special: [i32; 7],
+        level: i64,
+        special: [i64; 7],
         is_ghoul: bool,
         is_robot: bool,
         is_super_mutant: bool,
         has_companion: bool,
-        has_trait_swift_learner: bool,
+        perk_trait: bool,
     ) -> Self {
         Self {
             all_perks,
             char_perks: vec![],
             level,
-            special,
+            special: special,
             is_ghoul,
             is_robot,
             is_super_mutant,
             has_companion,
-            has_trait_swift_learner,
+            perk_trait,
             show_eligible_only: false,
             special_filters: [true; 8],
         }
     }
 
-    pub fn max_perks(&self) -> i32 {
-        self.level + if self.has_trait_swift_learner { 1 } else { 0 }
+    pub fn max_perks(&self) -> i64 {
+        self.level + if self.perk_trait { 1 } else { 0 }
     }
 
-    pub fn perks_taken(&self) -> i32 {
-        self.char_perks.len() as i32
+    pub fn perks_taken(&self) -> i64 {
+        self.char_perks.len() as i64
     }
 
-    pub fn perks_remaining(&self) -> i32 {
+    pub fn perks_remaining(&self) -> i64 {
         self.max_perks() - self.perks_taken()
     }
 
-    pub fn get_ranks(&self, perk_id: i64) -> i32 {
+    pub fn get_ranks(&self, perk_id: i64) -> i64 {
         self.char_perks.iter()
             .find(|p| p.perk_id == perk_id)
             .map(|p| p.ranks)
             .unwrap_or(0)
+            .into()
     }
 
     pub fn has_perk(&self, perk_id: i64) -> bool {
@@ -109,7 +114,7 @@ impl PerksState {
                 let parts: Vec<&str> = req.splitn(2, ':').collect();
                 if parts.len() != 2 { continue; }
                 let stat = parts[0].trim().to_lowercase();
-                let val: i32 = parts[1].trim().parse().unwrap_or(0);
+                let val: i64 = parts[1].trim().parse().unwrap_or(0);
                 let char_val = self.special_value_for(&stat);
                 if char_val < val { return false; }
             }
@@ -135,7 +140,7 @@ impl PerksState {
         true
     }
 
-    fn special_value_for(&self, stat: &str) -> i32 {
+    fn special_value_for(&self, stat: &str) -> i64 {
         match stat {
             "strength"     => self.special[0],
             "perception"   => self.special[1],
@@ -197,6 +202,67 @@ impl PerksState {
     }
 }
 
+pub fn load_perks(db: &Db) -> Vec<PerkRow> {
+    let result = db.block_on(async {
+        sqlx::query!(
+            r#"
+            SELECT p.id, p.name, p.description, p.ranks, p.rank_range,
+                p.level_req, p.reqs, p.limits, s.name AS sourcebook
+            FROM perks p
+            JOIN sourcebooks s ON s.id = p.sourcebook_id
+            ORDER BY s.id, p.name
+            "#
+        )
+        .fetch_all(&db.pool)
+        .await
+    });
+
+    match result {
+        Ok(rows) => rows.into_iter().map(|r| {
+            let reqs: Vec<String> = r.reqs
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default();
+            let limits: Vec<String> = r.limits
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default();
+            PerkRow {
+                id: r.id,
+                name: r.name.unwrap_or_default(),
+                sourcebook: r.sourcebook.unwrap_or_default(),
+                description: r.description.unwrap_or_default(),
+                level_req: r.level_req.unwrap_or_default(),
+                ranks: r.ranks.unwrap_or_default(),
+                rank_range: r.rank_range.unwrap_or_default(),
+                limits,
+                reqs,
+            }
+        }).collect(),
+        Err(e) => { eprintln!("Failed to load perks: {e}"); vec![] }
+    }
+}
+    // SELECT id, name, description, level_req, ranks, rank_range,
+    //        reqs (comma-joined), limits (comma-joined)
+    // FROM perks ORDER BY level_req, name
+
+fn build_perk_labels(perks: &[PerkRow]) -> (Vec<String>, Vec<Option<i64>>) {
+    let mut labels: Vec<String> = vec![];
+    let mut label_map: Vec<Option<i64>> = vec![];
+    let mut current_book = String::new();
+
+    for (i, perk) in perks.iter().enumerate() {
+        if perk.sourcebook != current_book {
+            current_book = perk.sourcebook.clone();
+            labels.push(format!("-- {} --", current_book));
+            label_map.push(None);
+        }
+        labels.push(format!("  {}", perk.name));
+        label_map.push(Some(i.try_into().unwrap()));
+    }
+    (labels, label_map)
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 
 const FILTER_LABELS: [&str; 8] = ["X", "S", "P", "E", "C", "I", "A", "L"];
@@ -209,8 +275,8 @@ pub fn render_perks(
 ) {
     let (win_w, win_h) = window.size();
     let content_h = win_h as f32 - BAR_HEIGHT;
-    let w = (win_w as f32 * 0.80).min(1100.0);
-    let h = win_h as f32 * 0.90;
+    let w = (win_w as f32 * 0.65).min(860.0);
+    let h = win_h as f32 * 0.85;
 
     let Some(_tok) = ui.window("##perks")
         .title_bar(false)
@@ -283,6 +349,9 @@ pub fn render_perks(
         })
         .collect();
 
+    let (labels, label_map) = build_perk_labels(&state.all_perks);
+    let mut current_label = String::new();
+
     for &pi in &filtered {
         // Re-borrow inside loop to avoid holding state borrow
         let perk_id   = state.all_perks[pi].id;
@@ -298,6 +367,24 @@ pub fn render_perks(
         let at_cap      = ranks_taken >= perk_max;
         let no_slots    = state.perks_remaining() <= 0;
 
+        
+        let perk_label_idx = label_map
+            .iter()
+            .position(|m| *m == Some(perk_id.into()))
+            .unwrap_or(0);
+        let perk_label = labels
+            .get(perk_label_idx)
+            .map(|s| s.trim())
+            .unwrap_or("-");
+            //.to_string();
+        //let perk_label_copy = perk_label.clone();
+        if perk_label != current_label {
+            ui.text_disabled(perk_label);
+            ui.separator();
+            current_label = perk_label.to_string();
+            //current_label = perk_label_copy;
+        }
+
         // Row background tint based on status
         let cursor = ui.cursor_pos();
         let draw_list = ui.get_window_draw_list();
@@ -306,6 +393,7 @@ pub fn render_perks(
         let abs_y = win_pos[1] + cursor[1] - ui.scroll_y();
         let row_h = 80.0_f32;
 
+        //need to think how i want to handle this wrt themes
         let tint = if at_cap {
             [0.15, 0.35, 0.15, 0.3_f32]  // fully taken — green tint
         } else if eligible && ranks_taken > 0 {
@@ -317,7 +405,7 @@ pub fn render_perks(
         };
 
         if tint[3] > 0.0 {
-            draw_list.add_rect_filled(
+            draw_list.add_rect(
                 [abs_x - 4.0, abs_y - 2.0],
                 [abs_x + w - 24.0, abs_y + row_h],
                 imgui::ImColor32::from_rgba_f32s(tint[0], tint[1], tint[2], tint[3]),
@@ -325,7 +413,8 @@ pub fn render_perks(
         }
 
         // Perk name + rank pips
-        let pips = "★".repeat(ranks_taken as usize) + &"☆".repeat((perk_max - ranks_taken) as usize);
+        //let pips = "★".repeat(ranks_taken as usize) + &"☆".repeat((perk_max - ranks_taken) as usize);
+        let pips = "*".repeat(ranks_taken as usize) + &"¤".repeat((perk_max - ranks_taken) as usize);
         if at_cap {
             render_text_wrapped(false, true, ui,
                 &format!("{} {}", perk_name, pips), col_name, col_reqs);

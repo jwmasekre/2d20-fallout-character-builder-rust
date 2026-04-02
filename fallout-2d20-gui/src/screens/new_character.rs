@@ -362,7 +362,7 @@ pub fn render_new_character(
             let current_label = state.origin_labels
                 .get(current_combo_idx)
                 .map(|s| s.trim())
-                .unwrap_or("—")
+                .unwrap_or("-")
                 .to_string();
 
             let mut origin_changed = false;

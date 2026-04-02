@@ -15,7 +15,7 @@ use screens::main_menu::render_main_menu;
 use screens::new_character::{NewCharacterState, render_new_character};
 use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
-use screens::perks:: { render_perks, PerksState };
+use screens::perks:: { render_perks, PerksState, load_perks };
 
 use crate::screens::new_character::render_text_wrapped;
 
@@ -401,14 +401,14 @@ fn main() -> Result<()> {
             AppScreen::Perks => {
                 let special_display = special_state
                     .as_ref()
-                    .map(|s| std::array::from_fn(|i| s.display_value(i)))
+                    .map(|s| std::array::from_fn(|i| s.display_value(i).into()))
                     .unwrap_or([5; 7]);
-                let level = new_char_state.as_ref().map(|s| s.level).unwrap_or(1);
+                let level = new_char_state.as_ref().map(|s| s.level).unwrap_or(1).into();
                 let is_ghoul = new_char_state.as_ref().map(|s| s.is_ghoul).unwrap_or(false);
                 let is_super_mutant = new_char_state.as_ref()
                     .map(|s| s.mutant_type() != MutantType::None)
                     .unwrap_or(false);
-                let has_swift_learner = new_char_state.as_ref()
+                let perk_trait = new_char_state.as_ref()
                     .map(|s| s.traits.iter().enumerate()
                         .any(|(i, t)| t.id == 10 && s.selected_traits.get(i).copied().unwrap_or(false)))
                     .unwrap_or(false);
@@ -416,7 +416,7 @@ fn main() -> Result<()> {
                 let state = perks_state.get_or_insert_with(|| {
                     let all_perks = load_perks(&db);
                     PerksState::new(all_perks, level, special_display,
-                        is_ghoul, false, is_super_mutant, false, has_swift_learner)
+                        is_ghoul, false, is_super_mutant, false, perk_trait)
                 });
 
                 // Sync mutable context each frame
@@ -424,7 +424,7 @@ fn main() -> Result<()> {
                 state.special = special_display;
                 state.is_ghoul = is_ghoul;
                 state.is_super_mutant = is_super_mutant;
-                state.has_trait_swift_learner = has_swift_learner;
+                state.perk_trait = perk_trait;
 
                 render_perks(&ui, &window, state, &mut screen);
                 if screen != AppScreen::Perks {
