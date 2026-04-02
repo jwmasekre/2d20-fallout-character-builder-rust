@@ -378,12 +378,15 @@ fn main() -> Result<()> {
                     SkillsState::new(intelligence, level)
                 });
 
+                state.intelligence = intelligence;
+                state.level = level;
+
                 // Sync trait effects each frame
                 if let Some(nc) = &new_char_state {
                     let selected_ids: Vec<i32> = nc.traits.iter().enumerate()
                         .filter(|(i, _)| nc.selected_traits.get(*i).copied().unwrap_or(false))
                         .map(|(_, t)| t.id as i32)
-                        .collect();
+                        .collect();            
                     sync_trait_effects(state, &selected_ids, nc.is_ghoul);
                 }
 

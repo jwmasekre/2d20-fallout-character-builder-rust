@@ -108,7 +108,9 @@ impl SkillsState {
     }
 
     pub fn total_tagged(&self) -> usize {
-        self.skills.iter().filter(|s| s.tagged).count()
+        self.skills.iter().enumerate()
+        .filter(|(si, s)| s.tagged && self.forced_tag != Some(*si))
+        .count()
     }
 
     pub fn base_tag_slots(&self) -> usize { 3 }

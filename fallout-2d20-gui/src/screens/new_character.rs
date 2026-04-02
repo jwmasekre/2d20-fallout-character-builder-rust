@@ -112,6 +112,10 @@ impl NewCharacterState {
         }
         */
         self.selected_traits = vec![false; self.traits.iter().count()];
+
+        if self.traits.len() == 1 && !self.traits[0].is_ghoul_trait {
+            self.selected_traits[0] = true;
+        }
         //let non_ghoul_count = self.traits.iter().filter(|t| !t.is_ghoul_trait).count();
         //self.selected_traits = vec![false; non_ghoul_count];
     }
