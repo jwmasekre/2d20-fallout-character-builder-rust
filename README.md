@@ -13,8 +13,8 @@ this project isn't even remotely close to functional, if you can't tell what's g
         * ~~0.1.1 - themes, main menu, db setup (postgres -> sqlite)~~
         * ~~0.1.2 - new_character page (origin/trait select)~~
         * ~~0.1.3 - special stat assignment~~ 
-        * ~~0.1.4 - skills assignment~~ `<- YOU ARE HERE`
-        * 0.1.5 - perk selection
+        * ~~0.1.4 - skills assignment~~ 
+        * ~~0.1.5 - perk selection~~ `<- YOU ARE HERE`
         * 0.1.6 - stat calculation and review
         * 0.1.7 - equipment selection
         * 0.1.8 - review and acceptance page
