@@ -364,6 +364,7 @@ pub fn render_perks(
         let perk_max  = state.all_perks[pi].ranks;
         let perk_reqs = state.all_perks[pi].reqs.clone();
         let perk_lims = state.all_perks[pi].limits.clone();
+        let perk_rank_rng = state.all_perks[pi].rank_range;
 
         let ranks_taken = state.get_ranks(perk_id);
         let eligible    = state.is_eligible(&state.all_perks[pi].clone());
@@ -435,9 +436,17 @@ pub fn render_perks(
                 &format!("{} {}", perk_name, pips), col_name, col_reqs);
         }
 
+        let mut lvl_string = String::new();
+        for i in 0..perk_max {
+            if i == 0 { continue } else {
+                let next_lvl = format!("/{}", perk_lvl + (i * perk_rank_rng));
+                lvl_string.push_str(&next_lvl);
+            }
+        }
+
         // Level req
         ui.same_line_with_pos(col_reqs);
-        ui.text_disabled(format!("Lvl {}", perk_lvl));
+        ui.text_disabled(format!("lv {}{}", perk_lvl, lvl_string));
 
         // Ranks display
         ui.same_line_with_pos(col_ranks);
