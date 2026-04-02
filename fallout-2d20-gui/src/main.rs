@@ -15,6 +15,7 @@ use screens::main_menu::render_main_menu;
 use screens::new_character::{NewCharacterState, render_new_character};
 use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
+use screens::perks:: { render_perks, PerksState };
 
 use crate::screens::new_character::render_text_wrapped;
 
@@ -151,6 +152,7 @@ enum AppScreen {
     ImportCharacter,
     Special,
     Skills,
+    Perks,
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -225,6 +227,7 @@ fn main() -> Result<()> {
     let mut new_char_state: Option<NewCharacterState> = None;
     let mut special_state: Option<SpecialState> = None;
     let mut skills_state: Option<SkillsState> = None;
+    let mut perks_state: Option<PerksState> = None;
     
     let db_path = config::db_path();
     std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -313,7 +316,7 @@ fn main() -> Result<()> {
 
             ui.text("fallout 2d20 character manager");
             ui.spacing();
-            render_text_wrapped(true, false, ui, "v0.1.4, 20260401", 16.0, aw - 32.0);
+            render_text_wrapped(true, false, ui, "v0.1.5, 20260401", 16.0, aw - 32.0);
             ui.spacing();
             ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
             ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
@@ -378,18 +381,54 @@ fn main() -> Result<()> {
                     SkillsState::new(intelligence, level)
                 });
 
+                state.intelligence = intelligence;
+                state.level = level;
+
                 // Sync trait effects each frame
                 if let Some(nc) = &new_char_state {
                     let selected_ids: Vec<i32> = nc.traits.iter().enumerate()
                         .filter(|(i, _)| nc.selected_traits.get(*i).copied().unwrap_or(false))
                         .map(|(_, t)| t.id as i32)
-                        .collect();
+                        .collect();            
                     sync_trait_effects(state, &selected_ids, nc.is_ghoul);
                 }
 
                 render_skills(&ui, &window, state, &mut screen);
                 if screen == AppScreen::MainMenu {
                     skills_state = None;
+                }
+            }
+            AppScreen::Perks => {
+                let special_display = special_state
+                    .as_ref()
+                    .map(|s| std::array::from_fn(|i| s.display_value(i)))
+                    .unwrap_or([5; 7]);
+                let level = new_char_state.as_ref().map(|s| s.level).unwrap_or(1);
+                let is_ghoul = new_char_state.as_ref().map(|s| s.is_ghoul).unwrap_or(false);
+                let is_super_mutant = new_char_state.as_ref()
+                    .map(|s| s.mutant_type() != MutantType::None)
+                    .unwrap_or(false);
+                let has_swift_learner = new_char_state.as_ref()
+                    .map(|s| s.traits.iter().enumerate()
+                        .any(|(i, t)| t.id == 10 && s.selected_traits.get(i).copied().unwrap_or(false)))
+                    .unwrap_or(false);
+
+                let state = perks_state.get_or_insert_with(|| {
+                    let all_perks = load_perks(&db);
+                    PerksState::new(all_perks, level, special_display,
+                        is_ghoul, false, is_super_mutant, false, has_swift_learner)
+                });
+
+                // Sync mutable context each frame
+                state.level = level;
+                state.special = special_display;
+                state.is_ghoul = is_ghoul;
+                state.is_super_mutant = is_super_mutant;
+                state.has_trait_swift_learner = has_swift_learner;
+
+                render_perks(&ui, &window, state, &mut screen);
+                if screen != AppScreen::Perks {
+                    perks_state = None;
                 }
             }
         }
