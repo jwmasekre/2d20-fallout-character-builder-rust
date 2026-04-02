@@ -415,12 +415,16 @@ pub fn render_perks(
             [0.0, 0.0, 0.0, 0.0_f32]     // unavailable — no tint
         };
 
+        let button_height = ui.clone_style().frame_padding[1] * 2.0 + ui.text_line_height();
+
+        let rect_fill = imgui::ImColor32::from_rgba_f32s(tint[0], tint[1], tint[2], tint[3]);
+
         if tint[3] > 0.0 {
-            draw_list.add_rect(
-                [abs_x - 4.0, abs_y - 2.0],
-                [abs_x + w - 24.0, abs_y + row_h],
-                imgui::ImColor32::from_rgba_f32s(tint[0], tint[1], tint[2], tint[3]),
-            ).build();
+            draw_list.add_rect_filled_multicolor(
+                [abs_x - 4.0, abs_y - 4.0],
+                [abs_x + w - 24.0, abs_y + button_height + 4.0],
+                rect_fill, rect_fill, rect_fill, rect_fill
+            );
         }
 
         // Perk name + rank pips
