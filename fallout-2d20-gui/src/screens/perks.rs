@@ -246,12 +246,14 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
     //        reqs (comma-joined), limits (comma-joined)
     // FROM perks ORDER BY level_req, name
 
+/*
 fn build_perk_labels(perks: &[PerkRow]) -> (Vec<String>, Vec<Option<i64>>) {
     let mut labels: Vec<String> = vec![];
     let mut label_map: Vec<Option<i64>> = vec![];
     let mut current_book = String::new();
 
     for (i, perk) in perks.iter().enumerate() {
+        println!("perk: {} - sourcebook: {} - perkid: {}", perk.name, perk.sourcebook, perk.id);
         if perk.sourcebook != current_book {
             current_book = perk.sourcebook.clone();
             labels.push(format!("-- {} --", current_book));
@@ -262,6 +264,7 @@ fn build_perk_labels(perks: &[PerkRow]) -> (Vec<String>, Vec<Option<i64>>) {
     }
     (labels, label_map)
 }
+*/
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -349,7 +352,7 @@ pub fn render_perks(
         })
         .collect();
 
-    let (labels, label_map) = build_perk_labels(&state.all_perks);
+    //let (labels, label_map) = build_perk_labels(&state.all_perks);
     let mut current_label = String::new();
 
     for &pi in &filtered {
@@ -367,7 +370,13 @@ pub fn render_perks(
         let at_cap      = ranks_taken >= perk_max;
         let no_slots    = state.perks_remaining() <= 0;
 
-        
+        let perk_src = state.all_perks[pi].sourcebook.clone();
+        if current_label != perk_src {
+            ui.text_disabled(format!(" ----- {} -----", perk_src));
+            ui.separator();
+            current_label = perk_src;
+        }
+        /*
         let perk_label_idx = label_map
             .iter()
             .position(|m| *m == Some(perk_id.into()))
@@ -384,6 +393,7 @@ pub fn render_perks(
             current_label = perk_label.to_string();
             //current_label = perk_label_copy;
         }
+        */
 
         // Row background tint based on status
         let cursor = ui.cursor_pos();
@@ -409,7 +419,7 @@ pub fn render_perks(
                 [abs_x - 4.0, abs_y - 2.0],
                 [abs_x + w - 24.0, abs_y + row_h],
                 imgui::ImColor32::from_rgba_f32s(tint[0], tint[1], tint[2], tint[3]),
-            );
+            ).build();
         }
 
         // Perk name + rank pips
