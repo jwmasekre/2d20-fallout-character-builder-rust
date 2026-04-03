@@ -428,7 +428,7 @@ fn main() -> Result<()> {
                 state.is_super_mutant = is_super_mutant;
                 state.perk_trait = perk_trait;
 
-                render_perks(&ui, &window, state, &mut screen);
+                render_perks(&ui, &window, state, &mut screen, perk_resolution.is_some());
                 // Open resolution popup if a special perk was just taken
                 if let Some(pid) = state.pending_resolution.take() {
                     let pname = state.all_perks.iter()

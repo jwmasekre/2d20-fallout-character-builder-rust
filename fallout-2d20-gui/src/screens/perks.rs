@@ -328,6 +328,7 @@ pub fn render_perks(
     window: &Window,
     state: &mut PerksState,
     screen: &mut AppScreen,
+    resolving: bool,
 ) {
     let (win_w, win_h) = window.size();
     let content_h = win_h as f32 - BAR_HEIGHT;
@@ -363,6 +364,13 @@ pub fn render_perks(
     }
 
     ui.spacing();
+
+    let _modal_guard = resolving.then(|| ui.begin_disabled(true));
+
+    if resolving {
+        render_text_wrapped(false, true, ui, "resolve the perk popup before continuing...", 0.0, w);
+        ui.spacing();
+    }
 
     // ── Filters ───────────────────────────────────────────────────
     ui.checkbox("Show eligible only##eo", &mut state.show_eligible_only);
@@ -579,6 +587,8 @@ pub fn render_perks(
 
     // ── Footer ────────────────────────────────────────────────────
     render_footer(ui, h, screen, remaining == 0);
+
+    drop(_modal_guard);
 }
 
 /// Returns true if the popup was confirmed (apply the perk effect),
@@ -679,23 +689,9 @@ pub fn render_perk_resolution(
             let preview_a = skill_a.map(|i| SKILLS[i]).unwrap_or("-- Select --");
             if let Some(_cb) = ui.begin_combo("##sk_a", preview_a) {
                 for (si, &name) in SKILLS.iter().enumerate() {
-                    /* 
-                    let already_tagged = skills_state.skills[si].tagged;
-                    let would_exceed_cap = skills_state.skills[si].ranks + 2 > skills_state.max_rank_for(si);
-                    let disabled = already_tagged || would_exceed_cap;
-                    let _g = disabled.then(|| ui.begin_disabled(true));
-                    let sel = *selected_skill == Some(si);
-                    let label = if already_tagged {
-                        format!("{} (already tagged)", name)
-                    } else if would_exceed_cap {
-                        format!("{} (would exceed cap)", name)
-                    } else {
-                        name.to_string()
-                    };
-                    */
                     let tag_bonus = if skills_state.skills[si].tagged { 2 } else { 0 };
                     let at_sk_cap = skills_state.skills[si].ranks + tag_bonus >= skills_state.max_rank_for(si);
-                    let would_exceed_cap = skills_state.skills[si].ranks + tag_bonus + 2
+                    let would_exceed_cap = skills_state.skills[si].ranks + tag_bonus + bonus_a
                     >= skills_state.max_rank_for(si);
                     let is_b = *skill_b == Some(si);
                     let disabled = at_sk_cap || is_b || would_exceed_cap;
