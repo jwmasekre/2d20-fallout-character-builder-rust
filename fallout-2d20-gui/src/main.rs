@@ -3,20 +3,21 @@ mod config;
 mod screens;
 
 use db::Db;
-use sdl2::video::{GLProfile,Window};
+use sdl2::video::{ GLProfile,Window };
 use imgui_sdl2::ImguiSdl2;
 use imgui_opengl_renderer::Renderer;
-use imgui::{Ui};
+use imgui::{ Ui };
 //use fallout_2d20_core::special::SpecialStats;
 use std::os::raw::c_void;
 use anyhow::Result;
 use glow::HasContext;
 use config::{ load_config, save_config, AppConfig };
 use screens::main_menu::render_main_menu;
-use screens::new_character::{NewCharacterState, render_new_character, render_text_wrapped};
+use screens::new_character::{ NewCharacterState, render_new_character, render_text_wrapped };
 use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
-use screens::perks:: { render_perks, PerksState, load_perks, render_perk_resolution, PerkResolutionPopup };
+use screens::perks::{ render_perks, PerksState, load_perks, render_perk_resolution, PerkResolutionPopup };
+use screens::stats::{ render_stats };
 
 struct Theme {
     name: &'static str,
@@ -199,6 +200,7 @@ enum AppScreen {
     Special,
     Skills,
     Perks,
+    Stats,
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -366,7 +368,7 @@ fn main() -> Result<()> {
 
                     ui.text("fallout 2d20 character manager");
                     ui.spacing();
-                    render_text_wrapped(true, false, ui, "v0.1.5, 20260401", 16.0, aw - 32.0);
+                    render_text_wrapped(true, false, ui, "v0.1.6, 20260403", 16.0, aw - 32.0);
                     ui.spacing();
                     ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
                     ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
@@ -515,6 +517,16 @@ fn main() -> Result<()> {
                 if screen == AppScreen::MainMenu {
                     perks_state = None;
                 }
+            }
+            AppScreen::Stats => {
+                render_stats(
+                    &ui, &window,
+                    special_state.as_ref().unwrap(),
+                    skills_state.as_ref().unwrap(),
+                    perks_state.as_ref().unwrap(),
+                    new_char_state.as_ref().unwrap(),
+                    &mut screen,
+                );
             }
         }
 

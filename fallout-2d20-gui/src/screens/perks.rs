@@ -586,7 +586,7 @@ pub fn render_perks(
     drop(_child);
 
     // ── Footer ────────────────────────────────────────────────────
-    render_footer(ui, h, screen, remaining == 0);
+    render_footer(ui, h, screen, remaining == 0, remaining);
 
     drop(_modal_guard);
 }
@@ -835,7 +835,7 @@ fn apply_resolution(
     }
 }
 
-fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, perks_complete: bool) {
+fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, perks_complete: bool, remaining: i64) {
     let footer_y = win_h - 44.0;
     ui.set_cursor_pos([16.0, footer_y]);
     if ui.button("< Back") {
@@ -844,7 +844,11 @@ fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, perks_complete: bo
     ui.same_line();
     let _g = (!perks_complete).then(|| ui.begin_disabled(true));
     if ui.button("Next >") {
-        // TODO: next screen
+        * screen = AppScreen::Stats;
+    }
+     if !perks_complete {
+        ui.same_line();
+        render_text_wrapped(true, false, ui, &format!("Select {} more perks to continue",remaining), 0.0, win_h);
     }
     drop(_g);
 }
