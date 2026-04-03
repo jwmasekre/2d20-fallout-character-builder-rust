@@ -109,7 +109,7 @@ impl SpecialState {
     }
 
     /// Stat cap for a given stat considering mutant type
-    fn stat_max(&self, stat: usize) -> i32 {
+    pub fn stat_max(&self, stat: usize) -> i32 {
         match self.mutant_type {
             MutantType::StandardSuperMutant => match stat {
                 I | C => 6,

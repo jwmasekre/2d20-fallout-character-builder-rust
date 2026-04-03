@@ -6,8 +6,14 @@ use crate::{AppScreen, BAR_HEIGHT};
 use crate::db::Db;
 use crate::screens::new_character::render_text_wrapped;
 use crate::screens::special::SpecialState;
+use crate::screens::skills::SKILLS;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+const SPECIAL_LABELS: [&str; 7] = [
+    "Strength", "Perception", "Endurance",
+    "Charisma", "Intelligence", "Agility", "Luck",
+];
 
 #[derive(Debug, Clone)]
 pub struct PerkRow {
@@ -46,6 +52,8 @@ pub struct PerksState {
     // Filter state
     pub show_eligible_only: bool,
     pub special_filters: [bool; 8], // X, S, P, E, C, I, A, L
+
+    pub pending_resolution: Option<i64>, // set to perk_id when Take is clicked
 }
 
 impl PerksState {
@@ -71,6 +79,7 @@ impl PerksState {
             perk_trait,
             show_eligible_only: false,
             special_filters: [true; 8],
+            pending_resolution: None,
         }
     }
 
@@ -200,6 +209,38 @@ impl PerksState {
             }
         }
     }
+    pub fn begin_resolve(&self, perk_id: i64, perk_name: &str) -> Option<PerkResolutionPopup> {
+        let resolution = match perk_id {
+            PERK_INTENSE_TRAINING => Some(PerkResolution::IntenseTraining { selected_stat: None }),
+            PERK_SKILLED => Some(PerkResolution::Skilled {
+                mode: SkilledMode::TwoToOne,
+                skill_a: None,
+                skill_b: None,
+            }),
+            PERK_TAG => Some(PerkResolution::Tag { selected_skill: None }),
+            _ => None,
+        };
+        resolution.map(|r| PerkResolutionPopup {
+            perk_id,
+            perk_name: perk_name.to_string(),
+            resolution: r,
+            open: true,
+        })
+    }
+
+    pub fn is_resolution_complete(popup: &PerkResolutionPopup) -> bool {
+        match &popup.resolution {
+            PerkResolution::IntenseTraining { selected_stat } => selected_stat.is_some(),
+            PerkResolution::Skilled { mode, skill_a, skill_b } => {
+                match mode {
+                    SkilledMode::TwoToOne => skill_a.is_some(),
+                    SkilledMode::OneToTwo => skill_a.is_some() && skill_b.is_some()
+                        && skill_a != skill_b,
+                }
+            }
+            PerkResolution::Tag { selected_skill } => selected_skill.is_some(),
+        }
+    }
 }
 
 pub fn load_perks(db: &Db) -> Vec<PerkRow> {
@@ -242,29 +283,40 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
         Err(e) => { eprintln!("Failed to load perks: {e}"); vec![] }
     }
 }
-    // SELECT id, name, description, level_req, ranks, rank_range,
-    //        reqs (comma-joined), limits (comma-joined)
-    // FROM perks ORDER BY level_req, name
 
-/*
-fn build_perk_labels(perks: &[PerkRow]) -> (Vec<String>, Vec<Option<i64>>) {
-    let mut labels: Vec<String> = vec![];
-    let mut label_map: Vec<Option<i64>> = vec![];
-    let mut current_book = String::new();
+// ── Perk Resolution ───────────────────────────────────────────────────────────
 
-    for (i, perk) in perks.iter().enumerate() {
-        println!("perk: {} - sourcebook: {} - perkid: {}", perk.name, perk.sourcebook, perk.id);
-        if perk.sourcebook != current_book {
-            current_book = perk.sourcebook.clone();
-            labels.push(format!("-- {} --", current_book));
-            label_map.push(None);
-        }
-        labels.push(format!("  {}", perk.name));
-        label_map.push(Some(i.try_into().unwrap()));
-    }
-    (labels, label_map)
+const PERK_INTENSE_TRAINING: i64 = 45;
+const PERK_SKILLED: i64 = 83;
+const PERK_TAG: i64 = 92;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SkilledMode {
+    TwoToOne,
+    OneToTwo,
 }
-*/
+
+#[derive(Debug, Clone)]
+pub enum PerkResolution {
+    IntenseTraining {
+        selected_stat: Option<usize>, // index into SPECIAL (0-6)
+    },
+    Skilled {
+        mode: SkilledMode,
+        skill_a: Option<usize>,       // first skill index
+        skill_b: Option<usize>,       // second skill (OneToTwo only)
+    },
+    Tag {
+        selected_skill: Option<usize>,
+    },
+}
+
+pub struct PerkResolutionPopup {
+    pub perk_id: i64,
+    pub perk_name: String,
+    pub resolution: PerkResolution,
+    pub open: bool,
+}
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -464,6 +516,7 @@ pub fn render_perks(
             let _g = (!eligible || no_slots).then(|| ui.begin_disabled(true));
             if ui.button(format!("Take##take_{}", perk_id)) {
                 state.add_perk(perk_id);
+                state.pending_resolution = Some(perk_id);
             }
             drop(_g);
             ui.same_line();
@@ -484,6 +537,7 @@ pub fn render_perks(
             let _g = (!eligible || no_slots).then(|| ui.begin_disabled(true));
             if ui.button(format!("Rank+##rankp_{}", perk_id)) {
                 state.add_perk(perk_id);
+                state.pending_resolution = Some(perk_id);
             }
             drop(_g);
             ui.same_line();
@@ -524,6 +578,235 @@ pub fn render_perks(
 
     // ── Footer ────────────────────────────────────────────────────
     render_footer(ui, h, screen, remaining == 0);
+}
+
+/// Returns true if the popup was confirmed (apply the perk effect),
+/// false if it was cancelled (remove the perk).
+pub fn render_perk_resolution(
+    ui: &Ui,
+    window: &Window,
+    popup: &mut PerkResolutionPopup,
+    special: &mut [i64; 7],
+    special_max: &[i32; 7],       // per-stat caps
+    skills_state: &mut crate::screens::skills::SkillsState,
+) -> Option<bool> { // Some(true)=confirmed, Some(false)=cancelled, None=still open
+    if !popup.open { return Some(false); }
+
+    let (win_w, win_h) = (800_u32, 600_u32); // use actual window size if available
+    let pw = 380.0_f32;
+    let ph = 220.0_f32;
+
+    let Some(_tok) = ui.window(format!("##resolve_{}", popup.perk_id))
+        .title_bar(false)
+        .resizable(false)
+        .movable(true)
+        .size([pw, ph], imgui::Condition::Always)
+        .position(
+            [(win_w as f32 - pw) * 0.5, (win_h as f32 - ph) * 0.5],
+            imgui::Condition::Appearing,
+        )
+        .begin()
+    else { return None; };
+
+    // Title + X
+    ui.text(format!("Resolve: {}", popup.perk_name));
+    ui.same_line_with_pos(pw - 32.0);
+    if ui.button(format!("X##res_close_{}", popup.perk_id)) {
+        popup.open = false;
+        return Some(false); // cancelled — caller should remove_perk
+    }
+    ui.separator();
+    ui.spacing();
+
+    match &mut popup.resolution {
+
+        // ── Intense Training: pick one SPECIAL stat ───────────────
+        PerkResolution::IntenseTraining { selected_stat } => {
+            ui.text("Increase one SPECIAL stat by 1:");
+            ui.spacing();
+            ui.set_next_item_width(220.0);
+
+            let preview = selected_stat
+                .map(|i| SPECIAL_LABELS[i])
+                .unwrap_or("-- Select stat --");
+
+            if let Some(_cb) = ui.begin_combo("##it_stat", preview) {
+                for i in 0..7 {
+                    if special[i] as i32 >= special_max[i] { 
+                        let _g = ui.begin_disabled(true);
+                        ui.selectable_config(
+                            &format!("{} (at cap)", SPECIAL_LABELS[i])
+                        ).build();
+                        drop(_g);
+                        continue; 
+                    }
+                    let sel = *selected_stat == Some(i);
+                    if ui.selectable_config(SPECIAL_LABELS[i]).selected(sel).build() {
+                        *selected_stat = Some(i);
+                    }
+                }
+            }
+            if *selected_stat == Some(4) {
+                ui.spacing();
+                ui.text_wrapped("Remember to update your skills on the previous page")
+            }
+        }
+
+        // ── Skilled: +2 to one skill OR +1 to two skills ──────────
+        PerkResolution::Skilled { mode, skill_a, skill_b } => {
+            ui.text("Choose distribution:");
+            ui.spacing();
+
+            let mut mode_val = matches!(mode, SkilledMode::OneToTwo);
+            if ui.radio_button_bool("+2 to one skill##sk2", !mode_val) {
+                *mode = SkilledMode::TwoToOne;
+                *skill_b = None;
+            }
+            ui.same_line();
+            if ui.radio_button_bool("+1 to two skills##sk1", mode_val) {
+                *mode = SkilledMode::OneToTwo;
+            }
+
+            ui.spacing();
+
+            let bonus_a = if matches!(mode, SkilledMode::TwoToOne) { 2 } else { 1 };
+
+            // Skill A
+            ui.text(if matches!(mode, SkilledMode::TwoToOne) { "+2 Skill:" } else { "+1 Skill 1:" });
+            ui.same_line();
+            ui.set_next_item_width(200.0);
+            let preview_a = skill_a.map(|i| SKILLS[i]).unwrap_or("-- Select --");
+            if let Some(_cb) = ui.begin_combo("##sk_a", preview_a) {
+                for (si, &name) in SKILLS.iter().enumerate() {
+                    let tag_bonus = if skills_state.skills[si].tagged { 2 } else { 0 };
+                    let at_sk_cap = skills_state.skills[si].ranks + tag_bonus >= skills_state.max_rank_for(si);
+                    let is_b = *skill_b == Some(si);
+                    let disabled = at_sk_cap || is_b;
+                    let _g = disabled.then(|| ui.begin_disabled(true));
+                    let sel = *skill_a == Some(si);
+                    let label = if at_sk_cap { format!("{} (cap)", name) } else { name.to_string() };
+                    if ui.selectable_config(&label).selected(sel).build() {
+                        *skill_a = Some(si);
+                    }
+                    drop(_g);
+                }
+            }
+
+            // Skill B (OneToTwo only)
+            if matches!(mode, SkilledMode::OneToTwo) {
+                ui.spacing();
+                ui.text("+1 Skill 2:");
+                ui.same_line();
+                ui.set_next_item_width(200.0);
+                let preview_b = skill_b.map(|i| SKILLS[i]).unwrap_or("-- Select --");
+                if let Some(_cb) = ui.begin_combo("##sk_b", preview_b) {
+                    for (si, &name) in SKILLS.iter().enumerate() {
+                        let tag_bonus = if skills_state.skills[si].tagged { 2 } else { 0 };
+                        let at_sk_cap = skills_state.skills[si].ranks + tag_bonus >= skills_state.max_rank_for(si);
+                        let is_a = *skill_a == Some(si);
+                        let disabled = at_sk_cap || is_a;
+                        let _g = disabled.then(|| ui.begin_disabled(true));
+                        let sel = *skill_b == Some(si);
+                        let label = if at_sk_cap { format!("{} (cap)", name) } else { name.to_string() };
+                        if ui.selectable_config(&label).selected(sel).build() {
+                            *skill_b = Some(si);
+                        }
+                        drop(_g);
+                    }
+                }
+            }
+        }
+
+        // ── Tag!: pick one more tag skill ─────────────────────────
+        PerkResolution::Tag { selected_skill } => {
+            ui.text("Tag one additional skill:");
+            ui.spacing();
+            ui.set_next_item_width(220.0);
+
+            let preview = selected_skill
+                .map(|i| SKILLS[i])
+                .unwrap_or("-- Select skill --");
+
+            if let Some(_cb) = ui.begin_combo("##tag_skill", preview) {
+                for (si, &name) in SKILLS.iter().enumerate() {
+                    let already_tagged = skills_state.skills[si].tagged;
+                    let would_exceed_cap = skills_state.skills[si].ranks + 2 > skills_state.max_rank_for(si);
+                    let disabled = already_tagged || would_exceed_cap;
+                    let _g = disabled.then(|| ui.begin_disabled(true));
+                    let sel = *selected_skill == Some(si);
+                    let label = if already_tagged {
+                        format!("{} (already tagged)", name)
+                    } else if would_exceed_cap {
+                        format!("{} (would exceed cap)", name)
+                    } else {
+                        name.to_string()
+                    };
+                    if ui.selectable_config(&label).selected(sel).build() {
+                        *selected_skill = Some(si);
+                    }
+                    drop(_g);
+                }
+            }
+        }
+    }
+
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
+
+    // Confirm button — only enabled when selection is complete
+    let complete = PerksState::is_resolution_complete(popup);
+    let _g = (!complete).then(|| ui.begin_disabled(true));
+    if ui.button(format!("Confirm##res_confirm_{}", popup.perk_id)) {
+        // Apply the effect
+        apply_resolution(popup, special, skills_state);
+        popup.open = false;
+        return Some(true);
+    }
+    drop(_g);
+
+    if !complete {
+        ui.same_line();
+        ui.text_disabled("Make a selection to confirm.");
+    }
+
+    None
+}
+
+fn apply_resolution(
+    popup: &PerkResolutionPopup,
+    special: &mut [i64; 7],
+    skills_state: &mut crate::screens::skills::SkillsState,
+) {
+    match &popup.resolution {
+        PerkResolution::IntenseTraining { selected_stat: Some(i) } => {
+            special[*i] += 1;
+            // Also update skills_state so INT change reflects on skill points
+            if *i == 4 {
+                let int_stat = special[*i];
+                skills_state.intelligence = int_stat as i32};
+        }
+        PerkResolution::Skilled { mode, skill_a, skill_b } => {
+            if let Some(a) = skill_a {
+                let bonus = if matches!(mode, SkilledMode::TwoToOne) { 2 } else { 1 };
+                skills_state.skills[*a].ranks =
+                    (skills_state.skills[*a].ranks + bonus)
+                    .min(skills_state.max_rank_for(*a));
+            }
+            if let Some(b) = skill_b {
+                skills_state.skills[*b].ranks =
+                    (skills_state.skills[*b].ranks + 1)
+                    .min(skills_state.max_rank_for(*b));
+            }
+        }
+        PerkResolution::Tag { selected_skill: Some(si) } => {
+            skills_state.skills[*si].tagged = true;
+            // Increase tag slot count so the skills screen counter stays correct
+            skills_state.perk_tag_slots += 1;
+            skills_state.extra_tags.push(*si);
+        }
+        _ => {}
+    }
 }
 
 fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, perks_complete: bool) {

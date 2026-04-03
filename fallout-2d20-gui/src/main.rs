@@ -15,9 +15,10 @@ use screens::main_menu::render_main_menu;
 use screens::new_character::{NewCharacterState, render_new_character};
 use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
-use screens::perks:: { render_perks, PerksState, load_perks };
+use screens::perks:: { render_perks, PerksState, load_perks, render_perk_resolution };
 
 use crate::screens::new_character::render_text_wrapped;
+use crate::screens::perks::PerkResolutionPopup;
 
 struct Theme {
     name: &'static str,
@@ -228,6 +229,7 @@ fn main() -> Result<()> {
     let mut special_state: Option<SpecialState> = None;
     let mut skills_state: Option<SkillsState> = None;
     let mut perks_state: Option<PerksState> = None;
+    let mut perk_resolution: Option<PerkResolutionPopup> = None;
     
     let db_path = config::db_path();
     std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -427,7 +429,41 @@ fn main() -> Result<()> {
                 state.perk_trait = perk_trait;
 
                 render_perks(&ui, &window, state, &mut screen);
-                if screen != AppScreen::Perks {
+                // Open resolution popup if a special perk was just taken
+                if let Some(pid) = state.pending_resolution.take() {
+                    let pname = state.all_perks.iter()
+                        .find(|p| p.id == pid)
+                        .map(|p| p.name.as_str())
+                        .unwrap_or("");
+                    if let Some(popup) = state.begin_resolve(pid, pname) {
+                        perk_resolution = Some(popup);
+                    }
+                }
+                // Render resolution popup if open
+                if let Some(popup) = &mut perk_resolution {
+                    let special_max: [i32; 7] = std::array::from_fn(|i| {
+                        special_state.as_ref().map(|s| s.stat_max(i)).unwrap_or(10)
+                    });
+                    let result = render_perk_resolution(
+                        &ui, &window, popup,
+                        &mut state.special,
+                        &special_max,
+                        skills_state.as_mut().unwrap(),
+                    );
+                    match result {
+                        Some(false) => {
+                            // Cancelled — remove the perk
+                            let pid = popup.perk_id;
+                            state.remove_perk(pid);
+                            perk_resolution = None;
+                        }
+                        Some(true) => {
+                            perk_resolution = None;
+                        }
+                        None => {} // still open
+                    }
+                }
+                if screen == AppScreen::MainMenu {
                     perks_state = None;
                 }
             }

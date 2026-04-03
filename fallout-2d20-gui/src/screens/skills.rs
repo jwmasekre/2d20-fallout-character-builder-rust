@@ -63,6 +63,8 @@ pub struct SkillsState {
     // From SPECIAL
     pub intelligence: i32,
     pub level: i32,
+    
+    pub perk_tag_slots: usize,
 }
 
 impl SkillsState {
@@ -79,6 +81,7 @@ impl SkillsState {
             all_limited: false,
             intelligence,
             level,
+            perk_tag_slots: 0
         }
     }
 
@@ -116,7 +119,7 @@ impl SkillsState {
     pub fn base_tag_slots(&self) -> usize { 3 }
 
     pub fn total_tag_slots(&self) -> usize {
-        self.base_tag_slots() + self.extra_tag_count
+        self.base_tag_slots() + self.extra_tag_count + self.perk_tag_slots
     }
 
     /// Are all extra tag slots filled?
