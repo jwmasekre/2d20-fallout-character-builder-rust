@@ -31,7 +31,7 @@ pub struct PerkRow {
 #[derive(Debug, Clone)]
 pub struct CharPerk {
     pub perk_id: i64,
-    pub ranks: i32,
+    pub ranks: i64,
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -88,7 +88,8 @@ impl PerksState {
     }
 
     pub fn perks_taken(&self) -> i64 {
-        self.char_perks.len() as i64
+        //self.char_perks.len() as i64
+        self.char_perks.iter().map(|p| p.ranks).sum()
     }
 
     pub fn perks_remaining(&self) -> i64 {
