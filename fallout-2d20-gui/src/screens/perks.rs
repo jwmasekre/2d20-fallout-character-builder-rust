@@ -679,13 +679,29 @@ pub fn render_perk_resolution(
             let preview_a = skill_a.map(|i| SKILLS[i]).unwrap_or("-- Select --");
             if let Some(_cb) = ui.begin_combo("##sk_a", preview_a) {
                 for (si, &name) in SKILLS.iter().enumerate() {
+                    /* 
+                    let already_tagged = skills_state.skills[si].tagged;
+                    let would_exceed_cap = skills_state.skills[si].ranks + 2 > skills_state.max_rank_for(si);
+                    let disabled = already_tagged || would_exceed_cap;
+                    let _g = disabled.then(|| ui.begin_disabled(true));
+                    let sel = *selected_skill == Some(si);
+                    let label = if already_tagged {
+                        format!("{} (already tagged)", name)
+                    } else if would_exceed_cap {
+                        format!("{} (would exceed cap)", name)
+                    } else {
+                        name.to_string()
+                    };
+                    */
                     let tag_bonus = if skills_state.skills[si].tagged { 2 } else { 0 };
                     let at_sk_cap = skills_state.skills[si].ranks + tag_bonus >= skills_state.max_rank_for(si);
+                    let would_exceed_cap = skills_state.skills[si].ranks + tag_bonus + 2
+                    >= skills_state.max_rank_for(si);
                     let is_b = *skill_b == Some(si);
-                    let disabled = at_sk_cap || is_b;
+                    let disabled = at_sk_cap || is_b || would_exceed_cap;
                     let _g = disabled.then(|| ui.begin_disabled(true));
                     let sel = *skill_a == Some(si);
-                    let label = if at_sk_cap { format!("{} (cap)", name) } else { name.to_string() };
+                    let label = if at_sk_cap { format!("{} (cap)", name) } else if would_exceed_cap { format!("{} (would exceed cap)", name) } else { name.to_string() };
                     if ui.selectable_config(&label).selected(sel).build() {
                         *skill_a = Some(si);
                     }
