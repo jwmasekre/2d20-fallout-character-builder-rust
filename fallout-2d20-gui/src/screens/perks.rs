@@ -332,7 +332,7 @@ pub fn render_perks(
 ) {
     let (win_w, win_h) = window.size();
     let content_h = win_h as f32 - BAR_HEIGHT;
-    let w = (win_w as f32 * 0.65).min(860.0);
+    let w = (win_w as f32 * 0.65).min(960.0);
     let h = win_h as f32 * 0.85;
 
     let Some(_tok) = ui.window("##perks")

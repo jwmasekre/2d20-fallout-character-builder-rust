@@ -121,7 +121,7 @@ const THEME_NUCLEAR_WINTER: Theme = Theme {
     text:              [0.10, 0.10, 0.10, 1.0],
     text_dim:          [0.45, 0.45, 0.45, 1.0],
     text_desc:         [0.30, 0.30, 0.30, 1.0],
-    window_bg:         [0.93, 0.93, 0.93, 1.0],
+    window_bg:         [0.88, 0.88, 0.88, 1.0],
     header:            [0.70, 0.70, 0.70, 1.0],
     header_hovered:    [0.80, 0.80, 0.80, 1.0],
     header_active:     [0.60, 0.60, 0.60, 1.0],
