@@ -5,8 +5,8 @@ use serde_json;
 use crate::{AppScreen, BAR_HEIGHT};
 use crate::db::Db;
 use crate::screens::new_character::render_text_wrapped;
-use crate::screens::special::SpecialState;
-use crate::screens::skills::SKILLS;
+use crate::screens::special::{SpecialArray, SpecialState};
+use crate::screens::skills::{ SKILLS, SkillsState};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -599,7 +599,8 @@ pub fn render_perk_resolution(
     popup: &mut PerkResolutionPopup,
     special: &mut [i64; 7],
     special_max: &[i32; 7],       // per-stat caps
-    skills_state: &mut crate::screens::skills::SkillsState,
+    skills_state: &mut SkillsState,
+    special_state: &mut SpecialState,
 ) -> Option<bool> { // Some(true)=confirmed, Some(false)=cancelled, None=still open
     if !popup.open { return Some(false); }
 
@@ -772,7 +773,7 @@ pub fn render_perk_resolution(
     let _g = (!complete).then(|| ui.begin_disabled(true));
     if ui.button(format!("Confirm##res_confirm_{}", popup.perk_id)) {
         // Apply the effect
-        apply_resolution(popup, special, skills_state);
+        apply_resolution(popup, special, skills_state, special_state);
         popup.open = false;
         return Some(true);
     }
@@ -789,15 +790,26 @@ pub fn render_perk_resolution(
 fn apply_resolution(
     popup: &PerkResolutionPopup,
     special: &mut [i64; 7],
-    skills_state: &mut crate::screens::skills::SkillsState,
+    skills_state: &mut SkillsState,
+    special_state: &mut SpecialState,
 ) {
     match &popup.resolution {
         PerkResolution::IntenseTraining { selected_stat: Some(i) } => {
-            special[*i] += 1;
+            if special_state.selected_array == SpecialArray::Custom {
+                special_state.custom_values[*i] += 1;
+            } else {
+                if let Some(v) = special_state.preset_assignments[*i] {
+                    special_state.preset_assignments[*i] = Some(v + 1);
+                }
+            }
+            special[*i] = special_state.display_value(*i).into();
+            skills_state.intelligence = special_state.display_value(4);
             // Also update skills_state so INT change reflects on skill points
             if *i == 4 {
                 let int_stat = special[*i];
-                skills_state.intelligence = int_stat as i32};
+                skills_state.intelligence = int_stat as i32
+            };
+            special_state.perk_bonus += 1;
         }
         PerkResolution::Skilled { mode, skill_a, skill_b } => {
             if let Some(a) = skill_a {

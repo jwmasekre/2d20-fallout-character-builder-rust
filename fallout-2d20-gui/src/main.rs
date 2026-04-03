@@ -449,6 +449,7 @@ fn main() -> Result<()> {
                         &mut state.special,
                         &special_max,
                         skills_state.as_mut().unwrap(),
+                        special_state.as_mut().unwrap(),
                     );
                     match result {
                         Some(false) => {
