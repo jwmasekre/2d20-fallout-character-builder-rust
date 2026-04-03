@@ -63,6 +63,9 @@ pub struct SkillsState {
     // From SPECIAL
     pub intelligence: i32,
     pub level: i32,
+    
+    pub perk_tag_slots: usize,
+    pub perk_skill_bonus: i32,
 }
 
 impl SkillsState {
@@ -79,6 +82,8 @@ impl SkillsState {
             all_limited: false,
             intelligence,
             level,
+            perk_tag_slots: 0,
+            perk_skill_bonus: 0,
         }
     }
 
@@ -91,7 +96,7 @@ impl SkillsState {
     }
 
     pub fn remaining_points(&self) -> i32 {
-        self.max_skill_points() - self.total_ranks()
+        self.max_skill_points() - self.total_ranks() + self.perk_skill_bonus
     }
 
     /// Max rank for a skill at current level (3..=6 clamp)
@@ -116,7 +121,7 @@ impl SkillsState {
     pub fn base_tag_slots(&self) -> usize { 3 }
 
     pub fn total_tag_slots(&self) -> usize {
-        self.base_tag_slots() + self.extra_tag_count
+        self.base_tag_slots() + self.extra_tag_count + self.perk_tag_slots
     }
 
     /// Are all extra tag slots filled?
@@ -210,7 +215,7 @@ pub fn render_skills(
 ) {
     let (win_w, win_h) = window.size();
     let content_h = win_h as f32 - BAR_HEIGHT;
-    let w = (win_w as f32 * 0.65).min(860.0);
+    let w = (win_w as f32 * 0.65).min(960.0);
     let h = win_h as f32 * 0.85;
 
     let Some(_tok) = ui.window("##skills")
@@ -297,7 +302,7 @@ pub fn render_skills(
                 &format!("Select {} more extra tag skill(s) to continue.",
                     state.extra_tag_count - state.extra_tags.len()),
                 0.0, w);
-            render_footer(ui, h, screen);
+            render_footer(ui, h, screen, remaining, total_tagged, tag_slots, state.extra_tag_count, state.extra_tags_complete());
             return;
         }
 
@@ -402,12 +407,12 @@ pub fn render_skills(
         }
     }
 
-    render_footer(ui, h, screen);
+    render_footer(ui, h, screen, remaining, total_tagged, tag_slots, state.extra_tag_count, state.extra_tags_complete());
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 
-fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen) {
+fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, remaining: i32, total_tagged: usize, tag_slots: usize, extra_tag_count: usize, extra_tags_complete: bool) {
     let footer_y = win_h - 48.0;
     ui.set_cursor_pos([16.0, footer_y]);
     if ui.button("< Back") {
@@ -415,9 +420,25 @@ fn render_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen) {
     }
     ui.same_line();
 
+    let skills_complete = remaining == 0
+        && total_tagged == tag_slots
+        && (extra_tag_count == 0 || extra_tags_complete);
+
+    let _next_gate = (!skills_complete).then(|| ui.begin_disabled(true));
     // Next is only enabled when points and tags are satisfied
     // (caller should pass validation state, for now gated by button label)
     if ui.button("Next >") {
-        // TODO: advance
+        * screen = AppScreen::Perks;
+    }
+    if !skills_complete {
+        ui.same_line();
+        let hint = if remaining != 0 {
+            format!("{} skill point(s) unspent", remaining.abs())
+        } else if total_tagged < tag_slots {
+            format!("{} tag skill(s) unselected", tag_slots - total_tagged)
+        } else {
+            "Select extra tag skills first".to_string()
+        };
+        render_text_wrapped(true, false, ui, &hint, 0.0, win_h);
     }
 }

@@ -311,6 +311,7 @@ dependencies = [
  "imgui-opengl-renderer",
  "imgui-sdl2",
  "sdl2",
+ "serde",
  "serde_json",
  "sqlx",
  "tokio",

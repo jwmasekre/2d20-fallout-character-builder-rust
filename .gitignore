@@ -2,3 +2,4 @@
 /target
 /.resources/db_loaders_bak
 /.resources/db_schema.sql
+/fallout-2d20-gui/usr_config.toml

@@ -80,6 +80,8 @@ pub struct SpecialState {
 
     /// Mutant type
     pub mutant_type: MutantType,
+
+    pub perk_bonus: i32,
 }
 
 impl SpecialState {
@@ -91,6 +93,7 @@ impl SpecialState {
             is_gifted,
             gifted_selected: [false; 7],
             mutant_type,
+            perk_bonus: 0,
         }
     }
 
@@ -109,7 +112,7 @@ impl SpecialState {
     }
 
     /// Stat cap for a given stat considering mutant type
-    fn stat_max(&self, stat: usize) -> i32 {
+    pub fn stat_max(&self, stat: usize) -> i32 {
         match self.mutant_type {
             MutantType::StandardSuperMutant => match stat {
                 I | C => 6,
@@ -164,7 +167,7 @@ pub fn render_special(
 ) {
     let (win_w, win_h) = window.size();
     let content_h = win_h as f32 - BAR_HEIGHT;
-    let w = (win_w as f32 * 0.65).min(860.0);
+    let w = (win_w as f32 * 0.65).min(960.0);
     let h = win_h as f32 * 0.85;
 
     let Some(_window_token) = ui.window("##special")
@@ -219,7 +222,7 @@ pub fn render_special(
 
     // ── Remaining points (custom only) ────────────────────────────
     if state.selected_array == SpecialArray::Custom {
-        let remaining = state.remaining_points();
+        let remaining = state.remaining_points() + state.perk_bonus;
         if remaining < 0 {
             render_text_wrapped(true, false, ui, &format!("Remaining Points: {}", remaining), 0.0, w);
         } else if remaining == 0 {
@@ -244,88 +247,10 @@ pub fn render_special(
 
     let special_complete = match state.selected_array {
         SpecialArray::None => false,
-        SpecialArray::Custom => state.remaining_points() == 0,
+        SpecialArray::Custom => state.remaining_points() + state.perk_bonus == 0,
         _ => state.preset_assignments.iter().all(|v| v.is_some()),
     };
     render_footer(ui, h, screen, special_complete);
-
-    /*
-    ui.window("##special")
-        .title_bar(false)
-        .resizable(false)
-        .movable(false)
-        .size([w, h], imgui::Condition::Always)
-        .position(
-            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + (content_h - h) * 0.5],
-            imgui::Condition::Always,
-        )
-        .build(|| {
-            ui.text("SPECIAL");
-            ui.separator();
-            ui.spacing();
-
-            // ── Array selector ────────────────────────────────────────────
-            ui.text("Array:");
-            ui.same_line();
-            ui.set_next_item_width(260.0);
-            let current_label = state.selected_array.label();
-            if let Some(_cb) = ui.begin_combo("##array_select", current_label) {
-                for variant in [
-                    SpecialArray::Balanced,
-                    SpecialArray::Focused,
-                    SpecialArray::Specialized,
-                    SpecialArray::Custom,
-                ] {
-                    let selected = state.selected_array == variant;
-                    let item_id = format!("{}##arr_{:?}", variant.label(), variant);
-                    if ui.selectable_config(&item_id).selected(selected).build() {
-                        state.selected_array = variant;
-                        // Reset assignments when switching arrays
-                        state.preset_assignments = [None; 7];
-                        if variant == SpecialArray::Custom {
-                            state.custom_values = [5; 7];
-                        }
-                    }
-                }
-            }
-            ui.text(format!("DBG: {:?}", state.selected_array));
-
-            ui.spacing();
-
-            if state.selected_array == SpecialArray::None {
-                ui.text_disabled("Select an array to continue.");
-                render_footer(ui, h, screen);
-                return;
-            }
-
-            // ── Remaining points (custom only) ────────────────────────────
-            if state.selected_array == SpecialArray::Custom {
-                let remaining = state.remaining_points();
-                if remaining < 0 {
-                    render_text_wrapped(true, false, ui, &format!("Remaining Points: {}", remaining), 0.0, w);
-                } else if remaining == 0 {
-                    render_text_wrapped(false,true, ui, &format!("Remaining Points: {}", remaining), 0.0, w);
-                } else {
-                    ui.text_wrapped(&format!("Remaining Points: {}", remaining));
-                }
-                ui.spacing();
-            }
-
-            ui.separator();
-            ui.spacing();
-
-            // ── Stat rows ─────────────────────────────────────────────────
-            let label_w = 110.0_f32;
-            let val_w = 60.0_f32;
-
-            match state.selected_array {
-                SpecialArray::Custom => render_custom_stats(ui, state, label_w, val_w, w),
-                _ => render_preset_stats(ui, state, label_w, val_w, w),
-            }
-
-            render_footer(ui, h, screen);
-        });
-        */
 
 }
 
@@ -339,7 +264,7 @@ fn render_custom_stats(
     val_w: f32,
     win_w: f32,
 ) {
-    let remaining = state.remaining_points();
+    let remaining = state.remaining_points() + state.perk_bonus;
     let gifted_count = state.gifted_count();
 
     for si in 0..7 {

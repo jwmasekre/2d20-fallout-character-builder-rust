@@ -301,7 +301,7 @@ pub fn render_new_character(
 ) {
     let (win_w, win_h) = window.size();
     let content_h = win_h as f32 - BAR_HEIGHT;
-    let w = (win_w as f32 * 0.65).min(860.0);
+    let w = (win_w as f32 * 0.65).min(960.0);
     let h = win_h as f32 * 0.85;
 
     ui.window("##new_character")
@@ -362,7 +362,7 @@ pub fn render_new_character(
             let current_label = state.origin_labels
                 .get(current_combo_idx)
                 .map(|s| s.trim())
-                .unwrap_or("—")
+                .unwrap_or("-")
                 .to_string();
 
             let mut origin_changed = false;
