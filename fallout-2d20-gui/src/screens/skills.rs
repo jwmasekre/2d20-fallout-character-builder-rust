@@ -65,6 +65,7 @@ pub struct SkillsState {
     pub level: i32,
     
     pub perk_tag_slots: usize,
+    pub perk_skill_bonus: i32,
 }
 
 impl SkillsState {
@@ -81,7 +82,8 @@ impl SkillsState {
             all_limited: false,
             intelligence,
             level,
-            perk_tag_slots: 0
+            perk_tag_slots: 0,
+            perk_skill_bonus: 0,
         }
     }
 
@@ -94,7 +96,7 @@ impl SkillsState {
     }
 
     pub fn remaining_points(&self) -> i32 {
-        self.max_skill_points() - self.total_ranks()
+        self.max_skill_points() - self.total_ranks() + self.perk_skill_bonus
     }
 
     /// Max rank for a skill at current level (3..=6 clamp)

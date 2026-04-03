@@ -811,6 +811,7 @@ fn apply_resolution(
                     (skills_state.skills[*b].ranks + 1)
                     .min(skills_state.max_rank_for(*b));
             }
+            skills_state.perk_skill_bonus += 2;
         }
         PerkResolution::Tag { selected_skill: Some(si) } => {
             skills_state.skills[*si].tagged = true;
