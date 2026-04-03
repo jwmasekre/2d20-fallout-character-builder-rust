@@ -11,14 +11,12 @@ use imgui::{Ui};
 use std::os::raw::c_void;
 use anyhow::Result;
 use glow::HasContext;
+use config::{ load_config, save_config, AppConfig };
 use screens::main_menu::render_main_menu;
-use screens::new_character::{NewCharacterState, render_new_character};
+use screens::new_character::{NewCharacterState, render_new_character, render_text_wrapped};
 use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
-use screens::perks:: { render_perks, PerksState, load_perks, render_perk_resolution };
-
-use crate::screens::new_character::render_text_wrapped;
-use crate::screens::perks::PerkResolutionPopup;
+use screens::perks:: { render_perks, PerksState, load_perks, render_perk_resolution, PerkResolutionPopup };
 
 struct Theme {
     name: &'static str,
@@ -118,6 +116,53 @@ const THEME_COMMONWEALTH: Theme = Theme {
     separator:         [0.70, 0.65, 0.15, 1.0],
 };
 
+const THEME_NUCLEAR_WINTER: Theme = Theme {
+    name: "Nuclear Winter",
+    text:              [0.10, 0.10, 0.10, 1.0],
+    text_dim:          [0.45, 0.45, 0.45, 1.0],
+    text_desc:         [0.30, 0.30, 0.30, 1.0],
+    window_bg:         [0.93, 0.93, 0.93, 1.0],
+    header:            [0.70, 0.70, 0.70, 1.0],
+    header_hovered:    [0.80, 0.80, 0.80, 1.0],
+    header_active:     [0.60, 0.60, 0.60, 1.0],
+    button:            [0.75, 0.75, 0.75, 1.0],
+    button_hovered:    [0.85, 0.85, 0.85, 1.0],
+    button_active:     [0.60, 0.60, 0.60, 1.0],
+    slider_grab:       [0.35, 0.35, 0.35, 1.0],
+    slider_grab_active:[0.20, 0.20, 0.20, 1.0],
+    frame_bg:          [0.82, 0.82, 0.82, 1.0],
+    frame_bg_hovered:  [0.88, 0.88, 0.88, 1.0],
+    tab:               [0.78, 0.78, 0.78, 1.0],
+    tab_hovered:       [0.88, 0.88, 0.88, 1.0],
+    tab_active:        [0.85, 0.85, 0.85, 1.0],
+    title_bg:          [0.75, 0.75, 0.75, 1.0],
+    title_bg_active:   [0.65, 0.65, 0.65, 1.0],
+    separator:         [0.55, 0.55, 0.55, 1.0],
+};
+
+const THEME_NUCLEAR_SHADOW: Theme = Theme {
+    name: "Nuclear Shadow",
+    text:              [0.85, 0.85, 0.85, 1.0],
+    text_dim:          [0.50, 0.50, 0.50, 1.0],
+    text_desc:         [0.65, 0.65, 0.65, 1.0],
+    window_bg:         [0.10, 0.10, 0.10, 1.0],
+    header:            [0.22, 0.22, 0.22, 1.0],
+    header_hovered:    [0.32, 0.32, 0.32, 1.0],
+    header_active:     [0.40, 0.40, 0.40, 1.0],
+    button:            [0.20, 0.20, 0.20, 1.0],
+    button_hovered:    [0.30, 0.30, 0.30, 1.0],
+    button_active:     [0.40, 0.40, 0.40, 1.0],
+    slider_grab:       [0.60, 0.60, 0.60, 1.0],
+    slider_grab_active:[0.80, 0.80, 0.80, 1.0],
+    frame_bg:          [0.15, 0.15, 0.15, 1.0],
+    frame_bg_hovered:  [0.22, 0.22, 0.22, 1.0],
+    tab:               [0.17, 0.17, 0.17, 1.0],
+    tab_hovered:       [0.30, 0.30, 0.30, 1.0],
+    tab_active:        [0.25, 0.25, 0.25, 1.0],
+    title_bg:          [0.12, 0.12, 0.12, 1.0],
+    title_bg_active:   [0.18, 0.18, 0.18, 1.0],
+    separator:         [0.38, 0.38, 0.38, 1.0],
+};
 
 fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
     let style = imgui.style_mut();
@@ -204,8 +249,10 @@ fn main() -> Result<()> {
         })
     };
 
-    let themes: [&Theme; 3] = [&THEME_CAPITAL, &THEME_MOJAVE, &THEME_COMMONWEALTH];
-    let mut current_theme: usize = 0;
+    let themes: [&Theme; 5] = [&THEME_CAPITAL, &THEME_MOJAVE, &THEME_COMMONWEALTH, &THEME_NUCLEAR_WINTER, &THEME_NUCLEAR_SHADOW];
+
+    let cfg = load_config();
+    let mut current_theme = cfg.theme_index.min(themes.len() - 1);
 
     let mut imgui = imgui::Context::create();
     apply_theme(&mut imgui, themes[current_theme]);
@@ -222,7 +269,7 @@ fn main() -> Result<()> {
     let mut selected_menu_item: i32 = 0;
     let menu_items = ["New Character", "Load Character", "Import Character", "Quit"];
     
-    let mut pending_theme: Option<usize> = Some(0);
+    let mut pending_theme: Option<usize> = Some(current_theme);
 
     let mut show_about = false;
     let mut new_char_state: Option<NewCharacterState> = None;
@@ -269,6 +316,7 @@ fn main() -> Result<()> {
                     if ui.radio_button_bool(theme.name, current_theme == i) {
                         current_theme = i;
                         pending_theme = Some(i);
+                        save_config(&AppConfig { theme_index: i });
                     }
                     if i < themes.len() - 1 {
                         ui.same_line();
@@ -284,50 +332,50 @@ fn main() -> Result<()> {
             });
 
         if show_about {
-    let (win_w, win_h) = window.size();
-    let aw = 400.0_f32;
-    let ah = 220.0_f32;
-    let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
+            let (win_w, win_h) = window.size();
+            let aw = 400.0_f32;
+            let ah = 220.0_f32;
+            let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
 
-    // Only force position when first opened or re-centered (not every frame)
-    let condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
-        imgui::Condition::Appearing
-    } else {
-        imgui::Condition::Appearing
-    };
+            // Only force position when first opened or re-centered (not every frame)
+            let condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
+                imgui::Condition::Appearing
+            } else {
+                imgui::Condition::Appearing
+            };
 
-    ui.window("##about")
-        .title_bar(false)
-        .resizable(false)
-        .movable(true)          // draggable
-        .collapsible(false)
-        .size([aw, ah], imgui::Condition::Always)
-        .position(center, imgui::Condition::Once) // Once = only set pos on first appear
-        //.bring_current_window_to_display_front()  // always on top
-        .bring_to_front_on_focus(true)
-        .build(|| {
-            // Title row with X button
-            let close_x = aw - 28.0;
-            ui.text("About");
-            ui.same_line_with_pos(close_x);
-            if ui.button("X##about_close") {
-                show_about = false;
-            }
-            ui.separator();
-            ui.spacing();
+            ui.window("##about")
+                .title_bar(false)
+                .resizable(false)
+                .movable(true)          // draggable
+                .collapsible(false)
+                .size([aw, ah], imgui::Condition::Always)
+                .position(center, imgui::Condition::Once) // Once = only set pos on first appear
+                //.bring_current_window_to_display_front()  // always on top
+                .bring_to_front_on_focus(true)
+                .build(|| {
+                    // Title row with X button
+                    let close_x = aw - 28.0;
+                    ui.text("About");
+                    ui.same_line_with_pos(close_x);
+                    if ui.button("X##about_close") {
+                        show_about = false;
+                    }
+                    ui.separator();
+                    ui.spacing();
 
-            ui.text("fallout 2d20 character manager");
-            ui.spacing();
-            render_text_wrapped(true, false, ui, "v0.1.5, 20260401", 16.0, aw - 32.0);
-            ui.spacing();
-            ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
-            ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
-            ui.spacing();
-            ui.separator();
-            ui.spacing();
-            render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0, aw - 32.0);
-        });
-}
+                    ui.text("fallout 2d20 character manager");
+                    ui.spacing();
+                    render_text_wrapped(true, false, ui, "v0.1.5, 20260401", 16.0, aw - 32.0);
+                    ui.spacing();
+                    ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
+                    ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
+                    ui.spacing();
+                    ui.separator();
+                    ui.spacing();
+                    render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0, aw - 32.0);
+                });
+        }
 
         // ── Screen content (offset below the bar) ────────────────────────────────────
         match screen {
