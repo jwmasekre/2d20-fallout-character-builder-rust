@@ -371,7 +371,7 @@ fn main() -> Result<()> {
 
                     ui.text("fallout 2d20 character manager");
                     ui.spacing();
-                    render_text_wrapped(true, false, ui, "v0.1.6, 20260403", 16.0, aw - 32.0);
+                    render_text_wrapped(true, false, ui, "v0.1.7, 20260403", 16.0, aw - 32.0);
                     ui.spacing();
                     ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
                     ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");

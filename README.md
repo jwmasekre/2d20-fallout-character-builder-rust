@@ -15,8 +15,8 @@ this project isn't even remotely close to functional, if you can't tell what's g
         * ~~0.1.3 - special stat assignment~~ 
         * ~~0.1.4 - skills assignment~~ 
         * ~~0.1.5 - perk selection~~
-        * ~~0.1.6 - stat calculation and review~~ `<- YOU ARE HERE`
-        * 0.1.7 - equipment selection
+        * ~~0.1.6 - stat calculation and review~~
+        * ~~0.1.7 - equipment selection~~ `<- YOU ARE HERE`
         * 0.1.8 - review and acceptance page
         * 0.1.9 - cleanup and testing
     * 0.2.0 - full character build pages/logic
