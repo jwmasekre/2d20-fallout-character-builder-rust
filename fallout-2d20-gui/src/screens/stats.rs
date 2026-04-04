@@ -331,12 +331,12 @@ pub fn render_stats(
         *screen = AppScreen::Perks;
     }
     ui.same_line();
-    let _g = (!validation.valid).then(|| ui.begin_disabled(true));
+    //let _g = (!validation.valid).then(|| ui.begin_disabled(true));
     if ui.button("Next >") {
-        //*screen = AppScreen::Equipment;
-        render_placeholder(&ui, &window, "equipment", screen);
+        *screen = AppScreen::Equipment;
+        //render_placeholder(&ui, &window, "equipment", screen);
     }
-    drop(_g);
+    //drop(_g);
 
     if !validation.valid {
         ui.same_line();

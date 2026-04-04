@@ -18,6 +18,7 @@ use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
 use screens::perks::{ render_perks, PerksState, load_perks, render_perk_resolution, PerkResolutionPopup };
 use screens::stats::{ render_stats };
+use screens::equipment::{ render_equipment, EquipmentState };
 
 struct Theme {
     name: &'static str,
@@ -201,6 +202,7 @@ enum AppScreen {
     Skills,
     Perks,
     Stats,
+    Equipment,
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -279,6 +281,7 @@ fn main() -> Result<()> {
     let mut skills_state: Option<SkillsState> = None;
     let mut perks_state: Option<PerksState> = None;
     let mut perk_resolution: Option<PerkResolutionPopup> = None;
+    let mut equipment_state: Option<EquipmentState> = None;
     
     let db_path = config::db_path();
     std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -528,6 +531,26 @@ fn main() -> Result<()> {
                     &mut screen,
                 );
             }
+            AppScreen::Equipment => {
+                let origin_id = new_char_state.as_ref()
+                    .and_then(|s| s.selected_origin_id());
+                let state = equipment_state.get_or_insert_with(|| {
+                    let all_backgrounds = screens::equipment::load_backgrounds(&db);
+                    EquipmentState::new(all_backgrounds)
+                });
+
+                if state.origin_id != origin_id {
+                    state.origin_id = origin_id;
+                    state.reset_selection();
+                }
+
+                render_equipment(&ui, &window, state, &db, &mut screen);
+
+                if screen == AppScreen::MainMenu {
+                    equipment_state = None;
+                }
+            }
+
         }
 
         unsafe {
