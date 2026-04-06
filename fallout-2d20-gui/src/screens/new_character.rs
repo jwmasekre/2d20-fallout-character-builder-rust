@@ -78,7 +78,9 @@ impl NewCharacterState {
         state.refresh_traits(db);
         state
     }
-
+    pub fn selected_origin_id(&self) -> Option<i64> {
+        self.origins.get(self.selected_origin_idx).map(|o| o.id as i64)
+    }
     fn refresh_traits(&mut self, db: &Db) {
         if self.origins.is_empty() {
             self.traits = vec![];

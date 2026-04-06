@@ -4,3 +4,4 @@ pub mod special;
 pub mod skills;
 pub mod perks;
 pub mod stats;
+pub mod equipment;
