@@ -368,12 +368,23 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
         // Check if any repeated item links to a pack (chain of fixed) = single/pack
         let sibling_ids = &apparel_id_count[&anchor_row.apparel_id];
 
+        /*
         // The non-anchor siblings' alt_ids point to the double choices or pack items
         let sibling_alts: Vec<i64> = sibling_ids.iter()
             .filter(|&&id| id != anchor_id)
             .filter_map(|id| fwd.get(id).copied())
             .collect();
         eprintln!("anchor_id={anchor_id} sibling_ids={sibling_ids:?} sibling_alts={sibling_alts:?}");
+        
+        // With — also deduplicate, since the anchor may share an alt target:
+        let sibling_alts: Vec<i64> = sibling_ids.iter()
+            .filter(|&&id| id != anchor_id)
+            .filter_map(|id| fwd.get(id).copied())
+            .collect::<std::collections::HashSet<_>>()  // dedup
+            .into_iter()
+            .collect();
+        eprintln!("anchor_id={anchor_id} sibling_ids={sibling_ids:?} sibling_alts={sibling_alts:?}");
+
 
         // Determine if siblings' alts form choice groups (double) or fixed chains (pack)
         let is_pack = sibling_alts.iter().all(|&alt_id| {
@@ -402,6 +413,52 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
             }).collect();
             slots.push(ApparelSlot::SingleOrDouble { single: single_opt, double_choices });
         }
+        */
+        // Collect all unique alt targets from ALL siblings (not just non-anchor)
+        let mut sibling_alts: Vec<i64> = sibling_ids.iter()
+            .filter_map(|id| fwd.get(id).copied())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        // Each sibling_alt is the entry point into a choice group.
+        // Resolve each one into its full cycle.
+        let double_choices: Vec<Vec<ApparelOption>> = sibling_alts.iter().map(|&start| {
+            // Walk the cycle from this start point
+            let mut cyc: Vec<i64> = vec![];
+            let mut cur = start;
+            loop {
+                if cyc.contains(&cur) { break; }
+                cyc.push(cur);
+                match fwd.get(&cur) {
+                    Some(&next) => cur = next,
+                    None => break,
+                }
+            }
+            // Deduplicate: only include nodes not already part of another group
+            cyc.iter()
+                .filter_map(|id| by_id.get(id).map(|r| apparel_option(r)))
+                .collect()
+        }).collect();
+
+        // Deduplicate double_choices: if two groups resolved to the same set of nodes,
+        // collapse them (handles 15↔16 being reachable from both row 19 and 20)
+        let mut seen_sets: Vec<std::collections::HashSet<i64>> = vec![];
+        let mut deduped_choices: Vec<Vec<ApparelOption>> = vec![];
+        for group in double_choices {
+            let id_set: std::collections::HashSet<i64> = group.iter()
+                .map(|o| o.bg_apparel_id)
+                .collect();
+            if !seen_sets.iter().any(|s| s == &id_set) {
+                seen_sets.push(id_set);
+                deduped_choices.push(group);
+            }
+        }
+
+        slots.push(ApparelSlot::SingleOrDouble {
+            single: single_opt,
+            double_choices: deduped_choices,
+        });
     }
 
     slots
@@ -783,7 +840,7 @@ impl EquipmentState {
             .collect()
     }
 
-    fn reset_selection(&mut self) {
+    pub fn reset_selection(&mut self) {
         self.selected_bg_idx = None;
         self.current_bg = None;
         self.weapon_selections.clear();
@@ -903,7 +960,7 @@ pub fn render_equipment(
         .collect();
     let preview = state.selected_bg_idx
         .and_then(|i| state.all_backgrounds.get(i))
-        .map(|bg| bg.name_as_str())
+        .map(|bg| bg.name.as_str())
         .unwrap_or("Select background");
 
     ui.text("Background:");
