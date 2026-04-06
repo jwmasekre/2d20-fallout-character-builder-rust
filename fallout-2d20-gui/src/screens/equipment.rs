@@ -1,4 +1,4 @@
-use crate::{db::Db, render_placeholder};
+use crate::{db::Db, render_placeholder, screens::skills::SKILLS};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
@@ -75,6 +75,44 @@ pub struct AmmoRow {
 pub struct GearRow {
     pub gear_id: i64,
     pub gear_name: String,
+}
+
+pub struct EffectNameSets {
+    pub effect_names: HashSet<String>,   // from dam_effects
+    pub quality_names: HashSet<String>,  // from qualities
+}
+
+impl EffectNameSets {
+    pub fn load(db: &Db) -> Self {
+        let effects = db.block_on(async {
+            sqlx::query!("SELECT name FROM dam_effects")
+                .fetch_all(&db.pool).await
+        }).unwrap_or_default();
+
+        let qualities = db.block_on(async {
+            sqlx::query!("SELECT name FROM qualities")
+                .fetch_all(&db.pool).await
+        }).unwrap_or_default();
+
+        Self {
+            effect_names: effects.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+            quality_names: qualities.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+        }
+    }
+
+    pub fn is_quality(&self, name: &str) -> bool {
+        self.quality_names.contains(&name.to_lowercase())
+    }
+
+    pub fn is_effect(&self, name: &str) -> bool {
+        self.effect_names.contains(&name.to_lowercase())
+    }
 }
 
 // ── Resolved choice model ─────────────────────────────────────────────────────
@@ -172,6 +210,34 @@ pub struct ResolvedBackground {
     pub odd:     i32,
     pub outcast: i32,
     pub junk:    i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct WeaponEffect {
+    pub name: String,
+    pub value: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WeaponQuality {
+    pub name: String,
+    pub value: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedWeapon {
+    pub name: String,           // includes mod prefix
+    pub skill: String,
+    pub target_number: i32,
+    pub tagged: bool,
+    pub damage: String,
+    pub effects: Vec<WeaponEffect>,
+    pub damage_type: String,
+    pub rate: i32,
+    pub qualities: Vec<WeaponQuality>,
+    pub ammo_name: String,
+    pub ammo_quantity: String,
+    pub weight: i32,
 }
 
 // ── Weapon grouping ───────────────────────────────────────────────────────────
@@ -616,6 +682,349 @@ pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleS
     slots
 }
 
+pub fn resolve_weapons_for_review(
+    db: &Db,
+    bg: &ResolvedBackground,
+    weapon_selections: &[SlotSelection],
+    special: &crate::screens::special::SpecialState,
+    skills: &crate::screens::skills::SkillsState,
+) -> Vec<ResolvedWeapon> {
+    use crate::screens::special::{S, P, E, A};
+
+    let names = EffectNameSets::load(db);
+
+    // Collect the bg_weapon_ids that were actually selected
+    let selected_bg_weapon_ids: Vec<i64> = bg.weapon_slots.iter()
+        .zip(weapon_selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (WeaponSlot::Fixed(opt), _) =>
+                vec![opt.bg_weapon_id],
+            (WeaponSlot::Choice(opts), SlotSelection::Chosen(i)) if *i < opts.len() =>
+                vec![opts[*i].bg_weapon_id],
+            (WeaponSlot::ManyForOne(give_up, get_one), SlotSelection::ManyForOneChosen(choice)) =>
+                if *choice == 0 {
+                    vec![get_one.bg_weapon_id]
+                } else {
+                    give_up.iter().map(|w| w.bg_weapon_id).collect()
+                },
+            _ => vec![],
+        })
+        .collect();
+
+    if selected_bg_weapon_ids.is_empty() { return vec![]; }
+
+    let id_json = serde_json::to_string(&selected_bg_weapon_ids).unwrap_or_default();
+    // Pull full weapon data for each selected bg_weapon row
+    let rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT
+                bw.id        AS bg_weapon_id,
+                w.id         AS weapon_id,
+                w.name       AS weapon_name,
+                w.dam, w.dtype, w.rate, w.wgt,
+                s.name       AS skill_name,
+                a.name       AS ammo_name,
+                ba.quantity  AS ammo_quantity,
+                wm.id        AS mod_id,
+                wm.name      AS mod_name,
+                wm.prefix    AS mod_prefix,
+                wm.effects   AS mod_effects,
+                wm.wgt       AS mod_wgt
+            FROM background_weapons bw
+            JOIN weapons w   ON w.id  = bw.weapon_id
+            JOIN skills  s   ON s.id  = w.type
+            LEFT JOIN weapon_mods wm ON wm.id = bw.mod_id
+            LEFT JOIN background_ammo ba ON ba.bg_weapon_id = bw.id
+            LEFT JOIN ammo a ON a.id = ba.ammo_id
+            WHERE bw.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    // For each row pull qualities and effects from the weapon tables
+    let mut result: Vec<ResolvedWeapon> = vec![];
+
+    for row in &rows {
+        let weapon_id = row.weapon_id;
+
+        // Qualities
+        let qual_rows = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT q.name, wq.qual_val
+                   FROM weapon_quals wq
+                   JOIN qualities q ON q.id = wq.qual_id
+                   WHERE wq.weapon_id = ?"#,
+                weapon_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+
+        let mut qualities: Vec<WeaponQuality> = qual_rows.iter().map(|q| WeaponQuality {
+            name: q.name.clone().unwrap_or_default(),
+            value: q.qual_val,
+        }).collect();
+
+        // Effects
+        let effect_rows = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT de.name, we.effect_val
+                   FROM weapon_effects we
+                   JOIN dam_effects de ON de.id = we.effect_id
+                   WHERE we.weapon_id = ?"#,
+                weapon_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+
+        let mut effects: Vec<WeaponEffect> = effect_rows.iter().map(|e| WeaponEffect {
+            name: e.name.clone().unwrap_or_default(),
+            value: e.effect_val,
+        }).collect();
+
+        let mut damage     = row.dam.clone().unwrap_or_default();
+        let mut rate       = row.rate.unwrap_or_default() as i32;
+        let mut damage_type = row.dtype.clone().unwrap_or_default();
+        let base_wgt       = row.wgt.unwrap_or_default() as i32;
+        let mod_wgt        = row.mod_wgt.unwrap_or_default() as i32;
+        let weight         = base_wgt + mod_wgt;
+
+
+        // Build weapon name with mod prefix
+        let weapon_name = match &row.mod_prefix {
+            Some(prefix) if !prefix.is_empty() =>
+                format!("{} {}", prefix, row.weapon_name.clone().unwrap_or_default()),
+            _ => row.weapon_name.clone().unwrap_or_default(),
+        };
+
+        // Skill → SPECIAL attribute mapping
+        let skill_name = row.skill_name.clone().unwrap_or_default();
+        let (attr_idx, skill_total, tagged) = SKILLS.iter()
+            .position(|&s| s == skill_name)
+            .map(|skill_idx| {
+                let entry = &skills.skills[skill_idx];
+                let attr = match skill_name.as_str() {
+                    "Melee Weapons" | "Unarmed"         => S, // Strength
+                    "Small Guns"    | "Throwing"        => A, // Agility
+                    "Energy Weapons"| "Explosives"      => P, // Perception
+                    "Big Guns"                          => E, // Endurance
+                    _                                   => crate::screens::special::L,
+                };
+                (attr, entry.total(), entry.tagged)
+            })
+            .unwrap_or((crate::screens::special::L, 0, false));
+
+        let target_number = special.display_value(attr_idx) + skill_total;
+
+        // Parse and apply mod effects
+        if let Some(mod_fx_json) = &row.mod_effects {
+            if let Ok(fx_strings) = serde_json::from_str::<Vec<String>>(mod_fx_json) {
+                for fx_str in &fx_strings {
+                    match parse_mod_effect(fx_str) {
+                        ModEffect::SetDamage(d) => {
+                            damage = format!("{}CD", d);
+                        }
+                        ModEffect::AddDamage(n) => {
+                            // Extract leading number from e.g. "3CD", add n, reformat
+                            let base_n: i32 = damage
+                                .trim_end_matches(|c: char| c.is_alphabetic())
+                                .parse().unwrap_or(0);
+                            damage = format!("{}CD", base_n + n);
+                        }
+                        ModEffect::SubDamage(n) => {
+                            let base_n: i32 = damage
+                                .trim_end_matches(|c: char| c.is_alphabetic())
+                                .parse().unwrap_or(0);
+                            damage = format!("{}CD", (base_n - n).max(1));
+                        }
+                        ModEffect::SetRate(r) => { rate = r; }
+                        ModEffect::AddRate(r) => { rate += r; }
+                        ModEffect::SubRate(r) => { rate = (rate - r).max(0); }
+                        ModEffect::AddRange(_) | ModEffect::SubRange(_) => {
+                            // Range is a display string — store for future use
+                            // TODO: implement range stepping when range model is defined
+                        }
+                        ModEffect::Gain(name, val) => {
+                            apply_gain(&mut effects, &mut qualities, &name, val, &names);
+                        }
+                        ModEffect::Lose(name, val) => {
+                            apply_lose(&mut effects, &mut qualities, &name, val, &names);
+                        }
+                        ModEffect::SetDamageType(dt) => { damage_type = dt; }
+                        ModEffect::SetAmmo(_) => {
+                            // Ammo swap handled at character sheet save time
+                        }
+                        ModEffect::AllowsMods(_) | ModEffect::AddWeapon(_) => {
+                            // Structural changes — handled at save time
+                        }
+                        ModEffect::Unknown(s) => {
+                            eprintln!("Unknown mod effect: {s}");
+                        }
+                    }
+                }
+            }
+        }
+
+        // Damage type
+        let damage_type = match row.dtype.as_deref().unwrap_or("") {
+            "Ph"    => "Physical",
+            "En"    => "Energy",
+            "Ph/En" => "Physical/Energy",
+            "Rad"   => "Radiation",
+            "En/Rad"=> "Energy/Radiation",
+            "Poi"   => "Poison",
+            "All"   => "All",
+            other   => other,
+        }.to_string();
+
+        result.push(ResolvedWeapon {
+            name: weapon_name,
+            skill: skill_name,
+            target_number,
+            tagged,
+            damage,
+            effects,
+            damage_type,
+            rate,
+            qualities,
+            ammo_name: row.ammo_name.clone().unwrap_or_default(),
+            ammo_quantity:row.ammo_quantity.clone().unwrap_or_default(),
+            weight,
+        });
+    }
+
+    result
+}
+
+// ── Mod effect AST ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum ModEffect {
+    SetDamage(String),           // "XCD Dam"
+    AddDamage(i32),              // "+XCD Dam"
+    SubDamage(i32),              // "-XCD Dam"
+    SetRate(i32),                // "X Rate"
+    AddRate(i32),                // "+X Rate"
+    SubRate(i32),                // "-X Rate"
+    AddRange(i32),               // "+X Range"
+    SubRange(i32),               // "-X Range"
+    Gain(String, Option<i64>),   // "Gain X" or "Gain X Y"
+    Lose(String, Option<i64>),   // "Lose X" or "Lose X Y"
+    AllowsMods(String),          // "Allows X Mods"
+    AddWeapon(String),           // "Add X weapon"
+    SetDamageType(String),       // "Dam Type = X"
+    SetAmmo(String),             // "Ammo = X"
+    Unknown(String),             // fallback
+}
+
+pub fn parse_mod_effect(s: &str) -> ModEffect {
+    let s = s.trim();
+
+    // Dam Type = X
+    if let Some(rest) = s.strip_prefix("Dam Type =").or_else(|| s.strip_prefix("Dam Type=")) {
+        let val = rest.trim();
+        let dtype = if val.eq_ignore_ascii_case("Both Physical and Energy") {
+            "Ph/En".to_string()
+        } else {
+            val.to_string()
+        };
+        return ModEffect::SetDamageType(dtype);
+    }
+
+    // Ammo = X
+    if let Some(rest) = s.strip_prefix("Ammo =").or_else(|| s.strip_prefix("Ammo=")) {
+        return ModEffect::SetAmmo(rest.trim().to_string());
+    }
+
+    // Allows X Mods
+    if let Some(rest) = s.strip_prefix("Allows ") {
+        if let Some(mod_name) = rest.strip_suffix(" Mods") {
+            return ModEffect::AllowsMods(mod_name.trim().to_string());
+        }
+    }
+
+    // Add X weapon
+    if let Some(rest) = s.strip_prefix("Add ") {
+        if let Some(weap) = rest.strip_suffix(" weapon") {
+            return ModEffect::AddWeapon(weap.trim().to_string());
+        }
+    }
+
+    // Gain X / Gain X Y / Gain X(Y) / Gain X (Y)
+    if let Some(rest) = s.strip_prefix("Gain ") {
+        let (name, val) = parse_name_and_value(rest);
+        return ModEffect::Gain(name, val);
+    }
+
+    // Lose X / Lose X Y
+    if let Some(rest) = s.strip_prefix("Lose ") {
+        let (name, val) = parse_name_and_value(rest);
+        return ModEffect::Lose(name, val);
+    }
+
+    // +X Range / -X Range
+    if let Some(rest) = s.strip_suffix(" Range") {
+        if let Some(n) = rest.strip_prefix('+').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::AddRange(n);
+        }
+        if let Some(n) = rest.strip_prefix('-').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::SubRange(n);
+        }
+    }
+
+    // +X Rate / -X Rate / X Rate
+    if let Some(rest) = s.strip_suffix(" Rate") {
+        if let Some(n) = rest.strip_prefix('+').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::AddRate(n);
+        }
+        if let Some(n) = rest.strip_prefix('-').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::SubRate(n);
+        }
+        if let Ok(n) = rest.parse::<i32>() {
+            return ModEffect::SetRate(n);
+        }
+    }
+
+    // XCD Dam / +XCD Dam / -XCD Dam
+    if let Some(rest) = s.strip_suffix(" Dam") {
+        if let Some(inner) = rest.strip_prefix('+') {
+            // "+3CD Dam" → extract just the number
+            let n: i32 = inner.trim_end_matches(|c: char| c.is_alphabetic())
+                .parse().unwrap_or(0);
+            return ModEffect::AddDamage(n);
+        }
+        if let Some(inner) = rest.strip_prefix('-') {
+            let n: i32 = inner.trim_end_matches(|c: char| c.is_alphabetic())
+                .parse().unwrap_or(0);
+            return ModEffect::SubDamage(n);
+        }
+        // "3CD Dam" or "2CD Dam" — full replacement
+        return ModEffect::SetDamage(rest.trim().to_string());
+    }
+
+    ModEffect::Unknown(s.to_string())
+}
+
+/// Parse "Name" or "Name 3" or "Name(3)" or "Name (3)"
+fn parse_name_and_value(s: &str) -> (String, Option<i64>) {
+    // Try "Name(X)" or "Name (X)"
+    if let Some(paren_start) = s.rfind('(') {
+        let name = s[..paren_start].trim().to_string();
+        let val_str = s[paren_start+1..].trim_end_matches(')').trim();
+        if let Ok(v) = val_str.parse::<i64>() {
+            return (name, Some(v));
+        }
+    }
+    // Try "Name X" where last token is a number
+    if let Some(last_space) = s.rfind(' ') {
+        let maybe_num = &s[last_space+1..];
+        if let Ok(v) = maybe_num.parse::<i64>() {
+            return (s[..last_space].trim().to_string(), Some(v));
+        }
+    }
+    (s.trim().to_string(), None)
+}
+
 pub fn load_backgrounds(db: &Db) -> Vec<BackgroundRow> {
     let result = db.block_on(async {
         sqlx::query!(
@@ -815,6 +1224,7 @@ pub struct EquipmentState {
     pub apparel_selections: Vec<SlotSelection>,
     pub consumable_selections: Vec<SlotSelection>,
     pub robot_module_selections: Vec<SlotSelection>,
+
 }
 
 impl EquipmentState {
@@ -856,8 +1266,8 @@ impl EquipmentState {
         let bg = load_background_equipment(db, id);
         self.weapon_selections = default_selections(&bg.weapon_slots);
         self.apparel_selections = default_apparel_selections(&bg.apparel_slots);
-        self.consumable_selections = default_selections_generic(bg.consumable_slots.len());
-        self.robot_module_selections = default_selections_generic(bg.robot_module_slots.len());
+        self.consumable_selections = default_selections(&bg.consumable_slots);
+        self.robot_module_selections = default_selections(&bg.robot_module_slots);
         self.current_bg = Some(bg);
     }
 
@@ -916,6 +1326,66 @@ impl IsFixed for ConsumableSlot {
 }
 impl IsFixed for RobotModuleSlot {
     fn is_fixed(&self) -> bool { matches!(self, RobotModuleSlot::Fixed(_)) }
+}
+
+fn apply_gain(
+    effects: &mut Vec<WeaponEffect>,
+    qualities: &mut Vec<WeaponQuality>,
+    name: &str,
+    val: Option<i64>,
+    names: &EffectNameSets,
+) {
+    if names.is_quality(name) {
+        if let Some(existing) = qualities.iter_mut().find(|q| q.name.eq_ignore_ascii_case(name)) {
+            match (existing.value, val) {
+                (Some(qv), Some(v)) => existing.value = Some(qv + v),
+                (None, Some(v))     => existing.value = Some(v),
+                _                   => {}
+            }
+        } else {
+            qualities.push(WeaponQuality { name: name.to_string(), value: val });
+        }
+    } else if names.is_effect(name) {
+        if let Some(existing) = effects.iter_mut().find(|e| e.name.eq_ignore_ascii_case(name)) {
+            match (existing.value, val) {
+                (Some(ev), Some(v)) => existing.value = Some(ev + v),
+                (None, Some(v))     => existing.value = Some(v),
+                _                   => {}
+            }
+        } else {
+            effects.push(WeaponEffect { name: name.to_string(), value: val });
+        }
+    } else {
+        eprintln!("[apply_gain] unknown name '{}' — not in dam_effects or qualities", name);
+    }
+}
+
+fn apply_lose(
+    effects: &mut Vec<WeaponEffect>,
+    qualities: &mut Vec<WeaponQuality>,
+    name: &str,
+    val: Option<i64>,
+    names: &EffectNameSets,
+) {
+    if names.is_quality(name) {
+        if let Some(pos) = qualities.iter().position(|q| q.name.eq_ignore_ascii_case(name)) {
+            match (qualities[pos].value, val) {
+                (Some(qv), Some(v)) if v >= qv => { qualities.remove(pos); }
+                (Some(qv), Some(v))             => { qualities[pos].value = Some(qv - v); }
+                _                               => { qualities.remove(pos); }
+            }
+        }
+    } else if names.is_effect(name) {
+        if let Some(pos) = effects.iter().position(|e| e.name.eq_ignore_ascii_case(name)) {
+            match (effects[pos].value, val) {
+                (Some(ev), Some(v)) if v >= ev => { effects.remove(pos); }
+                (Some(ev), Some(v))             => { effects[pos].value = Some(ev - v); }
+                _                               => { effects.remove(pos); }
+            }
+        }
+    } else {
+        eprintln!("[apply_lose] unknown name '{}' — not in dam_effects or qualities", name);
+    }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -1303,7 +1773,7 @@ fn render_equipment_footer(ui: &Ui, win_h: f32, screen: &mut AppScreen, complete
     ui.same_line();
     let _g = (!complete).then(|| ui.begin_disabled(true));
     if ui.button("Review >") {
-        //*screen = AppScreen::Review;
+        *screen = AppScreen::Review;
         //render_placeholder(ui, window, "review", screen);
         }
     drop(_g);

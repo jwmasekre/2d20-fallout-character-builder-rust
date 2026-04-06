@@ -19,6 +19,7 @@ use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
 use screens::perks::{ render_perks, PerksState, load_perks, render_perk_resolution, PerkResolutionPopup };
 use screens::stats::{ render_stats };
 use screens::equipment::{ render_equipment, EquipmentState };
+use screens::review::render_review;
 
 struct Theme {
     name: &'static str,
@@ -203,6 +204,7 @@ enum AppScreen {
     Perks,
     Stats,
     Equipment,
+    Review
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -549,6 +551,19 @@ fn main() -> Result<()> {
                 if screen == AppScreen::MainMenu {
                     equipment_state = None;
                 }
+            }
+            AppScreen::Review => {
+                render_review(
+                    &ui, &window,
+                    new_char_state.as_ref().unwrap(),
+                    special_state.as_ref().unwrap(),
+                    skills_state.as_ref().unwrap(),
+                    perks_state.as_ref().unwrap(),
+                    equipment_state.as_ref().unwrap(),
+                    &mut screen,
+                    themes[current_theme],
+                    &db,
+                );
             }
 
         }
