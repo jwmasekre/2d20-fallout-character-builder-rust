@@ -940,7 +940,7 @@ CREATE TABLE IF NOT EXISTS backgrounds (
   "name" TEXT,
   "origin_id" INTEGER, -- smallint
   "caps" INTEGER, -- smallint
-  "misc" TEXT,
+  "misc" TEXT, -- json array of strings
   "trinket" INTEGER, -- smallint
   "food" INTEGER, -- smallint
   "forage" INTEGER, -- smallint

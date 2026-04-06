@@ -1109,7 +1109,7 @@ fn render_weapon_slot(
             let preview = if chosen_idx < options.len() {
                 weapon_label(&options[chosen_idx])
             } else {
-                format!("Weapon {} — choose...", idx + 1)
+                format!("Weapon {} - choose...", idx + 1)
             };
             ui.set_next_item_width(300.0);
             if let Some(_cb) = ui.begin_combo(format!("##wslot_{}", idx), &preview) {
@@ -1155,7 +1155,7 @@ fn render_apparel_slot(ui: &Ui, idx: usize, slot: &ApparelSlot, sel: &mut SlotSe
             let preview = if chosen_idx < options.len() {
                 options[chosen_idx].name.clone()
             } else {
-                format!("Apparel {} — choose...", idx + 1)
+                format!("Apparel {} - choose...", idx + 1)
             };
             ui.set_next_item_width(300.0);
             if let Some(_cb) = ui.begin_combo(format!("##aslot_{}", idx), &preview) {
@@ -1186,7 +1186,7 @@ fn render_apparel_slot(ui: &Ui, idx: usize, slot: &ApparelSlot, sel: &mut SlotSe
                     let picked = double_picks[di];
                     let preview = picked
                         .map(|i| choices[i].name.clone())
-                        .unwrap_or_else(|| format!("Slot {} — choose...", di + 1));
+                        .unwrap_or_else(|| format!("Slot {} - choose...", di + 1));
                     ui.set_next_item_width(280.0);
                     if let Some(_cb) = ui.begin_combo(format!("##adbl_{}_{}", idx, di), &preview) {
                         for (oi, opt) in choices.iter().enumerate() {
@@ -1221,7 +1221,7 @@ fn render_consumable_slot(ui: &Ui, idx: usize, slot: &ConsumableSlot, sel: &mut 
             let preview = if chosen_idx < options.len() {
                 options[chosen_idx].name.clone()
             } else {
-                format!("Consumable {} — choose...", idx + 1)
+                format!("Consumable {} - choose...", idx + 1)
             };
             ui.set_next_item_width(280.0);
             if let Some(_cb) = ui.begin_combo(format!("##cslot_{}", idx), &preview) {
@@ -1258,7 +1258,7 @@ fn render_robot_module_slot(ui: &Ui, idx: usize, slot: &RobotModuleSlot, sel: &m
             let preview = if chosen_idx < options.len() {
                 options[chosen_idx].name.clone()
             } else {
-                format!("Module {} — choose...", idx + 1)
+                format!("Module {} - choose...", idx + 1)
             };
             ui.set_next_item_width(280.0);
             if let Some(_cb) = ui.begin_combo(format!("##rmslot_{}", idx), &preview) {
