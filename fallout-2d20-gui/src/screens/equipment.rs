@@ -772,9 +772,10 @@ pub fn load_background_equipment(db: &Db, background_id: i64) -> ResolvedBackgro
         gear_name: r.gear_name.unwrap_or_default(),
     }).collect();
 
-    let misc = bg.misc.trim_matches(|c| c == '{' || c == '}' || c == '"')
-        .split("\",\"").collect::<Vec<_>>().join(", ");
-
+    let misc = serde_json::from_str::<Vec<String>>(&bg.misc)
+        .unwrap_or_default()
+        .join(", ");
+    
     ResolvedBackground {
         id: bg.id, name: bg.name,
         weapon_slots: resolve_weapon_slots(weapons),
