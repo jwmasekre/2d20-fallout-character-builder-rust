@@ -6,6 +6,12 @@ many sins have probably been committed here unwittingly
 
 this project isn't even remotely close to functional, if you can't tell what's going on and how to build/run it, you shouldn't be here
 
+## ai disclaimer
+
+ai was used for the generation of a large bulk of this code. while I have a decent understanding of programming *concepts*, I don't know every language, so this is a great opportunity to see how the concept translates to a new language (in this case, rust). I still review every line of code for both validation and learning purposes. prior to 1.0, I will also be doing a full pass through the app, improving documentation and ensuring full understanding.
+
+the db and its architecture was 100% designed and crafted by myself. the design, logic, and flow of the application was designed by myself.
+
 ## roadmap
 
 * 0.1 - base functionality development
