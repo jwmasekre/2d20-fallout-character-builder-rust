@@ -364,6 +364,163 @@ pub fn load_resolved_apparel(db: &Db, apparel_ids: &[i64]) -> Vec<ResolvedAppare
     }).collect()
 }
 
+/// Each inner Vec is one row of the display grid.
+pub fn limb_layout(limbs: &[Limb]) -> Vec<Vec<Limb>> {
+    // Detect robot type by which limbs are present
+    let has = |l: &Limb| limbs.contains(l);
+
+    if has(&Limb::Optics) {
+        // Mr. Handy
+        vec![
+            vec![Limb::Optics],
+            vec![Limb::Body],
+            vec![Limb::Arm1, Limb::Arm2, Limb::Arm3],
+            vec![Limb::Thruster],
+        ]
+    } else if has(&Limb::Wheel) {
+        // Securitron
+        vec![
+            vec![Limb::ArmLeft, Limb::Head, Limb::ArmRight],
+            vec![Limb::Body],
+            vec![Limb::Wheel],
+        ]
+    } else {
+        // All others (organic, robobrain, generic robot, securitron-fallback)
+        let torso_or_body = if has(&Limb::Torso) { Limb::Torso } else { Limb::Body };
+        let leg_l = if has(&Limb::LegLeft)   { Limb::LegLeft }   else { Limb::TrackLeft };
+        let leg_r = if has(&Limb::LegRight)  { Limb::LegRight }  else { Limb::TrackRight };
+
+        vec![
+            vec![Limb::Head],
+            vec![Limb::ArmLeft, Limb::ArmRight],
+            vec![torso_or_body],
+            vec![leg_l, leg_r],
+        ]
+    }
+    .into_iter()
+    // Drop any row whose limbs aren't actually present on this character
+    .map(|row| row.into_iter().filter(|l| has(l)).collect::<Vec<_>>())
+    .filter(|row| !row.is_empty())
+    .collect()
+}
+
+pub fn render_dr_block(
+    ui: &Ui,
+    limb: &Limb,
+    dr: &Dr,
+    base_health: i32,
+) {
+    let label   = limb.display_name();
+    let block_w = 100.0;
+    let pad_w = 10.0;
+    let cell_w = ( block_w / 2.0 ) - pad_w;
+    let pad = 6.0;
+
+    // Record top-left before the group
+    let start = ui.cursor_screen_pos();
+
+    ui.group(|| {
+        // Header centered
+        let text_w = ui.calc_text_size(label)[0];
+        let text_x = start[0] + ((block_w - text_w) / 2.0) - pad_w;
+        ui.set_cursor_screen_pos([text_x, ui.cursor_screen_pos()[1]]);
+        ui.text_colored(ui.style_color(imgui::StyleColor::DragDropTarget), label);
+
+        //ui.separator();
+
+        // Row 1 — Physical | Energy
+        render_dr_cell(ui, "PH", dr.phys, cell_w, pad_w);
+        ui.same_line_with_spacing(0.0, pad_w);
+        render_dr_cell(ui, "EN", dr.enrg, cell_w, pad_w);
+
+        // Row 2 — Radiation | Health
+        render_dr_cell(ui, "RD", dr.rads, cell_w, pad_w);
+        ui.same_line_with_spacing(0.0, pad_w);
+        render_dr_cell(ui, "HP", base_health, cell_w, pad_w);
+    });
+
+    // Draw border around the completed group
+    let end = ui.item_rect_max();
+    let draw = ui.get_window_draw_list();
+    let top_left_x = start[0] - pad;
+    let top_left_y = start[1] - pad;
+    let bot_right_x = end[0]   + pad;
+    let bot_right_y = end[1]   + pad;
+    draw.add_rect(
+        [top_left_x, top_left_y],
+        [bot_right_x, bot_right_y],
+        ui.style_color(imgui::StyleColor::DragDropTarget)
+    )
+    .rounding(3.0)
+    .build();
+}
+
+fn render_dr_cell(ui: &Ui, label: &str, value: i32, w: f32, _pad: f32) {
+    ui.group(|| {
+        let cell_w = w - 4.0;
+        // Label dimmed, left side
+        ui.text_disabled(label);
+        ui.same_line_with_spacing(0.0, 4.0);
+        // Value right-aligned within remaining space
+        let val_str = value.to_string();
+        let val_w   = ui.calc_text_size(&val_str)[0];
+        let label_w = ui.calc_text_size(label)[0];
+        let spacer  = (cell_w - label_w - val_w - 4.0).max(0.0);
+        ui.set_cursor_pos([
+            ui.cursor_pos()[0] + spacer,
+            ui.cursor_pos()[1],
+        ]);
+        ui.text(&val_str);
+    });
+}
+
+pub fn render_dr_table(
+    ui: &Ui,
+    limbs: &[Limb],
+    dr_map: &HashMap<Limb, Dr>,
+) {
+    let layout = limb_layout(limbs);
+    let block_w = 82.0;
+    let gap = 8.0;
+    let h_gap = 24.0;  // ← increased from 8.0
+    let v_gap = 18.0;
+    
+    ui.set_cursor_pos([
+        ui.cursor_pos()[0],
+        ui.cursor_pos()[1] + v_gap,
+    ]);
+
+    let mut iter = 0;
+
+    for row in &layout {
+        let row_w = row.len() as f32 * block_w
+            + (row.len().saturating_sub(1)) as f32 * h_gap;
+
+        // Center within the column, not the whole window
+        let avail      = ui.content_region_avail()[0];
+        let col_origin = ui.cursor_pos()[0];
+        let offset     = ((avail - row_w) / 2.0).max(0.0);
+
+        ui.set_cursor_pos([col_origin + offset, ui.cursor_pos()[1]]);
+
+        for (i, limb) in row.iter().enumerate() {
+            if i > 0 {
+                ui.same_line_with_spacing(0.0, h_gap);
+            }
+            let dr = dr_map.get(limb).cloned().unwrap_or_default();
+            render_dr_block(ui, limb, &dr, 0);
+        }
+
+        iter += 1;
+        ui.set_cursor_pos([
+            ui.cursor_pos()[0],
+            ui.cursor_pos()[1] + v_gap,
+        ])
+        //ui.spacing();
+        //ui.spacing();  // ← extra spacing between rows
+    }
+}
+
 // ── XP helpers ────────────────────────────────────────────────────────────────
 
 fn xp_for_level(level: i32) -> i32 {
@@ -491,26 +648,24 @@ pub fn render_review(
     ));
     ui.spacing();
 
-    // ── Skills ────────────────────────────────────────────────────────────────
-    section_header(ui, theme, "SKILLS");
+    // ── Skills + DR side by side ──────────────────────────────────────────────────
+    section_header(ui, theme, "SKILLS & DAMAGE RESISTANCE");
 
-    // Three-column skill layout
+    let skill_col_w = 260.0;
+    let dr_col_w    = w - 48.0 - skill_col_w;
+
+    ui.columns(2, "##skills_dr_cols", false);
+    ui.set_column_width(0, skill_col_w);
+    ui.set_column_width(1, dr_col_w);
+
+    // ── Left: Skills ─────────────────────────────────────────────────────────────
     let skill_entries: Vec<(i32, bool)> = skills.skills.iter()
         .map(|s| (s.total(), s.tagged))
         .collect();
 
-    let per_col = (skill_entries.len() + 2) / 3;
-    ui.columns(3, "##skill_cols", false);
-    let skill_col_w = (w - 48.0) / 3.0;
-    for i in 0..3 { ui.set_column_width(i, skill_col_w); }
-
     for (idx, (total, tagged)) in skill_entries.iter().enumerate() {
-        if idx > 0 && idx % per_col == 0 {
-            ui.next_column();
-        }
         let label = if *tagged {
             format!("* {:.<22} {}", SKILLS[idx], total)
-            //format!("★ {:.<22} {}", name, total)
         } else {
             format!("  {:.<22} {}", SKILLS[idx], total)
         };
@@ -520,10 +675,68 @@ pub fn render_review(
             ui.text(&label);
         }
     }
-    ui.columns(1, "##skill_cols_end", false);
-    ui.spacing();
 
-    // DISPLAY NEW CALCULATED STATS HERE
+    ui.next_column();
+
+    // ── Right: DR blocks ──────────────────────────────────────────────────────────
+    let trait_ids: Vec<i64> = nc.traits.iter()
+        .enumerate()
+        .filter(|(i, _)| nc.selected_traits.get(*i).copied().unwrap_or(false))
+        .filter_map(|(_, t)| Some(t.id))
+        .collect();
+
+    let is_robot = trait_ids.iter().any(|&id| {
+        id == TRAIT_MR_HANDY || id == TRAIT_ROBOBRAIN || id == TRAIT_SECURITRON
+        // expand with your generic Robot trait ID if you have one
+    });
+
+    let limbs = resolve_limbs(is_robot, &trait_ids);
+
+    // Collect selected apparel IDs from equipment state
+    let selected_apparel_ids: Vec<i64> = if let Some(bg) = &equipment.current_bg {
+        bg.apparel_slots.iter()
+            .zip(equipment.apparel_selections.iter())
+            .flat_map(|(slot, sel)| {
+                use crate::screens::equipment::{ApparelSlot, SlotSelection};
+                match (slot, sel) {
+                    (ApparelSlot::Fixed(opt), _) =>
+                        vec![opt.apparel_id],
+                    (ApparelSlot::Choice(opts), SlotSelection::Chosen(i)) if *i < opts.len() =>
+                        vec![opts[*i].apparel_id],
+                    (ApparelSlot::SingleOrDouble { single, double_choices }, SlotSelection::SingleOrDoubleChosen { take_single, double_picks }) => {
+                        if *take_single {
+                            vec![single.apparel_id]
+                        } else {
+                            double_picks.iter().enumerate()
+                                .filter_map(|(di, pick)| {
+                                    pick.and_then(|pi| double_choices.get(di)?.get(pi))
+                                        .map(|o| o.apparel_id)
+                                })
+                                .collect()
+                        }
+                    }
+                    (ApparelSlot::SingleOrPack { single, pack }, SlotSelection::SingleOrPackChosen(take_single)) => {
+                        if *take_single {
+                            vec![single.apparel_id]
+                        } else {
+                            pack.iter().map(|o| o.apparel_id).collect()
+                        }
+                    }
+                    _ => vec![],
+                }
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    let apparel_pieces = load_resolved_apparel(db, &selected_apparel_ids);
+    let dr_map = resolve_apparel_dr(&apparel_pieces, &limbs, is_robot);
+
+    render_dr_table(ui, &limbs, &dr_map);
+
+    ui.columns(1, "##skills_dr_end", false);
+    ui.spacing();
 
     // ── Weapons ───────────────────────────────────────────────────────────────────
     if equipment.current_bg.is_some() {
