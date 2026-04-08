@@ -10,7 +10,9 @@ use crate::screens::skills::SKILLS;
 use crate::screens::special::SpecialState;
 use crate::screens::skills::SkillsState;
 use crate::screens::perks::PerksState;
-use crate::screens::equipment::EquipmentState;
+use crate::screens::equipment::{EquipmentState, ResolvedWeapon};
+use crate::screens::stats::ComputedStats;
+use crate::screens::stats::build_melee_string;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Limb {
@@ -144,6 +146,13 @@ pub struct ResolvedApparel {
     pub enrg_dr: i32,
     pub rads_dr: i32,
     pub covered_location_ids: Vec<i64>,  // from apparel_covers
+    pub wgt: i32,
+}
+
+pub struct EquippedApparel {
+    pub id: i64,
+    pub name: String,
+    pub covered_location_ids: Vec<i64>,
 }
 
 pub struct DamageResistanceState {
@@ -192,6 +201,30 @@ pub fn location_id_to_limb(location_id: i64, limbs: &[Limb]) -> Option<Limb> {
     candidates.iter().find(|l| limbs.contains(l)).cloned()
 }
 
+pub fn limb_to_location_id(limb: &Limb) -> i64 {
+    let candidate: i64 = match &limb {
+        Limb::Head  => 1, 
+        Limb::ArmLeft  => 2, 
+        Limb::ArmRight  => 3, 
+        Limb::Torso  => 4,
+        Limb::Body  => 4, 
+        Limb::LegLeft  => 5,
+        Limb::TrackLeft  => 5, 
+        Limb::LegRight  => 6,
+        Limb::TrackRight  => 6,
+        Limb::Wheel  => 6, 
+        Limb::Optics  => 7, 
+        Limb::Arm1  => 8, 
+        Limb::Arm2  => 9, 
+        Limb::Arm3 => 10, 
+        Limb::Body => 11, 
+        Limb::Thruster => 12, 
+        Limb::Wheel => 13, 
+        _  => 0,
+    };
+    candidate
+}
+
 impl DamageResistanceState {
     pub fn new(is_robot: bool, trait_ids: &[i64]) -> Self {
         Self {
@@ -213,14 +246,15 @@ pub fn resolve_apparel_dr(
     pieces: &[ResolvedApparel],   // all selected apparel for this character
     limbs: &[Limb],
     is_robot: bool,
-) -> HashMap<Limb, Dr> {
+) -> (HashMap<Limb, Dr>, Vec<EquippedApparel>) {
     let mut dr_map: HashMap<Limb, Dr> = limbs.iter()
         .map(|l| (l.clone(), Dr::default()))
         .collect();
+    let mut equipped_apparel:Vec<EquippedApparel> = vec![];
 
     if is_robot {
         // Robots only benefit from hats, and hats give no DR
-        return dr_map;
+        return (dr_map, vec![]);
     }
 
     // ── Determine what layer(s) to equip ─────────────────────────────────────
@@ -263,6 +297,12 @@ pub fn resolve_apparel_dr(
 
     if let Some(base) = base_layer {
         apply_piece_to_map(base, limbs, &mut dr_map);
+        let base_item = EquippedApparel {
+            id: base.id,
+            name: base.name.clone(),
+            covered_location_ids: base.covered_location_ids.clone(),
+        };
+        equipped_apparel.push(base_item);
     }
 
     // ── Apply armor per limb (best physical DR wins ties broken by energy, then rads) ──
@@ -284,6 +324,13 @@ pub fn resolve_apparel_dr(
 
         let armor_dr = Dr { phys: best.phys_dr, enrg: best.enrg_dr, rads: best.rads_dr };
         let entry = dr_map.entry(limb.clone()).or_default();
+        let armor_item = EquippedApparel {
+            id: best.id,
+            name: best.name.clone(),
+            covered_location_ids: best.covered_location_ids.clone(),
+        };
+        equipped_apparel.push(armor_item);
+
         *entry = entry.layer_max(&armor_dr);
     }
 
@@ -291,9 +338,15 @@ pub fn resolve_apparel_dr(
 
     if let Some(hg) = headgear {
         apply_piece_to_map(hg, limbs, &mut dr_map);
+        let head_item = EquippedApparel {
+            id: hg.id,
+            name: hg.name.clone(),
+            covered_location_ids: hg.covered_location_ids.clone(),
+        };
+        equipped_apparel.push(head_item);
     }
 
-    dr_map
+    (dr_map, equipped_apparel)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -324,7 +377,7 @@ pub fn load_resolved_apparel(db: &Db, apparel_ids: &[i64]) -> Vec<ResolvedAppare
     let apparel_rows = db.block_on(async {
         sqlx::query!(r#"
             SELECT id, name, type AS apparel_type,
-                phys_dr, enrg_dr, rads_dr
+                phys_dr, enrg_dr, rads_dr, wgt
             FROM apparel
             WHERE id IN (SELECT value FROM json_each(?1))
         "#, id_json)
@@ -360,6 +413,7 @@ pub fn load_resolved_apparel(db: &Db, apparel_ids: &[i64]) -> Vec<ResolvedAppare
             enrg_dr: r.enrg_dr.unwrap_or_default() as i32,
             rads_dr: r.rads_dr.unwrap_or_default() as i32,
             covered_location_ids: cover_map.remove(&id).unwrap_or_default(),
+            wgt: r.wgt.unwrap_or_default() as i32,
         }
     }).collect()
 }
@@ -409,21 +463,22 @@ pub fn render_dr_block(
     limb: &Limb,
     dr: &Dr,
     base_health: i32,
+    equipped_item: &str,
 ) {
     let label   = limb.display_name();
     let block_w = 100.0;
     let pad_w = 10.0;
     let cell_w = ( block_w / 2.0 ) - pad_w;
-    let pad = 6.0;
+    let pad = 4.0;
 
     // Record top-left before the group
     let start = ui.cursor_screen_pos();
 
     ui.group(|| {
         // Header centered
-        let text_w = ui.calc_text_size(label)[0];
-        let text_x = start[0] + ((block_w - text_w) / 2.0) - pad_w;
-        ui.set_cursor_screen_pos([text_x, ui.cursor_screen_pos()[1]]);
+        let head_w = ui.calc_text_size(label)[0];
+        let head_x = start[0] + ((block_w - head_w) / 2.0) - pad_w;
+        ui.set_cursor_screen_pos([head_x, ui.cursor_screen_pos()[1]]);
         ui.text_colored(ui.style_color(imgui::StyleColor::DragDropTarget), label);
 
         //ui.separator();
@@ -437,6 +492,13 @@ pub fn render_dr_block(
         render_dr_cell(ui, "RD", dr.rads, cell_w, pad_w);
         ui.same_line_with_spacing(0.0, pad_w);
         render_dr_cell(ui, "HP", base_health, cell_w, pad_w);
+
+        // equipped clothing
+        let equip_w = ui.calc_text_size(equipped_item)[0];
+        let equip_x = start[0] + ((block_w - equip_w) / 2.0) - pad_w;
+        //let old_cursor_pos = ui.cursor_pos();
+        ui.set_cursor_screen_pos([equip_x, ui.cursor_screen_pos()[1] + 2.0]);
+        ui.text_disabled(equipped_item);
     });
 
     // Draw border around the completed group
@@ -444,8 +506,8 @@ pub fn render_dr_block(
     let draw = ui.get_window_draw_list();
     let top_left_x = start[0] - pad;
     let top_left_y = start[1] - pad;
-    let bot_right_x = end[0]   + pad;
-    let bot_right_y = end[1]   + pad;
+    let bot_right_x = end[0] + pad;
+    let bot_right_y = end[1] - 18.0 + pad;
     draw.add_rect(
         [top_left_x, top_left_y],
         [bot_right_x, bot_right_y],
@@ -478,19 +540,19 @@ pub fn render_dr_table(
     ui: &Ui,
     limbs: &[Limb],
     dr_map: &HashMap<Limb, Dr>,
+    equipped_apparel: Vec<EquippedApparel>,
 ) {
     let layout = limb_layout(limbs);
     let block_w = 82.0;
     let gap = 8.0;
     let h_gap = 24.0;  // ← increased from 8.0
-    let v_gap = 18.0;
+    let v_gap = 6.0;
     
     ui.set_cursor_pos([
         ui.cursor_pos()[0],
-        ui.cursor_pos()[1] + v_gap,
+        ui.cursor_pos()[1] + 6.0,
     ]);
 
-    let mut iter = 0;
 
     for row in &layout {
         let row_w = row.len() as f32 * block_w
@@ -508,10 +570,18 @@ pub fn render_dr_table(
                 ui.same_line_with_spacing(0.0, h_gap);
             }
             let dr = dr_map.get(limb).cloned().unwrap_or_default();
-            render_dr_block(ui, limb, &dr, 0);
+            let current_limb = limb_to_location_id(limb);
+            let equipped_item: &str = match equipped_apparel
+                .iter()
+                .find(
+                    |x| x.covered_location_ids.contains(&current_limb)
+                ) {
+                    Some(item) => &item.name.clone(),
+                    None => "",
+            };
+            render_dr_block(ui, limb, &dr, 0, equipped_item);
         }
 
-        iter += 1;
         ui.set_cursor_pos([
             ui.cursor_pos()[0],
             ui.cursor_pos()[1] + v_gap,
@@ -519,6 +589,11 @@ pub fn render_dr_table(
         //ui.spacing();
         //ui.spacing();  // ← extra spacing between rows
     }
+}
+
+struct InventoryLine {
+    name: String,
+    weight: i32,
 }
 
 // ── XP helpers ────────────────────────────────────────────────────────────────
@@ -538,6 +613,7 @@ pub fn render_review(
     special: &SpecialState,
     skills: &SkillsState,
     perks: &PerksState,
+    stats: &ComputedStats,
     equipment: &EquipmentState,
     screen: &mut AppScreen,
     theme: &Theme,
@@ -577,6 +653,8 @@ pub fn render_review(
     // ── Identity block ────────────────────────────────────────────────────────
     section_header(ui, theme, "IDENTITY");
 
+    let id_col_w = w / 2.0 - 24.0;
+
     let origin_name = nc.origins
         .get(nc.selected_origin_idx)
         .map(|o| o.name.as_str())
@@ -591,15 +669,26 @@ pub fn render_review(
     let next_xp     = xp_for_level(nc.level + 1);
     let to_next     = xp_to_next(nc.level);
 
-    // Two-column layout for identity
+    // Two-column layout for identity and stats
     ui.columns(2, "##id_cols", false);
     ui.set_column_width(0, col_w);
+    ui.set_column_width(1, col_w);
 
     kv(ui, theme, "Name",       &nc.name);
     kv(ui, theme, "Level",      &nc.level.to_string());
     kv(ui, theme, "XP",         &format!("{} / {} ({} to next)", current_xp, next_xp, to_next));
     kv(ui, theme, "Origin",     origin_name);
     kv(ui, theme, "Background", background_name);
+
+    ui.next_column();
+
+    let melee_str = build_melee_string(stats);
+
+    kv(ui, theme, "Poison DR",       &format!("{}", &stats.poison_dr));
+    kv(ui, theme, "Defense",       &format!("{}", &stats.defense));
+    kv(ui, theme, "Initiative",       &format!("{}", &stats.initiative));
+    kv(ui, theme, "HP",       &format!("{} / {}", &stats.max_hp, &stats.max_hp));
+    kv(ui, theme, "Melee",       &melee_str);
 
     ui.columns(1, "##id_cols_end", false);
     ui.spacing();
@@ -636,15 +725,17 @@ pub fn render_review(
     ui.columns(1, "##special_cols_end", false);
 
     // ── Luck Points ───────────────────────────────────────────────────────────────
+    /*
     let base_luck_points = special.display_value(6); // Luck stat index
     let gifted_penalty = if nc.selected_traits.iter().enumerate()
         .any(|(i, &sel)| sel && nc.traits.get(i).map(|t| t.id == 7).unwrap_or(false))
     { 7 } else { 0 };
     let max_luck_points = (base_luck_points - gifted_penalty).max(0);
+    */
 
     ui.text_colored(theme.text_dim, format!(
         "Luck Points: {}/{}",
-        max_luck_points, max_luck_points
+        stats.max_luck_pts, stats.max_luck_pts
     ));
     ui.spacing();
 
@@ -731,12 +822,14 @@ pub fn render_review(
     };
 
     let apparel_pieces = load_resolved_apparel(db, &selected_apparel_ids);
-    let dr_map = resolve_apparel_dr(&apparel_pieces, &limbs, is_robot);
+    let (dr_map, equipped_apparel) = resolve_apparel_dr(&apparel_pieces, &limbs, is_robot);
 
-    render_dr_table(ui, &limbs, &dr_map);
+    render_dr_table(ui, &limbs, &dr_map, equipped_apparel);
 
     ui.columns(1, "##skills_dr_end", false);
     ui.spacing();
+
+    let weapons: Vec<ResolvedWeapon> = vec![];
 
     // ── Weapons ───────────────────────────────────────────────────────────────────
     if equipment.current_bg.is_some() {
@@ -749,13 +842,25 @@ pub fn render_review(
             special,
             skills,
         );
+        //ui.text(format!("{}", ui.content_region_avail()[0]));
 
         if weapons.is_empty() {
             ui.text_colored(theme.text_dim, "  No weapons.");
         } else {
             // Column headers
-            let col_widths = [180.0_f32, 120.0, 50.0, 40.0, 60.0, 150.0, 100.0, 40.0, 150.0, 100.0, 50.0];
-            let headers    = ["Name", "Skill", "TN", "Tag", "Dmg", "Effects", "Type", "Rate", "Qualities", "Ammo", "Wgt"];
+            let table_w = ui.content_region_avail()[0];
+            let table_min = 800.0;
+            let table_max = 1080.0;
+            let col_widths_min = [150.0_f32, 50.0, 30.0, 35.0, 35.0, 90.0, 45.0, 40.0, 35.0, 120.0, 120.0, 35.0];
+            let col_widths_max = [220.0_f32, 55.0, 40.0, 45.0, 45.0, 132.0, 55.0, 50.0, 45.0, 176.0, 176.0, 45.0];
+            let col_widths: [f32; 12];
+            if table_w < table_min { col_widths = col_widths_min; }
+            else if table_w > table_max { col_widths = col_widths_max; }
+            else {
+                let ratio = (table_w - table_min) / (table_max - table_min);
+                col_widths = std::array::from_fn(|i| col_widths_min[i] + ((col_widths_max[i] - col_widths_min[i]) * ratio));
+            }
+            let headers    = ["Name", "Skill", "TN", "Tag", "Dmg", "Effects", "Type", "Rate", "Rng", "Qualities", "Ammo", "Wgt"];
 
             ui.columns(headers.len() as i32, "##weap_hdr", true);
             for (i, (hdr, cw)) in headers.iter().zip(col_widths.iter()).enumerate() {
@@ -768,7 +873,7 @@ pub fn render_review(
             for weap in &weapons {
                 let effects_str = weap.effects.iter().map(|e| {
                     match e.value {
-                        Some(v) => format!("{} {}", e.name, v),
+                        Some(v) => format!("{}", e.name.replace("X", &v.to_string())),
                         None    => e.name.clone(),
                     }
                 }).collect::<Vec<_>>().join(", ");
@@ -781,19 +886,40 @@ pub fn render_review(
                 }).collect::<Vec<_>>().join(", ");
 
                 let tag_str = if weap.tagged { "*" } else { "" };
-                let ammo_str = format!("{} ({})", weap.ammo_name, weap.ammo_quantity);
+                //let ammo_str = format!("{} ({})", weap.ammo_name, weap.ammo_quantity);
+                let skill_str = match weap.skill.as_str() {
+                    "Melee Weapons" => "MW",
+                    "Unarmed" => "Un",
+                    "Small Guns" => "SG",
+                    "Big Guns" => "BG",
+                    "Throwing" => "Th",
+                    "Explosives" => "Ex",
+                    "Energy Weapons" => "EW",
+                    _ => "",
+                }.to_string();
+
+                let mut damage: i32 = weap.damage.parse().unwrap();
+
+                if skill_str == "MW" {
+                    damage += stats.melee_base;
+                } else if skill_str == "Un" {
+                    damage += stats.melee_unarmed + stats.melee_base;
+                }
 
                 let cells: &[&str] = &[
                     &weap.name,
-                    &weap.skill,
+                    //&weap.skill,
+                    &skill_str,
                     &weap.target_number.to_string(),
                     tag_str,
-                    &weap.damage,
+                    &damage.to_string(),
                     &effects_str,
                     &weap.damage_type,
                     &weap.rate.to_string(),
+                    &weap.range,
                     &quals_str,
-                    &ammo_str,
+                    //&ammo_str,
+                    &weap.ammo_name,
                     &weap.weight.to_string(),
                 ];
 
@@ -846,7 +972,132 @@ pub fn render_review(
         ui.spacing();
     }
 
-    // DISPLAY EQUIPMENT HERE
+    // ── Inventory ─────────────────────────────────────────────────────────────────
+    if let Some(bg) = &equipment.current_bg {
+        section_header(ui, theme, "INVENTORY");
+
+        let mut lines: Vec<(&str, Vec<InventoryLine>)> = vec![];
+
+        // ── Weapons ──────────────────────────────────────────────────────────────
+        let weapon_lines: Vec<InventoryLine> = weapons.iter()
+            .map(|w| InventoryLine {
+                name:   w.name.clone(),
+                weight: w.weight,
+            })
+            .collect();
+
+        // ── Ammo ─────────────────────────────────────────────────────────────────
+        // Ammo weight is 0 per the system — list for visibility only
+        let ammo_lines: Vec<InventoryLine> = weapons.iter()
+            .filter(|w| !w.ammo_name.is_empty())
+            .map(|w| InventoryLine {
+                name:   format!("{} ({})", w.ammo_name, w.ammo_quantity),
+                weight: w.ammo_wgt,
+            })
+            .collect();
+
+        // ── Apparel ───────────────────────────────────────────────────────────────
+        let apparel_lines: Vec<InventoryLine> = apparel_pieces.iter()
+            .map(|a| InventoryLine {
+                name:   a.name.clone(),
+                weight: a.wgt,
+            })
+            .collect();
+
+        // ── Consumables ───────────────────────────────────────────────────────────
+        use crate::screens::equipment::{ConsumableSlot, SlotSelection};
+        let consumable_lines: Vec<InventoryLine> = bg.consumable_slots.iter()
+            .zip(equipment.consumable_selections.iter())
+            .flat_map(|(slot, sel)| {
+                let opts: Vec<&crate::screens::equipment::ConsumableOption> = match (slot, sel) {
+                    (ConsumableSlot::Fixed(opt), _) =>
+                        vec![opt],
+                    (ConsumableSlot::Choice(opts), SlotSelection::Chosen(i)) if *i < opts.len() =>
+                        vec![&opts[*i]],
+                    (ConsumableSlot::ManyForOne(giveup, getone), SlotSelection::ManyForOneChosen(choice)) =>
+                        if *choice == 0 { vec![getone] } else { giveup.iter().collect() },
+                    _ => vec![],
+                };
+                opts.into_iter().map(|o| InventoryLine {
+                    name:   o.name.clone(),
+                    weight: o.wgt as i32,   // consumable weight fetched below if needed; 0 for now
+                })
+            })
+            .collect();
+
+        // ── Gear ──────────────────────────────────────────────────────────────────
+        let gear_lines: Vec<InventoryLine> = bg.gear.iter()
+            .map(|g| InventoryLine {
+                name:   g.gear_name.clone(),
+                weight: g.wgt as i32,
+            })
+            .collect();
+
+        // ── Render table ──────────────────────────────────────────────────────────
+        let categories: &[(&str, &Vec<InventoryLine>)] = &[
+            ("Weapons",     &weapon_lines),
+            ("Ammo",        &ammo_lines),
+            ("Apparel",     &apparel_lines),
+            ("Consumables", &consumable_lines),
+            ("Gear",        &gear_lines),
+        ];
+
+        let name_col_w   = 320.0;
+        let weight_col_w = 60.0;
+
+        ui.columns(2, "##inv_cols", false);
+        ui.set_column_width(0, name_col_w);
+        ui.set_column_width(1, weight_col_w);
+
+        let mut total_weight: i32 = 0;
+
+        for (cat_name, items) in categories {
+            if items.is_empty() { continue; }
+
+            // Category header
+            ui.text_colored(theme.text_dim, *cat_name);
+            ui.next_column();
+            ui.next_column();
+
+            for item in *items {
+                ui.text(format!("  {}", item.name));
+                ui.next_column();
+                if item.weight > 0 {
+                    ui.text(item.weight.to_string());
+                } else {
+                    ui.text_colored(theme.text_dim, "—");
+                }
+                ui.next_column();
+                total_weight += item.weight;
+            }
+
+            ui.spacing();
+            ui.next_column();
+            ui.next_column();
+        }
+
+        ui.separator();
+        ui.next_column();
+        ui.next_column();
+
+        // ── Carry weight summary ──────────────────────────────────────────────────
+        // Max carry = Strength × 10 (standard Fallout 2d20 rule)
+        let max_carry     = stats.carry_weight;
+        let over          = total_weight > max_carry;
+        let carry_str     = format!("{} / {} lbs", total_weight, max_carry);
+
+        ui.text_colored(theme.text_dim, "Total Weight");
+        ui.next_column();
+        if over {
+            ui.text_colored([1.0, 0.3, 0.3, 1.0], carry_str);
+        } else {
+            ui.text(carry_str);
+        }
+        ui.next_column();
+
+        ui.columns(1, "##inv_end", false);
+        ui.spacing();
+    }
     
     drop(_scroll);
 

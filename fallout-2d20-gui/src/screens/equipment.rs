@@ -52,6 +52,7 @@ pub struct ConsumableRow {
     pub consumable_id: i64,
     pub consumable_name: String,
     pub alt_id: Option<i64>,
+    pub wgt: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +76,7 @@ pub struct AmmoRow {
 pub struct GearRow {
     pub gear_id: i64,
     pub gear_name: String,
+    pub wgt: i64,
 }
 
 pub struct EffectNameSets {
@@ -166,6 +168,7 @@ pub struct ConsumableOption {
     pub bg_consumable_id: i64,
     pub consumable_id: i64,
     pub name: String,
+    pub wgt: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -234,9 +237,11 @@ pub struct ResolvedWeapon {
     pub effects: Vec<WeaponEffect>,
     pub damage_type: String,
     pub rate: i32,
+    pub range: String,
     pub qualities: Vec<WeaponQuality>,
     pub ammo_name: String,
     pub ammo_quantity: String,
+    pub ammo_wgt: i32,
     pub weight: i32,
 }
 
@@ -562,6 +567,7 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
                     bg_consumable_id: row.id,
                     consumable_id: row.consumable_id,
                     name: row.consumable_name.clone(),
+                    wgt: row.wgt,
                 }));
             }
         }
@@ -595,12 +601,14 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
                     bg_consumable_id: r.id,
                     consumable_id: r.consumable_id,
                     name: r.consumable_name.clone(),
+                    wgt: row.wgt,
                 })
                 .collect();
             let get = ConsumableOption {
                 bg_consumable_id: target,
                 consumable_id: by_id[&target].consumable_id,
                 name: by_id[&target].consumable_name.clone(),
+                wgt: row.wgt,
             };
             slots.push(ConsumableSlot::ManyForOne(give_up, get));
         } else {
@@ -610,6 +618,7 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
                     bg_consumable_id: r.id,
                     consumable_id: r.consumable_id,
                     name: r.consumable_name.clone(),
+                    wgt: row.wgt,
                 })
                 .collect();
             if options.len() == 1 {
@@ -692,6 +701,7 @@ pub fn resolve_weapons_for_review(
     use crate::screens::special::{S, P, E, A};
 
     let names = EffectNameSets::load(db);
+    let ranges = ["R","C","M","L","X"];
 
     // Collect the bg_weapon_ids that were actually selected
     let selected_bg_weapon_ids: Vec<i64> = bg.weapon_slots.iter()
@@ -721,9 +731,10 @@ pub fn resolve_weapons_for_review(
                 bw.id        AS bg_weapon_id,
                 w.id         AS weapon_id,
                 w.name       AS weapon_name,
-                w.dam, w.dtype, w.rate, w.wgt,
+                w.dam, w.dtype, w.rate, w.range, w.wgt,
                 s.name       AS skill_name,
                 a.name       AS ammo_name,
+                a.wgt        AS ammo_wgt,
                 ba.quantity  AS ammo_quantity,
                 wm.id        AS mod_id,
                 wm.name      AS mod_name,
@@ -784,6 +795,7 @@ pub fn resolve_weapons_for_review(
 
         let mut damage     = row.dam.clone().unwrap_or_default();
         let mut rate       = row.rate.unwrap_or_default() as i32;
+        let mut range = row.range.clone().unwrap_or_default();
         let mut damage_type = row.dtype.clone().unwrap_or_default();
         let base_wgt       = row.wgt.unwrap_or_default() as i32;
         let mod_wgt        = row.mod_wgt.unwrap_or_default() as i32;
@@ -840,9 +852,17 @@ pub fn resolve_weapons_for_review(
                         ModEffect::SetRate(r) => { rate = r; }
                         ModEffect::AddRate(r) => { rate += r; }
                         ModEffect::SubRate(r) => { rate = (rate - r).max(0); }
-                        ModEffect::AddRange(_) | ModEffect::SubRange(_) => {
-                            // Range is a display string — store for future use
-                            // TODO: implement range stepping when range model is defined
+                        ModEffect::AddRange(_) => {
+                            let range_num = ranges.iter().position(|&r| r == &range).unwrap();
+                            if range_num > 0 || range_num < 4 {
+                                range = ranges[range_num + 1].to_string();
+                            }
+                        }
+                        ModEffect::SubRange(_) => {
+                            let range_num = ranges.iter().position(|&r| r == &range).unwrap();
+                            if range_num > 1 || range_num < 5 {
+                                range = ranges[range_num - 1].to_string();
+                            }
                         }
                         ModEffect::Gain(name, val) => {
                             apply_gain(&mut effects, &mut qualities, &name, val, &names);
@@ -867,12 +887,22 @@ pub fn resolve_weapons_for_review(
 
         // Damage type
         let damage_type = match row.dtype.as_deref().unwrap_or("") {
+            /*
             "Ph"    => "Physical",
             "En"    => "Energy",
             "Ph/En" => "Physical/Energy",
             "Rad"   => "Radiation",
             "En/Rad"=> "Energy/Radiation",
             "Poi"   => "Poison",
+            "All"   => "All",
+            other   => other,
+            */
+            "Ph"    => "Ph",
+            "En"    => "En",
+            "Ph/En" => "Ph/En",
+            "Rad"   => "Rd",
+            "En/Rad"=> "En/Rd",
+            "Poi"   => "Po",
             "All"   => "All",
             other   => other,
         }.to_string();
@@ -886,9 +916,11 @@ pub fn resolve_weapons_for_review(
             effects,
             damage_type,
             rate,
+            range,
             qualities,
             ammo_name: row.ammo_name.clone().unwrap_or_default(),
             ammo_quantity:row.ammo_quantity.clone().unwrap_or_default(),
+            ammo_wgt: row.ammo_wgt.clone().unwrap_or_default() as i32,
             weight,
         });
     }
@@ -1130,7 +1162,7 @@ pub fn load_background_equipment(db: &Db, background_id: i64) -> ResolvedBackgro
     // Consumables
     let consumable_rows = db.block_on(async {
         sqlx::query!(
-            r#"SELECT bc.id, bc.background_id, bc.consumable_id, bc.alt_id,
+            r#"SELECT bc.id, bc.background_id, bc.consumable_id, bc.alt_id, c.wgt,
                       c.name AS consumable_name
                FROM background_consumables bc
                JOIN consumables c ON c.id = bc.consumable_id
@@ -1144,6 +1176,7 @@ pub fn load_background_equipment(db: &Db, background_id: i64) -> ResolvedBackgro
         consumable_id: r.consumable_id.unwrap_or_default(),
         consumable_name: r.consumable_name.unwrap_or_default(),
         alt_id: r.alt_id,
+        wgt: r.wgt.unwrap_or_default(),
     }).collect();
 
     // Robot modules
@@ -1168,7 +1201,7 @@ pub fn load_background_equipment(db: &Db, background_id: i64) -> ResolvedBackgro
     // Gear
     let gear_rows = db.block_on(async {
         sqlx::query!(
-            r#"SELECT bg.gear_id, g.name AS gear_name
+            r#"SELECT bg.gear_id, g.name AS gear_name, g.wgt
                FROM background_gear bg
                JOIN gear g ON g.id = bg.gear_id
                WHERE bg.background_id = ?"#,
@@ -1179,6 +1212,7 @@ pub fn load_background_equipment(db: &Db, background_id: i64) -> ResolvedBackgro
     let gear: Vec<GearRow> = gear_rows.into_iter().map(|r| GearRow {
         gear_id: r.gear_id.unwrap_or_default(),
         gear_name: r.gear_name.unwrap_or_default(),
+        wgt: r.wgt.unwrap_or_default(),
     }).collect();
 
     let misc = serde_json::from_str::<Vec<String>>(&bg.misc)
