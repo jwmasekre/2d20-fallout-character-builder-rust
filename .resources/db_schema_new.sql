@@ -87,6 +87,50 @@ CREATE TABLE IF NOT EXISTS character_tags (
   "unarmed" INTEGER, -- bool
 FOREIGN KEY (character_id) REFERENCES characters (id)
 );
+CREATE TABLE IF NOT EXISTS character_tags_trait (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, -- uuid
+  "athletics" INTEGER, -- bool
+  "barter" INTEGER, -- bool
+  "bigGuns" INTEGER, -- bool
+  "energyWeapons" INTEGER, -- bool
+  "explosives" INTEGER, -- bool
+  "lockpick" INTEGER, -- bool
+  "medicine" INTEGER, -- bool
+  "meleeWeapons" INTEGER, -- bool
+  "pilot" INTEGER, -- bool
+  "repair" INTEGER, -- bool
+  "science" INTEGER, -- bool
+  "smallGuns" INTEGER, -- bool
+  "sneak" INTEGER, -- bool
+  "speech" INTEGER, -- bool
+  "survival" INTEGER, -- bool
+  "throwing" INTEGER, -- bool
+  "unarmed" INTEGER, -- bool
+FOREIGN KEY (character_id) REFERENCES characters (id)
+);
+CREATE TABLE IF NOT EXISTS character_tags_perk (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, -- uuid
+  "athletics" INTEGER, -- bool
+  "barter" INTEGER, -- bool
+  "bigGuns" INTEGER, -- bool
+  "energyWeapons" INTEGER, -- bool
+  "explosives" INTEGER, -- bool
+  "lockpick" INTEGER, -- bool
+  "medicine" INTEGER, -- bool
+  "meleeWeapons" INTEGER, -- bool
+  "pilot" INTEGER, -- bool
+  "repair" INTEGER, -- bool
+  "science" INTEGER, -- bool
+  "smallGuns" INTEGER, -- bool
+  "sneak" INTEGER, -- bool
+  "speech" INTEGER, -- bool
+  "survival" INTEGER, -- bool
+  "throwing" INTEGER, -- bool
+  "unarmed" INTEGER, -- bool
+FOREIGN KEY (character_id) REFERENCES characters (id)
+);
 CREATE TABLE IF NOT EXISTS factions (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "party_id" TEXT, -- uuid
@@ -368,6 +412,28 @@ CREATE TABLE IF NOT EXISTS character_skills (
   "unarmed" INTEGER, -- smallint
 FOREIGN KEY (character_id) REFERENCES characters (id)
 );
+CREATE TABLE IF NOT EXISTS character_skills_skilled (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, -- uuid
+  "athletics" INTEGER, -- smallint
+  "barter" INTEGER, -- smallint
+  "bigGuns" INTEGER, -- smallint
+  "energyWeapons" INTEGER, -- smallint
+  "explosives" INTEGER, -- smallint
+  "lockpick" INTEGER, -- smallint
+  "medicine" INTEGER, -- smallint
+  "meleeWeapons" INTEGER, -- smallint
+  "pilot" INTEGER, -- smallint
+  "repair" INTEGER, -- smallint
+  "science" INTEGER, -- smallint
+  "smallGuns" INTEGER, -- smallint
+  "sneak" INTEGER, -- smallint
+  "speech" INTEGER, -- smallint
+  "survival" INTEGER, -- smallint
+  "throwing" INTEGER, -- smallint
+  "unarmed" INTEGER, -- smallint
+FOREIGN KEY (character_id) REFERENCES characters (id)
+);
 CREATE TABLE IF NOT EXISTS character_weapon_legendary (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "character_weapon_id" INTEGER, -- smallint
@@ -507,6 +573,7 @@ CREATE TABLE IF NOT EXISTS characters (
   "character_name" TEXT,
   "xp" INTEGER,
   "origin" INTEGER, -- smallint
+  "background" INTEGER, -- smallint
   "luck_points" INTEGER, -- smallint
   "current_health" INTEGER, -- smallint
   "rad_points" INTEGER, -- smallint
@@ -528,9 +595,12 @@ CREATE TABLE IF NOT EXISTS characters (
   "sleep" INTEGER, -- smallint
   "exposure" INTEGER, -- smallint
   "party_id" TEXT, -- uuid
+  "misc" TEXT, -- json
+  "notes" TEXT,
 FOREIGN KEY (player_id) REFERENCES players (id),
 FOREIGN KEY (origin) REFERENCES origins (id),
-FOREIGN KEY (party_id) REFERENCES parties (id)
+FOREIGN KEY (party_id) REFERENCES parties (id),
+FOREIGN KEY (background) REFERENCES backgrounds (id)
 );
 CREATE TABLE IF NOT EXISTS skills (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1007,6 +1077,30 @@ FOREIGN KEY (robot_module_id) REFERENCES robot_modules (id),
 FOREIGN KEY (perk_id) REFERENCES perks (id)
 );
 CREATE TABLE IF NOT EXISTS character_special (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, -- uuid
+  "strength" INTEGER, -- smallint
+  "perception" INTEGER, -- smallint
+  "endurance" INTEGER, -- smallint
+  "charisma" INTEGER, -- smallint
+  "intelligence" INTEGER, -- smallint
+  "agility" INTEGER, -- smallint
+  "luck" INTEGER, -- smallint
+FOREIGN KEY (character_id) REFERENCES characters (id)
+);
+CREATE TABLE IF NOT EXISTS character_special_gifted (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, -- uuid
+  "strength" INTEGER, -- bool
+  "perception" INTEGER, -- bool
+  "endurance" INTEGER, -- bool
+  "charisma" INTEGER, -- bool
+  "intelligence" INTEGER, -- bool
+  "agility" INTEGER, -- bool
+  "luck" INTEGER, -- bool
+FOREIGN KEY (character_id) REFERENCES characters (id)
+);
+CREATE TABLE IF NOT EXISTS character_special_training (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "character_id" TEXT, -- uuid
   "strength" INTEGER, -- smallint

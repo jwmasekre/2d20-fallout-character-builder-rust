@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "fallout-2d20-gui"
-version = "0.1.3"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "dirs",

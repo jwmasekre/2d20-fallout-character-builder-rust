@@ -286,7 +286,12 @@ fn main() -> Result<()> {
     let mut equipment_state: Option<EquipmentState> = None;
     let mut stats_state: Option<ComputedStats> = None;
     
-    let db_path = config::db_path();
+    //let db_path = config::db_path();
+    let db_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fallout_2d20.db");
     std::fs::create_dir_all(db_path.parent().unwrap())?;
     let db = Db::connect(&format!("sqlite:{}", db_path.display()))?;
 
