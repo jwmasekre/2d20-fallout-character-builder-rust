@@ -1,6 +1,7 @@
 mod db;
 mod config;
 mod screens;
+mod character;
 
 use db::Db;
 use sdl2::video::{ GLProfile,Window };
