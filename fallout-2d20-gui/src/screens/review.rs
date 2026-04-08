@@ -898,7 +898,8 @@ pub fn render_review(
                     _ => "",
                 }.to_string();
 
-                let mut damage: i32 = weap.damage.parse().unwrap();
+                //let mut damage: i32 = weap.damage.parse().unwrap();
+                let mut damage: i32 = weap.damage.replace("CD","").parse().unwrap();
 
                 if skill_str == "MW" {
                     damage += stats.melee_base;
