@@ -186,6 +186,7 @@ pub fn render_stats(
     perks: &PerksState,
     traits: &NewCharacterState,
     screen: &mut AppScreen,
+    state: &mut ComputedStats,
 ) {
     let (win_w, win_h) = window.size();
     let w = (win_w as f32 * 0.65).min(960.0);
@@ -210,6 +211,7 @@ pub fn render_stats(
     ui.spacing();
 
     let stats = compute_stats(special, traits, perks);
+    let state = compute_stats(special, traits, perks);
     let validation = validate_all(skills, perks);
 
     // ── Validation warnings ───────────────────────────────────────
@@ -346,7 +348,7 @@ pub fn render_stats(
 
 // ── Melee string builder ──────────────────────────────────────────────────────
 
-fn build_melee_string(stats: &ComputedStats) -> String {
+pub fn build_melee_string(stats: &ComputedStats) -> String {
     let mut parts = vec![format!("+{}CD", stats.melee_base)];
 
     if stats.melee_unarmed > 0 && stats.melee_sneak > 0 {

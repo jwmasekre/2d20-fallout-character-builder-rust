@@ -17,8 +17,9 @@ use screens::new_character::{ NewCharacterState, render_new_character, render_te
 use screens::special::{ render_special, SpecialState, MutantType };
 use screens::skills::{ render_skills, SkillsState, sync_trait_effects };
 use screens::perks::{ render_perks, PerksState, load_perks, render_perk_resolution, PerkResolutionPopup };
-use screens::stats::{ render_stats };
+use screens::stats::{ render_stats, ComputedStats, compute_stats };
 use screens::equipment::{ render_equipment, EquipmentState };
+use screens::review::render_review;
 
 struct Theme {
     name: &'static str,
@@ -203,6 +204,7 @@ enum AppScreen {
     Perks,
     Stats,
     Equipment,
+    Review
 }
 
 fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
@@ -282,6 +284,7 @@ fn main() -> Result<()> {
     let mut perks_state: Option<PerksState> = None;
     let mut perk_resolution: Option<PerkResolutionPopup> = None;
     let mut equipment_state: Option<EquipmentState> = None;
+    let mut stats_state: Option<ComputedStats> = None;
     
     let db_path = config::db_path();
     std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -371,7 +374,7 @@ fn main() -> Result<()> {
 
                     ui.text("fallout 2d20 character manager");
                     ui.spacing();
-                    render_text_wrapped(true, false, ui, "v0.1.7, 20260403", 16.0, aw - 32.0);
+                    render_text_wrapped(true, false, ui, "v0.1.9, 20260408", 16.0, aw - 32.0);
                     ui.spacing();
                     ui.text_wrapped("A character creation and management tool for the 2d20 ttrpg system.");
                     ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
@@ -522,14 +525,24 @@ fn main() -> Result<()> {
                 }
             }
             AppScreen::Stats => {
+                let special = special_state.as_ref().unwrap();
+                let traits = new_char_state.as_ref().unwrap();
+                let perks = perks_state.as_ref().unwrap();
+                let state = stats_state.get_or_insert_with(|| {
+                    compute_stats(special, traits, perks)
+                });
                 render_stats(
                     &ui, &window,
-                    special_state.as_ref().unwrap(),
+                    special,
                     skills_state.as_ref().unwrap(),
-                    perks_state.as_ref().unwrap(),
-                    new_char_state.as_ref().unwrap(),
+                    perks,
+                    traits,
                     &mut screen,
+                    state,
                 );
+                if screen == AppScreen::MainMenu {
+                    stats_state = None;
+                }
             }
             AppScreen::Equipment => {
                 let origin_id = new_char_state.as_ref()
@@ -549,6 +562,20 @@ fn main() -> Result<()> {
                 if screen == AppScreen::MainMenu {
                     equipment_state = None;
                 }
+            }
+            AppScreen::Review => {
+                render_review(
+                    &ui, &window,
+                    new_char_state.as_ref().unwrap(),
+                    special_state.as_ref().unwrap(),
+                    skills_state.as_ref().unwrap(),
+                    perks_state.as_ref().unwrap(),
+                    stats_state.as_ref().unwrap(),
+                    equipment_state.as_ref().unwrap(),
+                    &mut screen,
+                    themes[current_theme],
+                    &db,
+                );
             }
 
         }

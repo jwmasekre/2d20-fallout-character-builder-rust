@@ -5,3 +5,4 @@ pub mod skills;
 pub mod perks;
 pub mod stats;
 pub mod equipment;
+pub mod review;

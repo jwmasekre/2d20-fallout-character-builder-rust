@@ -22,9 +22,9 @@ the db and its architecture was 100% designed and crafted by myself. the design,
         * ~~0.1.4 - skills assignment~~ 
         * ~~0.1.5 - perk selection~~
         * ~~0.1.6 - stat calculation and review~~
-        * ~~0.1.7 - equipment selection~~ `<- YOU ARE HERE`
-        * 0.1.8 - review and acceptance page
-        * 0.1.9 - cleanup and testing
+        * ~~0.1.7 - equipment selection~~
+        * ~~0.1.8 - review and acceptance page~~
+        * 0.1.9 - cleanup and testing `<- YOU ARE HERE`
     * 0.2.0 - full character build pages/logic
     * 0.3.0 - view character sheet, character saving, loading, importing, exporting
     * 0.4.0 - interactive character sheet
