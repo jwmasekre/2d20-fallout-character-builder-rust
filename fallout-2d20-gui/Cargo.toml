@@ -16,7 +16,7 @@ gl = "0.10.0"
 tokio = { version = "1.50.0", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "macros", "uuid"] }
 dotenvy = "0.15.7"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v7"] }
 
 dirs = "5"
 
