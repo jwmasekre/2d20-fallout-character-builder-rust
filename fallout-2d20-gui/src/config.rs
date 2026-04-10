@@ -1,22 +1,38 @@
 use std::path::PathBuf;
 use std::fs;
 
-pub fn db_path() -> PathBuf {
-    dirs::data_dir()
+pub fn db_path(config_path: PathBuf) -> PathBuf {
+    if config_path.exists() { return config_path }
+    let userdata_path = dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("fallout-2d20-builder")
-        .join("fallout_2d20.db")
+        .join("fallout_2d20.db");
+    if userdata_path.exists() {
+        return userdata_path
+    }
+    let exe_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fallout_2d20.db");
+    //if exe_path.exists() {
+        return exe_path
+    //}
 }
 
 const CONFIG_FILE: &str = "usr_config.toml";
 
 pub struct AppConfig {
     pub theme_index: usize,
+    pub db_path: PathBuf,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { theme_index: 0 }
+        Self {
+            theme_index: 0,
+            db_path: std::env::current_exe().unwrap().parent().unwrap().join("fallout_2d20.db"),
+        }
     }
 }
 
@@ -48,13 +64,19 @@ pub fn load_config() -> AppConfig {
                 cfg.theme_index = i;
             }
         }
+        if let Some(val) = line.strip_prefix("db_path=") {
+            let db_path = PathBuf::from(val);
+            if db_path.is_file() {
+                cfg.db_path = db_path;
+            }
+        }
     }
     cfg
 }
 
 pub fn save_config(cfg: &AppConfig) {
     let path = config_path();
-    let contents = format!("theme_index={}\n", cfg.theme_index);
+    let contents = format!("theme_index={}\ndb_path={:?}\n", cfg.theme_index, cfg.db_path);
     if let Err(e) = fs::write(&path, contents) {
         eprintln!("Failed to save config: {e}");
     }

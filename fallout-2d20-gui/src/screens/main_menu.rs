@@ -37,13 +37,13 @@ pub fn render_main_menu(
 
             // Keyboard nav: arrow keys move selection
             if ui.is_window_focused() {
-                if ui.is_key_pressed(imgui::Key::DownArrow) {
+                if ui.is_key_pressed_no_repeat(imgui::Key::DownArrow) {
                     *selected = (*selected + 1).min(items.len() as i32 - 1);
                 }
-                if ui.is_key_pressed(imgui::Key::UpArrow) {
+                if ui.is_key_pressed_no_repeat(imgui::Key::UpArrow) {
                     *selected = (*selected - 1).max(0);
                 }
-                if ui.is_key_pressed(imgui::Key::Enter) || ui.is_key_pressed(imgui::Key::Space) {
+                if ui.is_key_pressed_no_repeat(imgui::Key::Enter) || ui.is_key_pressed(imgui::Key::Space) {
                     handle_selection(*selected, screen);
                 }
             }

@@ -1,3 +1,6 @@
+use imgui::Ui;
+use sdl2::video::Window;
+
 pub struct Theme {
     pub name: &'static str,
     pub text: [f32; 4],
@@ -144,6 +147,8 @@ pub const THEME_NUCLEAR_SHADOW: Theme = Theme {
     separator:         [0.38, 0.38, 0.38, 1.0],
 };
 
+pub const THEMES: [&Theme; 5] = [&THEME_CAPITAL, &THEME_MOJAVE, &THEME_COMMONWEALTH, &THEME_NUCLEAR_WINTER, &THEME_NUCLEAR_SHADOW];
+
 pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
     let style = imgui.style_mut();
     style.colors[imgui::StyleColor::Text as usize]             = theme.text;
@@ -168,4 +173,62 @@ pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
     style.colors[imgui::StyleColor::Separator as usize]        = theme.separator;
     style.colors[imgui::StyleColor::PopupBg as usize]          = theme.window_bg;
     style.colors[imgui::StyleColor::ChildBg as usize]          = theme.window_bg;
+}
+
+pub fn render_window(ui: &Ui, window: &Window, label: &str, title: &str) {
+    let (win_w, win_h) = window.size();
+    let bar_h = BAR_HEIGHT;
+    let content_h = win_h as f32 - bar_h;
+    let w = (win_w as f32 * 0.85).min(1100.0);
+    let h = content_h * 0.92;
+
+    let Some(_window_token) = ui.window(label)
+        .title_bar(false)
+        .resizable(false)
+        .movable(false)
+        .size([w, h], imgui::Condition::Always)
+        .position(
+            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + (content_h - h) * 0.5], imgui::Condition::Always,
+        )
+        .begin()
+    else {
+        return;
+    };
+    ui.text(title);
+    ui.separator();
+    ui.spacing();
+}
+
+pub fn sanitize(s: &str) -> String {
+    s.replace('\u{2019}', "'")
+}
+
+pub fn render_text_wrapped(disabled: bool, colored: bool, ui: &Ui, text: &str, indent_x: f32, wrap_pos: f32) {
+    let cleaned = sanitize(text);
+    let lines: Vec<&str> = cleaned.split("\\n").collect();
+
+    let desc_color = ui.style_color(imgui::StyleColor::DragDropTarget);
+    let dis_color = ui.style_color(imgui::StyleColor::TextDisabled);
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() { ui.spacing(); continue; }
+
+        if i > 0 {
+            let y = ui.cursor_pos()[1];
+            ui.set_cursor_pos([indent_x, y]);
+        }
+
+        let _wrap = ui.push_text_wrap_pos_with_pos(wrap_pos);
+
+        if disabled {
+            let _c = ui.push_style_color(imgui::StyleColor::Text, dis_color);
+            ui.text_wrapped(trimmed);
+        } else if colored {
+            let _c = ui.push_style_color(imgui::StyleColor::Text, desc_color);
+            ui.text_wrapped(trimmed);
+        } else {
+            ui.text_wrapped(trimmed);
+        }
+    }
 }

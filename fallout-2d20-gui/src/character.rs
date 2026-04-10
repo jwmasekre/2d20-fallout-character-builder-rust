@@ -101,7 +101,7 @@ pub struct Player {
 }
 
 impl Player {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             id: (Uuid::now_v7()),
             name: String::new(),
@@ -117,7 +117,7 @@ pub struct Party {
 }
 
 impl Party {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             id: (Uuid::now_v7()),
             name: String::new(),

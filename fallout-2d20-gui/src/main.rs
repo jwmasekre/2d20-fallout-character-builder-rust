@@ -3,6 +3,8 @@ mod config;
 mod screens;
 mod character;
 mod theme;
+mod main2;
+mod screens2;
 
 use db::Db;
 use sdl2::video::{ GLProfile,Window };
@@ -10,6 +12,7 @@ use imgui_sdl2::ImguiSdl2;
 use imgui_opengl_renderer::Renderer;
 use imgui::{ Ui };
 use std::os::raw::c_void;
+use std::path::PathBuf;
 use anyhow::Result;
 use glow::HasContext;
 use config::{ load_config, save_config, AppConfig };
@@ -92,7 +95,13 @@ fn main() -> Result<()> {
 
     let mut imgui = imgui::Context::create();
     apply_theme(&mut imgui, themes[current_theme]);
-    imgui.set_ini_filename(None);
+    //imgui.set_ini_filename(None);
+    let ini_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("imgui.ini");
+    imgui.set_ini_filename(ini_path);
 
     let mut imgui_sdl2 = ImguiSdl2::new(&mut imgui, &window);
     let renderer = Renderer::new(&mut imgui, |s| {
@@ -116,7 +125,8 @@ fn main() -> Result<()> {
     let mut equipment_state: Option<EquipmentState> = None;
     let mut stats_state: Option<ComputedStats> = None;
     
-    let db_path = config::db_path();
+    let db_path = &config::db_path(cfg.db_path);
+    //let db_path_str = &db_path.display().to_string();
     /*
     let db_path = std::env::current_exe()
         .unwrap()
@@ -161,7 +171,7 @@ fn main() -> Result<()> {
                     if ui.radio_button_bool(theme.name, current_theme == i) {
                         current_theme = i;
                         pending_theme = Some(i);
-                        save_config(&AppConfig { theme_index: i });
+                        save_config(&AppConfig { theme_index: i, db_path: db_path.to_path_buf() });
                     }
                     if i < themes.len() - 1 {
                         ui.same_line();

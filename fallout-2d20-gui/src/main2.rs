@@ -1,0 +1,439 @@
+//mod screens2;
+
+use std::os::raw::c_void;
+use glow::HasContext;
+use sdl2::video::{ GLProfile,Window };
+use imgui_sdl2::ImguiSdl2;
+use imgui_opengl_renderer::Renderer;
+use imgui::Ui;
+use anyhow::Result;
+
+use crate::{
+    config::{db_path, load_config, save_config, AppConfig},
+    db::Db,
+    theme::{THEMES, Theme, apply_theme, BAR_HEIGHT, render_text_wrapped},
+    character::{Character, Player, Party}
+};
+use screens2::main_menu::render_main_menu;
+use screens2::origin_select::{render_origin_select, OriginState};
+use screens2::special_assignment::{render_special_assignment, SpecialState};
+use screens2::skill_assignment::{render_skill_assignment, SkillState};
+use screens2::perk_select::{render_perk_select, PerkState};
+use screens2::stat_calculation::render_stat_calculation;
+use screens2::background_select::{render_background_select, BackgroundState};
+use screens2::character_review::render_character_review;
+
+#[derive(Debug, Clone, PartialEq)]
+enum AppScreen {
+    MainMenu,
+    LoadCharacter,
+    ImportCharacter,
+    OriginSelect,
+    SpecialAssignment,
+    SkillAssignment,
+    PerkSelect,
+    StatCalculation,
+    BackgroundSelect,
+    CharacterReview,
+    CharacterSheet,
+}
+
+pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
+    (AppScreen::OriginSelect, "Origin"),
+    (AppScreen::SpecialAssignment, "SPECIAL"),
+    (AppScreen::SkillAssignment, "Skills"),
+    (AppScreen::PerkSelect, "Perks"),
+    (AppScreen::StatCalculation, "Stats"),
+    (AppScreen::BackgroundSelect, "Background"),
+    (AppScreen::CharacterReview, "Review"),
+];
+
+const VERSION: &str = "0.1.9-alpha.1";
+const DATE: &str = "20260409";
+
+pub fn screen_unlocked(
+    screen: &AppScreen,
+    origin: &OriginState,
+    special: &SpecialState,
+    skills: &SkillState,
+    perks: &PerkState,
+    background: &BackgroundState,
+) -> bool {
+    match screen {
+        AppScreen::OriginSelect => true,
+        AppScreen::SpecialAssignment => origin.is_complete(),
+        AppScreen::SkillAssignment => special.is_complete(),
+        AppScreen::PerkSelect => skills.is_complete(),
+        AppScreen::StatCalculation => perks.is_complete(),
+        AppScreen::BackgroundSelect => special.is_complete() && skills.is_complete() && perks.is_complete(),
+        AppScreen::CharacterReview => background.is_complete(),
+        _ => false,
+    }
+}
+
+//build a placeholder window
+fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
+    let (win_w, win_h) = window.size();
+    let w = 500.0_f32;
+    let h = 200.0_f32;
+
+    ui.window(&format!("##{title}_placeholder"))
+        .title_bar(false)
+        .resizable(false)
+        .movable(false)
+        .size([w, h], imgui::Condition::Always)
+        .position(
+            [(win_w as f32 - w) * 0.5, (win_h as f32 - h) * 0.5],
+            imgui::Condition::Always,
+        )
+        .build(|| {
+            ui.text(format!("{} -- coming soon", title));
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+            if ui.button("< Back to Main Menu") {
+                *screen = AppScreen::MainMenu;
+            }
+        });
+}
+
+fn main() -> Result<()> {
+    //build the window
+    let sdl_context = sdl2::init().map_err(|e| anyhow::anyhow!(e))?;
+    let video_subsystem = sdl_context.video().map_err(|e| anyhow::anyhow!(e))?;
+
+    video_subsystem.gl_attr().set_context_profile(GLProfile::Core);
+    video_subsystem.gl_attr().set_context_version(3,2);
+
+    let window = video_subsystem
+        .window(&format!("Fallout 2d20 Character Manager v{}",VERSION), 1900, 950)
+        .position_centered()
+        .opengl()
+        .resizable()
+        .build()
+        .map_err(anyhow::Error::msg)?;
+
+    let _gl_context = window.gl_create_context().map_err(|e| anyhow::anyhow!(e))?;
+
+    let gl = unsafe {
+        glow::Context::from_loader_function(|s| {
+            video_subsystem.gl_get_proc_address(s) as *const c_void
+        })
+    };
+
+    //load the user config
+    let cfg = load_config();
+    //load the theme from the user config
+    let mut current_theme = cfg.theme_index.min(THEMES.len() - 1);
+
+    //creates the context for imgui functions
+    let mut imgui = imgui::Context::create();
+    //applies the theme from the user config
+    apply_theme(&mut imgui, THEMES[current_theme]);
+    //sets the path for the db
+    let db_path = &db_path(cfg.db_path);
+    //sets the file path for imgui ini file
+    let ini_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("imgui.ini");
+    imgui.set_ini_filename(ini_path);
+
+    //create the renderer
+    let mut imgui_sdl2 = ImguiSdl2::new(&mut imgui, &window);
+    let renderer = Renderer::new(&mut imgui, |s| {
+        video_subsystem.gl_get_proc_address(s) as *const c_void
+    });
+
+    //create the event pump
+    let mut event_pump = sdl_context.event_pump().map_err(|e| anyhow::anyhow!(e))?;
+
+    //create the main menu
+    let mut screen = AppScreen::MainMenu;
+    let mut selected_menu_item: i32 = 0;
+    let menu_items = ["New Character", "Load Character", "Import Character", "Quit"];
+
+    //since we just set our theme, pending theme can be set to the same thing
+    //we'll check this in the loop every frame to determine if the theme needs
+    //  to be updated
+    let mut pending_theme: Option<usize> = Some(current_theme);
+
+    //initializing all the states on first load as None
+    let mut show_about = false;
+    let mut character: Option<Character> = None;
+    let mut player: Option<Player> = None;
+    let mut party: Option<Party> = None;
+    let mut origin_state: Option<OriginState> = None;
+    let mut origin_state: Option<SpecialState> = None;
+    let mut origin_state: Option<SkillState> = None;
+    let mut origin_state: Option<PerkState> = None;
+    let mut origin_state: Option<BackgroundState> = None;
+
+    //create the db if it doesn't exist, which avoids errors
+    //if it's a new db, it's going to result in blank entries for origin select
+    std::fs::create_dir_all(db_path.parent().unwrap())?;
+    let db = Db::connect(&format!("sqlite:{}", db_path.display()))?;
+
+    //start the render loop
+    'main: loop {
+        //function for handling the tabbed windows for the builder:
+        pub fn render_tab_bar(
+            ui: &Ui,
+            current: &AppScreen,
+            screen: &mut AppScreen,
+            origin: &OriginState,
+            special: &SpecialState,
+            skills: &SkillState,
+            perks: &PerkState,
+            background: &BackgroundState,
+        ) {
+            //evenly space the tabs
+            let tab_w = ui.content_region_avail()[0] / BUILD_SCREENS.len() as f32;
+
+            //establish which tab is the current tab and which are unlocked
+            for (target, label) in BUILD_SCREENS {
+                let is_current  = target == current;
+                let is_unlocked = screen_unlocked(target, origin, special, skills, perks, background);
+
+                //highlight the current tab
+                if is_current {
+                    let color = ui.push_style_color(
+                        imgui::StyleColor::Button,
+                        ui.style_color(imgui::StyleColor::ButtonActive),
+                    );
+                    ui.set_next_item_width(tab_w);
+                    ui.button(label);
+                    drop(color);
+                    //render the tab normally
+                } else if is_unlocked {
+                    ui.set_next_item_width(tab_w);
+                    if ui.button(label) {
+                        *screen = target.clone();
+                    }
+                } else {
+                    //disable the tab
+                    let color = ui.push_style_color(
+                        imgui::StyleColor::Text,
+                        ui.style_color(imgui::StyleColor::TextDisabled),
+                    );
+                    let color2 = ui.push_style_color(
+                        imgui::StyleColor::Button,
+                        ui.style_color(imgui::StyleColor::FrameBg),
+                    );
+                    ui.set_next_item_width(tab_w);
+                    ui.button(label);
+                    drop(color);
+                    drop(color2);
+                }
+
+                ui.same_line_with_spacing(0.0, 0.0);
+            }
+
+            ui.new_line();
+            ui.separator();
+            ui.spacing();
+        }
+
+        //function for rendering forward/back buttons
+        pub fn render_nav_footer(
+            ui: &Ui,
+            h: f32,
+            current: &AppScreen,
+            screen: &mut AppScreen,
+            origin: &OriginState,
+            special: &SpecialState,
+            skills: &SkillState,
+            perks: &PerkState,
+            background: &BackgroundState,
+        ) {
+            //figure out which tab/screen we're on
+            let idx = BUILD_SCREENS.iter().position(|(s, _)| s == current).unwrap_or(0);
+
+            //define the previous and next screens
+            let prev = idx.checked_sub(1).map(|i| &BUILD_SCREENS[i].0);
+            let next = BUILD_SCREENS.get(idx + 1).map(|(s, _)| s);
+
+            ui.separator();
+            ui.spacing();
+            ui.set_cursor_pos([16.0, h - 36.0]);
+
+            //if there's a previous screen, create a back button and point to it
+            if let Some(prev_screen) = prev {
+                if ui.button("< Back") {
+                    *screen = prev_screen.clone();
+                }
+                ui.same_line();
+            }
+
+            if let Some(next_screen) = next {
+                let unlocked = screen_unlocked(next_screen, origin, special, skills, perks, background);
+                //disable the next button if it's not unlocked
+                if !unlocked {
+                    let c = ui.push_style_color(imgui::StyleColor::Text, ui.style_color(imgui::StyleColor::TextDisabled));
+                    let c2 = ui.push_style_color(imgui::StyleColor::Button, ui.style_color(imgui::StyleColor::FrameBg));
+                    ui.button("Next >");
+                    drop(c); drop(c2);
+                } else if ui.button("Next >") {
+                    *screen = next_screen.clone();
+                }
+            }
+        }
+
+        //listen for events and handle them
+        for event in event_pump.poll_iter() {
+            imgui_sdl2.handle_event(&mut imgui, &event);
+            if let sdl2::event::Event::Quit { .. } = event {
+                break 'main;
+            }
+        }
+        
+        //if pending theme is not None, apply it and make it None
+        if let Some(t) = pending_theme.take() {
+            apply_theme(&mut imgui, THEMES[t]);
+        }
+
+        //create the frame for rendering stuff
+        imgui_sdl2.prepare_frame(imgui.io_mut(), &window, &event_pump.mouse_state());
+        let ui = imgui.frame();
+
+        //get the window size
+        let (win_w, _win_h) = window.size();
+
+        //create the theme bar at the very top
+        ui.window("##theme_bar")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .collapsible(false)
+            .no_decoration()
+            .size([win_w as f32, BAR_HEIGHT], imgui::Condition::Always)
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .build(|| {
+                ui.set_cursor_pos([8.0, 7.0]);
+                ui.text_colored(THEMES[current_theme].text_dim, "Theme:");
+                ui.same_line();
+                //iterating through the themes to draw radio buttons
+                for (i, theme) in THEMES.iter().enumerate() {
+                    //checks if the radio button is clicked for the theme
+                    if ui.radio_button_bool(theme.name, current_theme == i) {
+                        //sets the theme, then writes it to the config
+                        current_theme = i;
+                        pending_theme = Some(i);
+                        save_config(&AppConfig { theme_index: i, db_path: db_path.to_path_buf() });
+                    }
+                    if i < THEMES.len() - 1 {
+                        //doesn't move to the next line unless we're at the end of the themes
+                        ui.same_line();
+                    }
+                }
+                // About button, right-aligned
+                let button_w = 60.0_f32;
+                let button_x = win_w as f32 - button_w - 8.0;
+                ui.set_cursor_pos([button_x, 4.0]);
+                //set the show_about flag if clicked
+                if ui.button("About") {
+                    show_about = true; 
+                }
+            });
+
+        //render about window if the flag is set
+        if show_about {
+            let (win_w, win_h) = window.size();
+            let aw = 400.0_f32;
+            let ah = 220.0_f32;
+            let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
+
+            //center the about window when it's opened or the button is clicked again (not every frame)
+            let condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
+                imgui::Condition::Appearing
+            } else {
+                imgui::Condition::Appearing
+            };
+
+            //rendering the about window
+            ui.window("##about")
+                .title_bar(false)
+                .resizable(false)
+                .movable(true)
+                .collapsible(false)
+                .size([aw, ah], imgui::Condition::Always)
+                .position(center, imgui::Condition::Once)
+                .bring_to_front_on_focus(true)
+                .build(|| {
+                    //title with X
+                    let close_x = aw - 28.0;
+                    ui.text("About");
+                    ui.same_line_with_pos(close_x);
+                    if ui.button("X##about_close") {
+                        show_about = false;
+                    }
+                    ui.separator();
+                    ui.spacing();
+
+                    ui.text("fallout 2d20 character manager");
+                    ui.spacing();
+                    render_text_wrapped(true, false, ui, &format!("v{}, {}", VERSION, DATE), 16.0, aw - 32.0);
+                    ui.spacing();
+                    ui.text_wrapped("a character creation and management tool for the 2d20 ttrpg system.");
+                    ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
+                    ui.spacing();
+                    ui.separator();
+                    ui.spacing();
+                    render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0, aw - 32.0);
+                });
+        }
+
+        match screen {
+            AppScreen::MainMenu => {
+                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
+            }
+            AppScreen::OriginSelect => {
+                let state: &mut OriginState;
+                player.get_or_insert_with(|| Player::new());
+                //party.get_or_insert_with(|| Party::new());
+                character.get_or_insert_with(|| Character::new(player.unwrap(), None));
+                render_origin_select(&ui, &window, state, &mut screen, &db, character)
+            }
+            AppScreen::SpecialAssignment => {
+                
+            }
+            AppScreen::SkillAssignment => {
+                
+            }
+            AppScreen::PerkSelect => {
+                
+            }
+            AppScreen::StatCalculation => {
+                
+            }
+            AppScreen::BackgroundSelect => {
+                
+            }
+            AppScreen::CharacterReview => {
+                
+            }
+            AppScreen::CharacterSheet => {
+                
+            }
+            AppScreen::LoadCharacter => {
+                render_placeholder(&ui, &window, "load", &mut screen);
+            }
+            AppScreen::ImportCharacter => {
+                render_placeholder(&ui, &window, "import", &mut screen);
+                
+            }
+        }
+
+        unsafe {
+            gl.clear_color(0.05, 0.05, 0.05, 1.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+
+        imgui_sdl2.prepare_render(&ui, &window);
+        renderer.render(&mut imgui);
+
+        window.gl_swap_window();
+    }
+    Ok(())
+}
