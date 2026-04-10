@@ -175,7 +175,7 @@ pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
     style.colors[imgui::StyleColor::ChildBg as usize]          = theme.window_bg;
 }
 
-pub fn render_window(ui: &Ui, window: &Window, label: &str, title: &str) {
+pub fn render_window(ui: &Ui, window: &Window, label: &str, title: &str) -> (f32, f32) {
     let (win_w, win_h) = window.size();
     let bar_h = BAR_HEIGHT;
     let content_h = win_h as f32 - bar_h;
@@ -192,11 +192,13 @@ pub fn render_window(ui: &Ui, window: &Window, label: &str, title: &str) {
         )
         .begin()
     else {
-        return;
+        return (0.0, 0.0);
     };
     ui.text(title);
     ui.separator();
     ui.spacing();
+
+    return (w, h);
 }
 
 pub fn sanitize(s: &str) -> String {

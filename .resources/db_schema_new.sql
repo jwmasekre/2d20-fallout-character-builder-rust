@@ -1008,6 +1008,7 @@ FOREIGN KEY (robot_armor_recipe_id) REFERENCES robot_armor_recipes (id)
 CREATE TABLE IF NOT EXISTS backgrounds (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "name" TEXT,
+  "description" TEXT,
   "origin_id" INTEGER, -- smallint
   "caps" INTEGER, -- smallint
   "misc" TEXT, -- json array of strings

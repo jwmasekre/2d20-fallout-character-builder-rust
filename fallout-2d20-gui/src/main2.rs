@@ -14,17 +14,17 @@ use crate::{
     theme::{THEMES, Theme, apply_theme, BAR_HEIGHT, render_text_wrapped},
     character::{Character, Player, Party}
 };
-use screens2::main_menu::render_main_menu;
-use screens2::origin_select::{render_origin_select, OriginState};
-use screens2::special_assignment::{render_special_assignment, SpecialState};
-use screens2::skill_assignment::{render_skill_assignment, SkillState};
-use screens2::perk_select::{render_perk_select, PerkState};
-use screens2::stat_calculation::render_stat_calculation;
-use screens2::background_select::{render_background_select, BackgroundState};
-use screens2::character_review::render_character_review;
+use crate::screens2::main_menu::render_main_menu;
+use crate::screens2::origin_select::{render_origin_select, OriginState};
+use crate::screens2::special_assignment::{render_special_assignment, SpecialState};
+use crate::screens2::skill_assignment::{render_skill_assignment, SkillState};
+use crate::screens2::perk_select::{render_perk_select, PerkState};
+use crate::screens2::stat_calculation::render_stat_calculation;
+use crate::screens2::background_select::{render_background_select, BackgroundState};
+use crate::screens2::character_review::render_character_review;
 
 #[derive(Debug, Clone, PartialEq)]
-enum AppScreen {
+pub enum AppScreen {
     MainMenu,
     LoadCharacter,
     ImportCharacter,
@@ -161,14 +161,15 @@ fn main() -> Result<()> {
 
     //initializing all the states on first load as None
     let mut show_about = false;
-    let mut character: Option<Character> = None;
-    let mut player: Option<Player> = None;
+    let mut player = Player::new();
+    //let mut party = Party::new();
+    let mut character = Character::new(player, None);
     let mut party: Option<Party> = None;
-    let mut origin_state: Option<OriginState> = None;
-    let mut origin_state: Option<SpecialState> = None;
-    let mut origin_state: Option<SkillState> = None;
-    let mut origin_state: Option<PerkState> = None;
-    let mut origin_state: Option<BackgroundState> = None;
+    let mut origin = OriginState::new();
+    let mut special = SpecialState::new();
+    let mut skill = SkillState::new();
+    let mut perk = PerkState::new();
+    let mut background = BackgroundState::new();
 
     //create the db if it doesn't exist, which avoids errors
     //if it's a new db, it's going to result in blank entries for origin select
@@ -384,16 +385,17 @@ fn main() -> Result<()> {
                 });
         }
 
+        render_tab_bar(ui, &screen, &mut screen, origin, special, skill, perk, background);
+
         match screen {
             AppScreen::MainMenu => {
                 render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
             }
             AppScreen::OriginSelect => {
                 let state: &mut OriginState;
-                player.get_or_insert_with(|| Player::new());
-                //party.get_or_insert_with(|| Party::new());
-                character.get_or_insert_with(|| Character::new(player.unwrap(), None));
-                render_origin_select(&ui, &window, state, &mut screen, &db, character)
+
+                let h = render_origin_select(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, origin, special, skills, perks, background);
             }
             AppScreen::SpecialAssignment => {
                 

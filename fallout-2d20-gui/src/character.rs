@@ -1,43 +1,43 @@
 use uuid::Uuid;
 
 pub struct Character {
-    id: Uuid,
-    name: String,
-    player: Player,
-    party: Option<Party>,
-    level: i32,
-    xp: i32,
-    origin: Option<Origin>,
-    background: Option<Background>,
-    traits: Vec<Trait>,
-    ghoul: bool,
-    mutant: MutantType,
-    robot: RobotType,
-    robot_hat: Option<Apparel>,
-    special: Special,
-    luck_points: i32,
-    luck_points_max: i32,
-    rad_points: i32,
-    skills: Skills,
-    perks: Vec<Perk>,
-    melee_mod: MeleeModifiers,
-    defense: i32,
-    initiative: i32,
-    hp: i32,
-    hp_max: i32,
-    poison_dr: i32,
-    limb_dr: Limbs,
-    weapons: Vec<Weapon>,
-    ammo: Vec<AmmoInv>,
-    apparel: Vec<Apparel>,
-    robot_modules: Vec<RobotModule>,
-    consumables: Vec<Consumable>,
-    gear: Vec<Gear>,
-    junk: Junk,
-    misc: Vec<String>,
-    carry_wgt: i32,
-    carry_wgt_max: i32,
-    notes: String,
+    pub id: Uuid,
+    pub name: String,
+    pub player: Player,
+    pub party: Option<Party>,
+    pub level: i32,
+    pub xp: i32,
+    pub origin: Option<Origin>,
+    pub background: Option<Background>,
+    pub traits: Vec<Trait>,
+    pub ghoul: bool,
+    pub mutant: MutantType,
+    pub robot: RobotType,
+    pub robot_hat: Option<Apparel>,
+    pub special: Special,
+    pub luck_points: i32,
+    pub luck_points_max: i32,
+    pub rad_points: i32,
+    pub skills: Skills,
+    pub perks: Vec<Perk>,
+    pub melee_mod: MeleeModifiers,
+    pub defense: i32,
+    pub initiative: i32,
+    pub hp: i32,
+    pub hp_max: i32,
+    pub poison_dr: i32,
+    pub limb_dr: Limbs,
+    pub weapons: Vec<Weapon>,
+    pub ammo: Vec<AmmoInv>,
+    pub apparel: Vec<Apparel>,
+    pub robot_modules: Vec<RobotModule>,
+    pub consumables: Vec<Consumable>,
+    pub gear: Vec<Gear>,
+    pub junk: Junk,
+    pub misc: Vec<String>,
+    pub carry_wgt: i32,
+    pub carry_wgt_max: i32,
+    pub notes: String,
 }
 
 impl Character {
@@ -128,10 +128,10 @@ impl Party {
 }
 
 pub struct Origin {
-    id: i32,
-    name: String,
-    desc: String,
-    can_ghoul: bool,
+    pub id: i32,
+    pub name: String,
+    pub desc: String,
+    pub can_ghoul: bool,
 }
 
 pub struct Background {
@@ -141,9 +141,9 @@ pub struct Background {
 }
 
 pub struct Trait {
-    id: i32,
-    name: String,
-    desc: String,
+    pub id: i32,
+    pub name: String,
+    pub desc: String,
 }
 
 #[derive(PartialEq)]
