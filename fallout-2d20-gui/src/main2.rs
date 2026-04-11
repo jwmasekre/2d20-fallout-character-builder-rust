@@ -159,22 +159,22 @@ fn main() -> Result<()> {
     //  to be updated
     let mut pending_theme: Option<usize> = Some(current_theme);
 
+    //create the db if it doesn't exist, which avoids errors
+    //if it's a new db, it's going to result in blank entries for origin select
+    std::fs::create_dir_all(db_path.parent().unwrap())?;
+    let db = Db::connect(&format!("sqlite:{}", db_path.display()))?;
+
     //initializing all the states on first load as None
     let mut show_about = false;
     let mut player = Player::new();
     //let mut party = Party::new();
     let mut character = Character::new(player, None);
     let mut party: Option<Party> = None;
-    let mut origin = OriginState::new();
+    let mut origin = OriginState::new(&db);
     let mut special = SpecialState::new();
     let mut skill = SkillState::new();
     let mut perk = PerkState::new();
     let mut background = BackgroundState::new();
-
-    //create the db if it doesn't exist, which avoids errors
-    //if it's a new db, it's going to result in blank entries for origin select
-    std::fs::create_dir_all(db_path.parent().unwrap())?;
-    let db = Db::connect(&format!("sqlite:{}", db_path.display()))?;
 
     //start the render loop
     'main: loop {
@@ -385,38 +385,52 @@ fn main() -> Result<()> {
                 });
         }
 
-        render_tab_bar(ui, &screen, &mut screen, origin, special, skill, perk, background);
+        render_tab_bar(ui, &screen, &mut screen, &origin, special, skill, perk, background);
 
         match screen {
             AppScreen::MainMenu => {
                 render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
             }
             AppScreen::OriginSelect => {
-                let state: &mut OriginState;
-
+                let state = &mut origin;
                 let h = render_origin_select(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, origin, special, skills, perks, background);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::SpecialAssignment => {
-                
+                let state = &mut special.update(&character);
+                let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::SkillAssignment => {
-                
+                let state = &mut skill;
+                let h = render_skill_assignment(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::PerkSelect => {
-                
+                let state = &mut perk;
+                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::StatCalculation => {
-                
+                let state = &mut stat;
+                let h = render_stat_calculation(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::BackgroundSelect => {
-                
+                let state = &mut background;
+                let h = render_background_select(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::CharacterReview => {
-                
+                let state = &mut review;
+                let h = render_character_review(&ui, &window, state, &mut screen, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::CharacterSheet => {
-                
+                render_placeholder(&ui, &window, "sheet", &mut screen);
+                //let state = &mut special;
+                //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
+                //render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
             }
             AppScreen::LoadCharacter => {
                 render_placeholder(&ui, &window, "load", &mut screen);

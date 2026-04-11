@@ -399,25 +399,6 @@ pub fn render_new_character(
 
             ui.spacing();
 
-            /*
-            let can_be_ghoul = state.origins
-                .get(state.selected_origin_idx)
-                .map(|o| o.can_ghoul)
-                .unwrap_or(false);
-
-
-            let origin_description = state.origins
-                .get(state.selected_origin_idx)
-                .map(|o| o.description.clone())
-                .unwrap_or_default();
-
-
-            let origin_name = state.origins
-                .get(state.selected_origin_idx)
-                .map(|o| o.description.clone())
-                .unwrap_or_default();
-             */
-
             // ── Origin Description ────────────────────────────────────────────
             if let Some(origin) = state.origins.get(state.selected_origin_idx) {
                 ui.text("Description");

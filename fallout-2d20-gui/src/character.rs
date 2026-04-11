@@ -1,5 +1,7 @@
 use uuid::Uuid;
 
+use crate::screens2::special_assignment::SpecialState;
+
 pub struct Character {
     pub id: Uuid,
     pub name: String,
@@ -110,10 +112,10 @@ impl Player {
 }
 
 pub struct Party {
-    id: Uuid,
-    name: String,
-    ap_players: i32,
-    ap_gm: i32,
+    pub id: Uuid,
+    pub name: String,
+    pub ap_players: i32,
+    pub ap_gm: i32,
 }
 
 impl Party {
@@ -135,9 +137,9 @@ pub struct Origin {
 }
 
 pub struct Background {
-    id: i32,
-    name: String,
-    desc: String,
+    pub id: i32,
+    pub name: String,
+    pub desc: String,
 }
 
 pub struct Trait {
@@ -175,13 +177,13 @@ pub enum SpecialAttr {
 }
 
 pub struct Special {
-    strength: SpecialBlock,
-    perception: SpecialBlock,
-    endurance: SpecialBlock,
-    charisma: SpecialBlock,
-    intelligence: SpecialBlock,
-    agility: SpecialBlock,
-    luck: SpecialBlock,
+    pub strength: SpecialBlock,
+    pub perception: SpecialBlock,
+    pub endurance: SpecialBlock,
+    pub charisma: SpecialBlock,
+    pub intelligence: SpecialBlock,
+    pub agility: SpecialBlock,
+    pub luck: SpecialBlock,
 }
 
 impl Special {
@@ -196,13 +198,34 @@ impl Special {
             luck: SpecialBlock::new(),
         }
     }
+    pub fn apply_max(character: &mut Character) {
+        match character.mutant {
+            MutantType::None => {
+                character.special.intelligence.max = 10;
+                character.special.charisma.max = 10;
+                character.special.strength.max = 10;
+                character.special.endurance.max = 10;
+                return
+            },
+            MutantType::SuperMutant => {
+                character.special.intelligence.max = 6;
+                character.special.charisma.max = 6;
+            },
+            MutantType::Nightkin => {
+                character.special.intelligence.max = 8;
+                character.special.charisma.max = 8;
+            }
+        }
+        character.special.strength.max = 12;
+        character.special.endurance.max = 12;
+    }
 }
 
 pub struct SpecialBlock {
-    value: i32,
-    gifted: bool,
-    trained: i32,
-    max: i32,
+    pub value: i32,
+    pub gifted: bool,
+    pub trained: i32,
+    pub max: i32,
 }
 
 impl SpecialBlock {
@@ -213,6 +236,12 @@ impl SpecialBlock {
             trained: 0,
             max: 10,
         }
+    }
+    pub fn can_increase(&self, state: &SpecialState, character: &Character) -> bool {
+        self.value < self.max && state.remaining_points(character) == 0
+    }
+    pub fn can_decrease(&self, character: &Character) -> bool {
+        self.value > 4 + if character.is_mutant() { 2 } else { 0 }
     }
 }
 
@@ -237,23 +266,23 @@ pub enum Skill {
 }
 
 pub struct Skills {
-    athletics: SkillBlock,
-	barter: SkillBlock,
-	big_guns: SkillBlock,
-	energy_weapons: SkillBlock,
-	explosives: SkillBlock,
-    lockpick: SkillBlock,
-	medicine: SkillBlock,
-	melee_weapons: SkillBlock,
-	pilot: SkillBlock,
-	repair: SkillBlock,
-    science: SkillBlock,
-	small_guns: SkillBlock,
-	sneak: SkillBlock,
-	speech: SkillBlock,
-	survival: SkillBlock,
-    throwing: SkillBlock,
-	unarmed: SkillBlock,
+    pub athletics: SkillBlock,
+	pub barter: SkillBlock,
+	pub big_guns: SkillBlock,
+	pub energy_weapons: SkillBlock,
+	pub explosives: SkillBlock,
+    pub lockpick: SkillBlock,
+	pub medicine: SkillBlock,
+	pub melee_weapons: SkillBlock,
+	pub pilot: SkillBlock,
+	pub repair: SkillBlock,
+    pub science: SkillBlock,
+	pub small_guns: SkillBlock,
+	pub sneak: SkillBlock,
+	pub speech: SkillBlock,
+	pub survival: SkillBlock,
+    pub throwing: SkillBlock,
+	pub unarmed: SkillBlock,
 }
 
 impl Skills {
@@ -281,11 +310,11 @@ impl Skills {
 }
 
 pub struct SkillBlock {
-    ranks: i32,
-    tagged: TagType,
-    skilled: Vec<i32>,
-    total: i32,
-    max: i32,
+    pub ranks: i32,
+    pub tagged: TagType,
+    pub skilled: Vec<i32>,
+    pub total: i32,
+    pub max: i32,
 }
 
 impl SkillBlock {
@@ -308,16 +337,16 @@ pub enum TagType {
 }
 
 pub struct Perk {
-    id: i32,
-    name: String,
-    desc: Vec<String>,
-    ranks: i32,
+    pub id: i32,
+    pub name: String,
+    pub desc: Vec<String>,
+    pub ranks: i32,
 }
 
 pub struct MeleeModifiers {
-    melee: i32,
-    unarmed: i32,
-    sneak: i32,
+    pub melee: i32,
+    pub unarmed: i32,
+    pub sneak: i32,
 }
 
 impl MeleeModifiers {
@@ -331,21 +360,21 @@ impl MeleeModifiers {
 }
 
 pub struct Limbs {
-    head: Limb,
-    torso: Limb,
-    body: Limb,
-    arm_left: Limb,
-    arm_right: Limb,
-    leg_left: Limb,
-    leg_right: Limb,
-    optics: Limb,
-    arm_1: Limb,
-    arm_2: Limb,
-    arm_3: Limb,
-    thruster: Limb,
-    wheel: Limb,
-    track_left: Limb,
-    track_right: Limb,
+    pub head: Limb,
+    pub torso: Limb,
+    pub body: Limb,
+    pub arm_left: Limb,
+    pub arm_right: Limb,
+    pub leg_left: Limb,
+    pub leg_right: Limb,
+    pub optics: Limb,
+    pub arm_1: Limb,
+    pub arm_2: Limb,
+    pub arm_3: Limb,
+    pub thruster: Limb,
+    pub wheel: Limb,
+    pub track_left: Limb,
+    pub track_right: Limb,
 }
 
 impl Limbs {
@@ -371,12 +400,12 @@ impl Limbs {
 }
 
 pub struct Limb {
-    active: bool,
-    ph_dr: i32,
-    en_dr: i32,
-    rd_dr: i32,
-    injuries: i32,
-    equipped: Option<Apparel>,
+    pub active: bool,
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
+    pub injuries: i32,
+    pub equipped: Option<Apparel>,
 }
 
 impl Limb {
@@ -403,21 +432,21 @@ impl Limb {
 }
 
 pub struct Weapon {
-    id: i32,
-    name: String,
-    prefix: String,
-    skill: Skill,
-    target: i32,
-    tag: bool,
-    damage: i32,
-    effects: Vec<String>, // new struct?
-    dam_type: DamageType,
-    rate: i32,
-    range: String,
-    qualities: Vec<String>, // new struct?
-    ammo: String,
-    wgt: i32,
-    mods: Vec<WeaponMods>,
+    pub id: i32,
+    pub name: String,
+    pub prefix: String,
+    pub skill: Skill,
+    pub target: i32,
+    pub tag: bool,
+    pub damage: i32,
+    pub effects: Vec<String>, // new struct?
+    pub dam_type: DamageType,
+    pub rate: i32,
+    pub range: String,
+    pub qualities: Vec<String>, // new struct?
+    pub ammo: String,
+    pub wgt: i32,
+    pub mods: Vec<WeaponMods>,
 }
 
 pub enum DamageType {
@@ -432,27 +461,27 @@ pub enum DamageType {
 }
 
 pub struct WeaponMods {
-    slot: WeaponSlot,
-    installed: bool,
-    id: i32,
-    name: String,
-    prefix: String,
-    wgt: i32,
-    damage_set: i32,
-    damage_chg: i32,
-    rate_set: i32,
-    rate_chg: i32,
-    range_set: i32,
-    range_chg: i32,
-    ammo_set: AmmoData,
-    effect_add: Vec<String>,
-    effect_rem: Vec<String>,
-    quality_add: Vec<String>,
-    quality_rem: Vec<String>,
-    slot_add: WeaponSlot,
-    damage_type_set: DamageType,
-    weapon_add: Weapon,
-    special_ability: String,
+    pub slot: WeaponSlot,
+    pub installed: bool,
+    pub id: i32,
+    pub name: String,
+    pub prefix: String,
+    pub wgt: i32,
+    pub damage_set: i32,
+    pub damage_chg: i32,
+    pub rate_set: i32,
+    pub rate_chg: i32,
+    pub range_set: i32,
+    pub range_chg: i32,
+    pub ammo_set: AmmoData,
+    pub effect_add: Vec<String>,
+    pub effect_rem: Vec<String>,
+    pub quality_add: Vec<String>,
+    pub quality_rem: Vec<String>,
+    pub slot_add: WeaponSlot,
+    pub damage_type_set: DamageType,
+    pub weapon_add: Weapon,
+    pub special_ability: String,
 }
 
 pub enum WeaponSlot {
@@ -475,33 +504,33 @@ pub enum WeaponSlot {
 }
 
 pub struct AmmoData {
-    id: i32,
-    name: String,
-    wgt: i32
+    pub id: i32,
+    pub name: String,
+    pub wgt: i32
 }
 
 pub struct Ammo {
-    ammo: AmmoData,
-    variants: Vec<AmmoData>,
+    pub ammo: AmmoData,
+    pub variants: Vec<AmmoData>,
 }
 
 pub struct AmmoInv {
-    ammo: AmmoData,
-    quantity: i32,
+    pub ammo: AmmoData,
+    pub quantity: i32,
 }
 
 pub struct Apparel {
-    id: i32,
-    name: String,
-    prefix: String,
-    apparel_type: ApparelType,
-    ph_dr: i32,
-    en_dr: i32,
-    rd_dr: i32,
-    wgt: i32,
-    effects: Vec<String>,
-    covers: Vec<BodyLocation>,
-    equipped: bool,
+    pub id: i32,
+    pub name: String,
+    pub prefix: String,
+    pub apparel_type: ApparelType,
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
+    pub wgt: i32,
+    pub effects: Vec<String>,
+    pub covers: Vec<BodyLocation>,
+    pub equipped: bool,
 }
 
 pub enum ApparelType {
@@ -531,24 +560,24 @@ pub enum BodyLocation {
 }
 
 pub struct RobotModule {
-    id: i32,
-    name: String,
-    installed: bool,
-    effect: Vec<String>,
-    wgt: i32,
+    pub id: i32,
+    pub name: String,
+    pub installed: bool,
+    pub effect: Vec<String>,
+    pub wgt: i32,
 }
 
 pub struct Consumable {
-    id: i32,
-    name: String,
-    consumable_type: ConsumableType,
-    health: i32,
-    effects: Vec<String>,
-    rads: i32,
-    wgt: i32,
-    duration: String,
-    addiction: i32,
-    quantity: i32,
+    pub id: i32,
+    pub name: String,
+    pub consumable_type: ConsumableType,
+    pub health: i32,
+    pub effects: Vec<String>,
+    pub rads: i32,
+    pub wgt: i32,
+    pub duration: String,
+    pub addiction: i32,
+    pub quantity: i32,
 }
 
 pub enum ConsumableType {
@@ -560,17 +589,17 @@ pub enum ConsumableType {
 }
 
 pub struct Gear {
-    id: i32,
-    name: String,
-    effect: Vec<String>,
-    wgt: i32,
-    quantity: i32,
+    pub id: i32,
+    pub name: String,
+    pub effect: Vec<String>,
+    pub wgt: i32,
+    pub quantity: i32,
 }
 
 pub struct Junk {
-    common: i32,
-    uncommon: i32,
-    rare: i32,
+    pub common: i32,
+    pub uncommon: i32,
+    pub rare: i32,
 }
 
 impl Junk {

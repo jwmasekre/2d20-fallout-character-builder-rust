@@ -2,7 +2,7 @@ use imgui::Ui;
 use sdl2::video::Window;
 use crate::main2::AppScreen;
 use crate::db::Db;
-use crate::character::{Character, MutantType, RobotType, Origin, Trait};
+use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
 use crate::theme::{render_text_wrapped, render_window};
 
 pub struct OriginState {
@@ -35,40 +35,87 @@ impl OriginState {
     pub fn is_complete(&self) -> bool {
         self.selected && (self.trait_count == self.origin_trait_count)
     }
-    fn update_origin(&self, character: &mut Character) {
+    fn update_origin(&mut self, character: &mut Character) {
+        //if no origins are returned by the db, return None
         if self.origins.is_empty() { character.origin = None; return }
+        //mark that the player has selected an origin
+        self.selected = true;
+        //capture which origin they selected
         let selected_origin = self.origins.get(self.origin_index).unwrap();
+        //build the origin struct for assignment to character
         let active_origin = Origin {
             id: selected_origin.id,
             name: selected_origin.name.clone(),
             desc: selected_origin.description.clone(),
             can_ghoul: selected_origin.can_ghoul,
         };
+        //grab the old origin; checking if they go from mutant -> non or vice-versa
+        let old_origin = character.origin.as_ref().unwrap().id;
+        //if they go to mutant from non, add two to str and end
+        if [3,16].contains(&selected_origin.id) && ![3,16].contains(&old_origin) {
+            character.special.strength.value += 2;
+            character.special.endurance.value += 2;
+        //if they go from mutant to non, remove two from str and end
+        } else if ![3,16].contains(&selected_origin.id) && [3,16].contains(&old_origin) {
+            character.special.strength.value -= 2;
+            character.special.endurance.value -= 2;
+        }
+        //update the character origin
         character.origin = Some(active_origin);
+        //set mutant status
+        character.mutant = match selected_origin.id {
+            3 => MutantType::SuperMutant,
+            16 => MutantType::Nightkin,
+            _ => MutantType::None,
+        };
+        //set robot status
+        character.robot = match selected_origin.id {
+            4 => RobotType::Handy,
+            9 => RobotType::Protectron,
+            10 => RobotType::Robobrain,
+            11 => RobotType::Securitron,
+            12 => RobotType::Synth,
+            14 => RobotType::Assaultron,
+            _ => RobotType::None,
+        };
+        //update max special
+        Special::apply_max(character);
     }
+    //retrieve the traits based on the current origin
     fn reload_traits(&mut self, db: &Db, character: &mut Character) {
+        //clear traits if the db doesn't return any origins
         if self.origins.is_empty() {
             self.traits = vec![];
             character.traits = vec![];
             return;
         }
+        //grab the currently selected origin's id
         let origin_id = self.origins[self.origin_index].id;
+        //retrieve traits from the db
         let traits = load_traits(db, origin_id, self);
+        //retrieve the ghoul trait
         let ghoul_trait = &load_ghoul_traits(db, self)[0];
+        //if the player selected the ghoul origin, mark the character as a ghoul
         if traits[0].is_ghoul_trait {
             character.ghoul = true;
+        //if the player selected an origin that can't ghoul, mark them as not a ghoul
         } else if !self.origins[origin_id as usize].can_ghoul {
             character.ghoul = false;
         }
+        //if the character is a ghoul, set their trait to the ghoul trait and don't run any other trait logic
         if character.ghoul {
+            //building the trait struct for assignment
             let active_trait= Trait {
                 id: ghoul_trait.id,
                 name: ghoul_trait.name.clone(),
                 desc: ghoul_trait.description.clone(),
             };
+            //assign the trait
             character.traits = vec![active_trait];
+            //mark the number of valid traits as 1 and assigned as 1 (satisfies one of the complete conditions)
             self.trait_count = 1;
             self.origin_trait_count = 1;
+        //if the character's origin only has one trait, just grab that and assign it (like the ghoul block above)
         } else if traits.len() == 1 {
             let active_trait = Trait {
                 id: traits[0].id,
@@ -78,24 +125,11 @@ impl OriginState {
             character.traits = vec![active_trait];
             self.trait_count = 1;
             self.origin_trait_count = 1;
+        //the character's origin has options, so clear out the character's traits and indicate that they've selected 0 out of a max of 2
         } else {
             character.traits = vec![];
             self.trait_count = 0;
             self.origin_trait_count = 2;
-        }
-        character.mutant = match origin_id {
-            3 => MutantType::SuperMutant,
-            16 => MutantType::Nightkin,
-            _ => MutantType::None,
-        };
-        character.robot = match origin_id {
-            4 => RobotType::Handy,
-            9 => RobotType::Protectron,
-            10 => RobotType::Robobrain,
-            11 => RobotType::Securitron,
-            12 => RobotType::Synth,
-            14 => RobotType::Assaultron,
-            _ => RobotType::None,
         }
     }
 }
