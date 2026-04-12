@@ -2,7 +2,7 @@ use imgui::Ui;
 use sdl2::video::Window;
 use crate::main2::AppScreen;
 use crate::db::Db;
-use crate::character::{Character, MutantType, Origin, RobotType, Special, Trait};
+use crate::character::Character;
 use crate::theme::{render_text_wrapped, render_window};
 
 //list of our array options
@@ -37,7 +37,7 @@ impl SpecialArray {
     }
 }
 //have a reference for stats to refer to (there's an enum in character.rs?)
-const SPECIAL_LABELS: [&str; 7] = ["Strength", "Perception", "Endurance", "Charisma", "Intelligence", "Agility", "Luck"];
+pub const SPECIAL_LABELS: [&str; 7] = ["Strength", "Perception", "Endurance", "Charisma", "Intelligence", "Agility", "Luck"];
 
 //track validity states (no array, )
 pub struct SpecialState {
@@ -123,11 +123,10 @@ pub fn render_special_assignment(
     ui: &Ui,
     window: &Window,
     state: &mut SpecialState,
-    screen: &mut AppScreen,
     db: &Db,
     character: &mut Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##origin_select", "Origin Select");
+    let (w, h) = render_window(ui, window, "##special_assignment", "Special Assignment");
 
     ui.text("SPECIAL");
     ui.separator();

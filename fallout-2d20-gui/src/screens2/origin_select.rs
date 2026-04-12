@@ -1,6 +1,5 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::main2::AppScreen;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
 use crate::theme::{render_text_wrapped, render_window};
@@ -32,7 +31,7 @@ impl OriginState {
             ghoul_trait: None,
         }
     }
-    pub fn is_complete(&self) -> bool {
+    pub fn is_complete(&self) -> bool {//do we need to be checking the character to make sure that's good to go too?
         self.selected && (self.trait_count == self.origin_trait_count)
     }
     fn update_origin(&mut self, character: &mut Character) {
@@ -130,6 +129,60 @@ impl OriginState {
             character.traits = vec![];
             self.trait_count = 0;
             self.origin_trait_count = 2;
+        }
+    }
+    fn update_trait(&self, character: &mut Character) {
+        let skill_max = character.level.clamp(3,6);
+        if character.is_mutant() {
+            character.skills.athletics.max = 4.min(skill_max);
+            character.skills.barter.max = 4.min(skill_max);
+            character.skills.big_guns.max = 4.min(skill_max);
+            character.skills.energy_weapons.max = 4.min(skill_max);
+            character.skills.explosives.max = 4.min(skill_max);
+            character.skills.lockpick.max = 4.min(skill_max);
+            character.skills.medicine.max = 4.min(skill_max);
+            character.skills.melee_weapons.max = 4.min(skill_max);
+            character.skills.pilot.max = 4.min(skill_max);
+            character.skills.repair.max = 4.min(skill_max);
+            character.skills.science.max = 4.min(skill_max);
+            character.skills.small_guns.max = 4.min(skill_max);
+            character.skills.sneak.max = 4.min(skill_max);
+            character.skills.speech.max = 4.min(skill_max);
+            character.skills.survival.max = 4.min(skill_max);
+            character.skills.throwing.max = 4.min(skill_max);
+            character.skills.unarmed.max = 4.min(skill_max);
+        } else {
+            character.skills.athletics.max = skill_max;
+            character.skills.barter.max = skill_max;
+            character.skills.big_guns.max = skill_max;
+            character.skills.energy_weapons.max = skill_max;
+            character.skills.explosives.max = skill_max;
+            character.skills.lockpick.max = skill_max;
+            character.skills.medicine.max = skill_max;
+            character.skills.melee_weapons.max = skill_max;
+            character.skills.pilot.max = skill_max;
+            character.skills.repair.max = skill_max;
+            character.skills.science.max = skill_max;
+            character.skills.small_guns.max = skill_max;
+            character.skills.sneak.max = skill_max;
+            character.skills.speech.max = skill_max;
+            character.skills.survival.max = skill_max;
+            character.skills.throwing.max = skill_max;
+            character.skills.unarmed.max = skill_max;
+        }
+        if character.traits.iter().any(|t| t.id == 13) {
+            character.skills.athletics.max = 4.min(skill_max);
+            character.skills.big_guns.max = 4.min(skill_max);
+            character.skills.energy_weapons.max = 4.min(skill_max);
+            character.skills.explosives.max = 4.min(skill_max);
+            character.skills.lockpick.max = 4.min(skill_max);
+            character.skills.melee_weapons.max = 4.min(skill_max);
+            character.skills.pilot.max = 4.min(skill_max);
+            character.skills.small_guns.max = 4.min(skill_max);
+            character.skills.sneak.max = 4.min(skill_max);
+            character.skills.survival.max = 4.min(skill_max);
+            character.skills.throwing.max = 4.min(skill_max);
+            character.skills.unarmed.max = 4.min(skill_max);
         }
     }
 }
@@ -257,7 +310,6 @@ pub fn render_origin_select(
     ui: &Ui,
     window: &Window,
     state: &mut OriginState,
-    screen: &mut AppScreen,
     db: &Db,
     character: &mut Character,
 ) -> f32 {
@@ -390,6 +442,7 @@ pub fn render_origin_select(
             ui.set_cursor_pos([label_w, y]);
             render_text_wrapped(false, true, ui, &character.traits[0].desc, label_w, label_w + field_w);
             ui.spacing();
+            state.update_trait(character);
         } else {
             //list all the traits with checkboxes, maximum of two
             let selected_count = character.traits.len();
@@ -414,6 +467,7 @@ pub fn render_origin_select(
                         if *test {
                             *test = checked;
                         }
+                        state.update_trait(character);
                     }
                 }
                 ui.same_line_with_pos(label_w + 24.0);

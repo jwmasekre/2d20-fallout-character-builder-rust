@@ -95,6 +95,25 @@ impl Character {
     pub fn is_robot(&self) -> bool {
         self.robot != RobotType::None
     }
+    pub fn total_skill(&self) -> i32 {
+        self.skills.athletics.total +
+            self.skills.barter.total +
+            self.skills.big_guns.total +
+            self.skills.energy_weapons.total +
+            self.skills.explosives.total +
+            self.skills.lockpick.total +
+            self.skills.medicine.total +
+            self.skills.melee_weapons.total +
+            self.skills.pilot.total +
+            self.skills.repair.total +
+            self.skills.science.total +
+            self.skills.small_guns.total +
+            self.skills.sneak.total +
+            self.skills.speech.total +
+            self.skills.survival.total +
+            self.skills.throwing.total +
+            self.skills.unarmed.total
+    }
 }
 
 pub struct Player {
@@ -307,6 +326,72 @@ impl Skills {
             unarmed: SkillBlock::new(),
         }
     }
+    pub fn standard_tags(&self) -> i32 {
+        [
+            self.athletics.tagged == TagType::Standard,
+            self.barter.tagged == TagType::Standard,
+            self.big_guns.tagged == TagType::Standard,
+            self.energy_weapons.tagged == TagType::Standard,
+            self.explosives.tagged == TagType::Standard,
+            self.lockpick.tagged == TagType::Standard,
+            self.medicine.tagged == TagType::Standard,
+            self.melee_weapons.tagged == TagType::Standard,
+            self.pilot.tagged == TagType::Standard,
+            self.repair.tagged == TagType::Standard,
+            self.science.tagged == TagType::Standard,
+            self.small_guns.tagged == TagType::Standard,
+            self.sneak.tagged == TagType::Standard,
+            self.speech.tagged == TagType::Standard,
+            self.survival.tagged == TagType::Standard,
+            self.throwing.tagged == TagType::Standard,
+            self.unarmed.tagged == TagType::Standard,
+        ].iter().filter(|&&b| b).count() as i32
+    }
+    pub fn trait_tags(&self) -> i32 {
+        [
+            self.athletics.tagged == TagType::Trait,
+            self.barter.tagged == TagType::Trait,
+            self.big_guns.tagged == TagType::Trait,
+            self.energy_weapons.tagged == TagType::Trait,
+            self.explosives.tagged == TagType::Trait,
+            self.lockpick.tagged == TagType::Trait,
+            self.medicine.tagged == TagType::Trait,
+            self.melee_weapons.tagged == TagType::Trait,
+            self.pilot.tagged == TagType::Trait,
+            self.repair.tagged == TagType::Trait,
+            self.science.tagged == TagType::Trait,
+            self.small_guns.tagged == TagType::Trait,
+            self.sneak.tagged == TagType::Trait,
+            self.speech.tagged == TagType::Trait,
+            self.survival.tagged == TagType::Trait,
+            self.throwing.tagged == TagType::Trait,
+            self.unarmed.tagged == TagType::Trait,
+        ].iter().filter(|&&b| b).count() as i32
+    }
+    pub fn perk_tags(&self) -> i32 {
+        [
+            self.athletics.tagged == TagType::Perk,
+            self.barter.tagged == TagType::Perk,
+            self.big_guns.tagged == TagType::Perk,
+            self.energy_weapons.tagged == TagType::Perk,
+            self.explosives.tagged == TagType::Perk,
+            self.lockpick.tagged == TagType::Perk,
+            self.medicine.tagged == TagType::Perk,
+            self.melee_weapons.tagged == TagType::Perk,
+            self.pilot.tagged == TagType::Perk,
+            self.repair.tagged == TagType::Perk,
+            self.science.tagged == TagType::Perk,
+            self.small_guns.tagged == TagType::Perk,
+            self.sneak.tagged == TagType::Perk,
+            self.speech.tagged == TagType::Perk,
+            self.survival.tagged == TagType::Perk,
+            self.throwing.tagged == TagType::Perk,
+            self.unarmed.tagged == TagType::Perk,
+        ].iter().filter(|&&b| b).count() as i32
+    }
+    pub fn total_tags(&self) -> i32 {
+        self.standard_tags() + self.trait_tags() + self.perk_tags()
+    }
 }
 
 pub struct SkillBlock {
@@ -327,8 +412,15 @@ impl SkillBlock {
             max: 3,
         }
     }
+    pub fn is_tagged(&self) -> bool {
+        self.tagged != TagType::None
+    }
+    pub fn update(&mut self) {
+        self.total = self.ranks + if self.is_tagged() { 2 } else { 0 };
+    }
 }
 
+#[derive(PartialEq)]
 pub enum TagType {
     None,
     Trait,

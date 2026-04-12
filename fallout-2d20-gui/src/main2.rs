@@ -11,7 +11,7 @@ use anyhow::Result;
 use crate::{
     config::{db_path, load_config, save_config, AppConfig},
     db::Db,
-    theme::{THEMES, Theme, apply_theme, BAR_HEIGHT, render_text_wrapped},
+    theme::{THEMES, apply_theme, BAR_HEIGHT, render_text_wrapped},
     character::{Character, Player, Party}
 };
 use crate::screens2::main_menu::render_main_menu;
@@ -55,17 +55,18 @@ pub fn screen_unlocked(
     screen: &AppScreen,
     origin: &OriginState,
     special: &SpecialState,
-    skills: &SkillState,
-    perks: &PerkState,
+    skill: &SkillState,
+    perk: &PerkState,
     background: &BackgroundState,
+    character: &Character,
 ) -> bool {
     match screen {
         AppScreen::OriginSelect => true,
         AppScreen::SpecialAssignment => origin.is_complete(),
-        AppScreen::SkillAssignment => special.is_complete(),
-        AppScreen::PerkSelect => skills.is_complete(),
-        AppScreen::StatCalculation => perks.is_complete(),
-        AppScreen::BackgroundSelect => special.is_complete() && skills.is_complete() && perks.is_complete(),
+        AppScreen::SkillAssignment => special.is_complete(character),
+        AppScreen::PerkSelect => skill.is_complete(character),
+        AppScreen::StatCalculation => perk.is_complete(),
+        AppScreen::BackgroundSelect => special.is_complete(character) && skill.is_complete(character) && perk.is_complete(),
         AppScreen::CharacterReview => background.is_complete(),
         _ => false,
     }
@@ -172,7 +173,7 @@ fn main() -> Result<()> {
     let mut party: Option<Party> = None;
     let mut origin = OriginState::new(&db);
     let mut special = SpecialState::new();
-    let mut skill = SkillState::new();
+    let mut skill = SkillState::new(character);
     let mut perk = PerkState::new();
     let mut background = BackgroundState::new();
 
@@ -185,9 +186,10 @@ fn main() -> Result<()> {
             screen: &mut AppScreen,
             origin: &OriginState,
             special: &SpecialState,
-            skills: &SkillState,
-            perks: &PerkState,
+            skill: &SkillState,
+            perk: &PerkState,
             background: &BackgroundState,
+            character: &Character,
         ) {
             //evenly space the tabs
             let tab_w = ui.content_region_avail()[0] / BUILD_SCREENS.len() as f32;
@@ -195,7 +197,7 @@ fn main() -> Result<()> {
             //establish which tab is the current tab and which are unlocked
             for (target, label) in BUILD_SCREENS {
                 let is_current  = target == current;
-                let is_unlocked = screen_unlocked(target, origin, special, skills, perks, background);
+                let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, &character);
 
                 //highlight the current tab
                 if is_current {
@@ -244,9 +246,10 @@ fn main() -> Result<()> {
             screen: &mut AppScreen,
             origin: &OriginState,
             special: &SpecialState,
-            skills: &SkillState,
-            perks: &PerkState,
+            skill: &SkillState,
+            perk: &PerkState,
             background: &BackgroundState,
+            character: &Character,
         ) {
             //figure out which tab/screen we're on
             let idx = BUILD_SCREENS.iter().position(|(s, _)| s == current).unwrap_or(0);
@@ -268,7 +271,7 @@ fn main() -> Result<()> {
             }
 
             if let Some(next_screen) = next {
-                let unlocked = screen_unlocked(next_screen, origin, special, skills, perks, background);
+                let unlocked = screen_unlocked(next_screen, origin, special, skill, perk, background, &character);
                 //disable the next button if it's not unlocked
                 if !unlocked {
                     let c = ui.push_style_color(imgui::StyleColor::Text, ui.style_color(imgui::StyleColor::TextDisabled));
@@ -385,7 +388,7 @@ fn main() -> Result<()> {
                 });
         }
 
-        render_tab_bar(ui, &screen, &mut screen, &origin, special, skill, perk, background);
+        render_tab_bar(ui, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
 
         match screen {
             AppScreen::MainMenu => {
@@ -393,51 +396,50 @@ fn main() -> Result<()> {
             }
             AppScreen::OriginSelect => {
                 let state = &mut origin;
-                let h = render_origin_select(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                let h = render_origin_select(&ui, &window, state, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::SpecialAssignment => {
                 let state = &mut special.update(&character);
-                let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                let h = render_special_assignment(&ui, &window, state, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::SkillAssignment => {
                 let state = &mut skill;
-                let h = render_skill_assignment(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                let h = render_skill_assignment(&ui, &window, state, &db, &mut character);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::PerkSelect => {
                 let state = &mut perk;
                 let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::StatCalculation => {
                 let state = &mut stat;
                 let h = render_stat_calculation(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::BackgroundSelect => {
                 let state = &mut background;
                 let h = render_background_select(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::CharacterReview => {
                 let state = &mut review;
                 let h = render_character_review(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
             }
             AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);
                 //let state = &mut special;
                 //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
-                //render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skills, perks, background);
+                //render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skill, perk, background, &character);
             }
             AppScreen::LoadCharacter => {
                 render_placeholder(&ui, &window, "load", &mut screen);
             }
             AppScreen::ImportCharacter => {
                 render_placeholder(&ui, &window, "import", &mut screen);
-                
             }
         }
 
