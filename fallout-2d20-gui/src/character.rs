@@ -404,11 +404,147 @@ impl Skills {
     pub fn total_tags(&self) -> i32 {
         self.standard_tags() + self.trait_tags() + self.perk_tags()
     }
+    pub fn zip_skilled(&self) -> Vec<(usize,usize)> {
+        let mut zipped = vec![];
+        for i in 0..self.athletics.skilled.len() {
+            let mut sk_a: usize = 17;
+            let mut sk_b: usize = 17;
+            match self.athletics.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 0} else {sk_b = 0; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 0; sk_b = 0; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.barter.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 1} else {sk_b = 1; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 1; sk_b = 1; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.big_guns.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 2} else {sk_b = 2; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 2; sk_b = 2; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.energy_weapons.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 3} else {sk_b = 3; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 3; sk_b = 3; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.explosives.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 4} else {sk_b = 4; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 4; sk_b = 4; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.lockpick.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 5} else {sk_b = 5; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 5; sk_b = 5; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.medicine.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 6} else {sk_b = 6; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 6; sk_b = 6; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.melee_weapons.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 7} else {sk_b = 7; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 7; sk_b = 7; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.pilot.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 8} else {sk_b = 8; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 8; sk_b = 8; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.repair.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 9} else {sk_b = 9; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 9; sk_b = 9; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.science.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 10} else {sk_b = 10; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 10; sk_b = 10; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.small_guns.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 11} else {sk_b = 11; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 11; sk_b = 11; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.sneak.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 12} else {sk_b = 12; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 12; sk_b = 12; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.speech.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 13} else {sk_b = 13; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 13; sk_b = 13; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.survival.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 14} else {sk_b = 14; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 14; sk_b = 14; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.throwing.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 15} else {sk_b = 15; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 15; sk_b = 15; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+            match self.unarmed.is_skilled(i) {
+                1 => {if sk_a == 17 {sk_a = 16} else {sk_b = 16; zipped.push((sk_a,sk_b)); continue}},
+                2 => {sk_a = 16; sk_b = 16; zipped.push((sk_a,sk_b)); continue},
+                _ => {}
+            }
+        }
+        zipped
+    }
+    pub fn available_tags(&self, character: &Character) -> Vec<usize> {
+        let mut available = vec![];
+        if !self.athletics.is_tagged() { available.push(0) }
+        if !self.barter.is_tagged() { available.push(1) }
+        if !self.big_guns.is_tagged() { available.push(2) }
+        if !self.energy_weapons.is_tagged() { available.push(3) }
+        if !self.explosives.is_tagged() { available.push(4) }
+        if !self.lockpick.is_tagged() { available.push(5) }
+        if !self.medicine.is_tagged() { available.push(6) }
+        if !self.melee_weapons.is_tagged() { available.push(7) }
+        if !self.pilot.is_tagged() { available.push(8) }
+        if !self.repair.is_tagged() { available.push(9) }
+        if !self.science.is_tagged() && !character.traits.iter().any(|t| t.id == 27) { available.push(10) }
+        if !self.small_guns.is_tagged() { available.push(11) }
+        if !self.sneak.is_tagged() { available.push(12) }
+        if !self.speech.is_tagged() { available.push(13) }
+        if !self.survival.is_tagged() { available.push(14) }
+        if !self.throwing.is_tagged() { available.push(15) }
+        if !self.unarmed.is_tagged() { available.push(16) }
+        available
+    }
+    pub fn perk_tagged(&self) -> Vec<usize> {
+        let mut tagged = vec![];
+        if self.athletics.tagged == TagType::Perk {tagged.push(0)}
+        if self.barter.tagged == TagType::Perk {tagged.push(1)}
+        if self.big_guns.tagged == TagType::Perk {tagged.push(2)}
+        if self.energy_weapons.tagged == TagType::Perk {tagged.push(3)}
+        if self.explosives.tagged == TagType::Perk {tagged.push(4)}
+        if self.lockpick.tagged == TagType::Perk {tagged.push(5)}
+        if self.medicine.tagged == TagType::Perk {tagged.push(6)}
+        if self.melee_weapons.tagged == TagType::Perk {tagged.push(7)}
+        if self.pilot.tagged == TagType::Perk {tagged.push(8)}
+        if self.repair.tagged == TagType::Perk {tagged.push(9)}
+        if self.science.tagged == TagType::Perk {tagged.push(10)}
+        if self.small_guns.tagged == TagType::Perk {tagged.push(11)}
+        if self.sneak.tagged == TagType::Perk {tagged.push(12)}
+        if self.speech.tagged == TagType::Perk {tagged.push(13)}
+        if self.survival.tagged == TagType::Perk {tagged.push(14)}
+        if self.throwing.tagged == TagType::Perk {tagged.push(15)}
+        if self.unarmed.tagged == TagType::Perk {tagged.push(16)}
+        tagged
+    }
 }
 
 pub struct SkillBlock {
     pub ranks: i32,
     pub tagged: TagType,
+    //skilled will create a new entry in every skill, either 0, 1 or 2. this aligns the skill selections with each rank of the perk
     pub skilled: Vec<i32>,
     pub total: i32,
     pub max: i32,
@@ -429,6 +565,9 @@ impl SkillBlock {
     }
     pub fn update(&mut self) {
         self.total = self.ranks + if self.is_tagged() { 2 } else { 0 };
+    }
+    pub fn is_skilled(&self, rank: usize) -> i32 {
+        self.skilled[rank]
     }
 }
 
