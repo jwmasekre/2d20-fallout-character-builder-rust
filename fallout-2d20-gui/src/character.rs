@@ -15,6 +15,7 @@ pub struct Character {
     pub ghoul: bool,
     pub mutant: MutantType,
     pub robot: RobotType,
+    pub companion: CompanionType,
     pub robot_hat: Option<Apparel>,
     pub special: Special,
     pub luck_points: i32,
@@ -57,6 +58,7 @@ impl Character {
             ghoul: false,
             mutant: MutantType::None,
             robot: RobotType::None,
+            companion: CompanionType::None,
             robot_hat: None,
             special: Special::new(),
             luck_points: 5,
@@ -135,6 +137,7 @@ pub struct Party {
     pub name: String,
     pub ap_players: i32,
     pub ap_gm: i32,
+    pub max_ap: i32,
 }
 
 impl Party {
@@ -144,6 +147,7 @@ impl Party {
             name: String::new(),
             ap_players: 0,
             ap_gm: 0,
+            max_ap: 6,
         }
     }
 }
@@ -183,6 +187,14 @@ pub enum RobotType {
     Securitron,
     Synth,
     Assaultron,
+}
+
+#[derive(PartialEq)]
+pub enum CompanionType {
+    None,
+    Dogmeat,
+    Human,
+    Robot,
 }
 
 pub enum SpecialAttr {
