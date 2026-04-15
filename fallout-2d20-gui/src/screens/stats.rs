@@ -218,7 +218,8 @@ pub fn render_stats(
     // ── Validation warnings ───────────────────────────────────────
     if !validation.valid {
         for issue in &validation.issues {
-            ui.text_colored([1.0, 0.4, 0.4, 1.0], format!("⚠ {}", issue));
+            //ui.text_colored([1.0, 0.4, 0.4, 1.0], format!("⚠ {}", issue));
+            ui.text_colored([1.0, 0.4, 0.4, 1.0], format!("!! {}", issue));
         }
         ui.spacing();
         ui.separator();

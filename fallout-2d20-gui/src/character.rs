@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::screens2::special_assignment::SpecialState;
 
+#[derive(Clone)]
 pub struct Character {
     pub id: Uuid,
     pub name: String,
@@ -87,9 +88,7 @@ impl Character {
         }
     }
     pub fn is_gifted(&self) -> bool {
-        self.traits.iter().any(|t| {
-            t.id == 7
-        })
+        self.has_trait(7)
     }
     pub fn is_mutant(&self) -> bool {
         self.mutant != MutantType::None
@@ -98,26 +97,24 @@ impl Character {
         self.robot != RobotType::None
     }
     pub fn total_skill(&self) -> i32 {
-        self.skills.athletics.total +
-            self.skills.barter.total +
-            self.skills.big_guns.total +
-            self.skills.energy_weapons.total +
-            self.skills.explosives.total +
-            self.skills.lockpick.total +
-            self.skills.medicine.total +
-            self.skills.melee_weapons.total +
-            self.skills.pilot.total +
-            self.skills.repair.total +
-            self.skills.science.total +
-            self.skills.small_guns.total +
-            self.skills.sneak.total +
-            self.skills.speech.total +
-            self.skills.survival.total +
-            self.skills.throwing.total +
-            self.skills.unarmed.total
+        self.skills.skill_block().iter().map(|s| s.total).sum()
     }
+    pub fn has_trait(&self, id: i32) -> bool {
+        self.traits.iter().any(|t| t.id == id)
+    }
+    pub fn has_any_trait(&self, id: Vec<i32>) -> bool {
+        self.traits.iter().any(|t| id.contains(&t.id))
+    }
+    pub fn has_perk(&self, id: i32) -> bool {
+        self.perks.iter().any(|p| p.id == id)
+    }
+    pub fn perk_ranks(&self, id: i32) -> i32 {
+        self.perks.iter().find(|p| p.id == id).map(|p| p.ranks).unwrap_or(0)
+    }
+
 }
 
+#[derive(Clone)]
 pub struct Player {
     id: Uuid,
     name: String,
@@ -132,6 +129,7 @@ impl Player {
     }
 }
 
+#[derive(Clone)]
 pub struct Party {
     pub id: Uuid,
     pub name: String,
@@ -152,6 +150,7 @@ impl Party {
     }
 }
 
+#[derive(Clone)]
 pub struct Origin {
     pub id: i32,
     pub name: String,
@@ -159,26 +158,28 @@ pub struct Origin {
     pub can_ghoul: bool,
 }
 
+#[derive(Clone)]
 pub struct Background {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
+#[derive(Clone)]
 pub struct Trait {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum MutantType {
     None,
     SuperMutant,
     Nightkin,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum RobotType {
     None,
     Handy,
@@ -189,7 +190,7 @@ pub enum RobotType {
     Assaultron,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum CompanionType {
     None,
     Dogmeat,
@@ -197,6 +198,7 @@ pub enum CompanionType {
     Robot,
 }
 
+#[derive(Clone)]
 pub enum SpecialAttr {
     Strength,
     Perception,
@@ -207,6 +209,7 @@ pub enum SpecialAttr {
     Luck,
 }
 
+#[derive(Clone)]
 pub struct Special {
     pub strength: SpecialBlock,
     pub perception: SpecialBlock,
@@ -250,8 +253,31 @@ impl Special {
         character.special.strength.max = 12;
         character.special.endurance.max = 12;
     }
+    pub fn mut_special_block(&mut self) -> [&mut SpecialBlock; 7] {
+        [
+            &mut self.strength,
+            &mut self.perception,
+            &mut self.endurance,
+            &mut self.charisma,
+            &mut self.intelligence,
+            &mut self.agility,
+            &mut self.luck,
+        ]
+    }
+    pub fn special_block(&self) -> [SpecialBlock; 7] {
+        [
+            self.strength.clone(),
+            self.perception.clone(),
+            self.endurance.clone(),
+            self.charisma.clone(),
+            self.intelligence.clone(),
+            self.agility.clone(),
+            self.luck.clone(),
+        ]
+    }
 }
 
+#[derive(Clone)]
 pub struct SpecialBlock {
     pub value: i32,
     pub gifted: bool,
@@ -276,6 +302,7 @@ impl SpecialBlock {
     }
 }
 
+#[derive(Clone)]
 pub enum Skill {
     Athletics,
 	Barter,
@@ -296,6 +323,7 @@ pub enum Skill {
 	Unarmed,
 }
 
+#[derive(Clone)]
 pub struct Skills {
     pub athletics: SkillBlock,
 	pub barter: SkillBlock,
@@ -338,209 +366,92 @@ impl Skills {
             unarmed: SkillBlock::new(),
         }
     }
-    pub fn standard_tags(&self) -> i32 {
+    pub fn skill_block(&self) -> [SkillBlock; 17] {
         [
-            self.athletics.tagged == TagType::Standard,
-            self.barter.tagged == TagType::Standard,
-            self.big_guns.tagged == TagType::Standard,
-            self.energy_weapons.tagged == TagType::Standard,
-            self.explosives.tagged == TagType::Standard,
-            self.lockpick.tagged == TagType::Standard,
-            self.medicine.tagged == TagType::Standard,
-            self.melee_weapons.tagged == TagType::Standard,
-            self.pilot.tagged == TagType::Standard,
-            self.repair.tagged == TagType::Standard,
-            self.science.tagged == TagType::Standard,
-            self.small_guns.tagged == TagType::Standard,
-            self.sneak.tagged == TagType::Standard,
-            self.speech.tagged == TagType::Standard,
-            self.survival.tagged == TagType::Standard,
-            self.throwing.tagged == TagType::Standard,
-            self.unarmed.tagged == TagType::Standard,
-        ].iter().filter(|&&b| b).count() as i32
+            self.athletics.clone(),
+            self.barter.clone(),
+            self.big_guns.clone(),
+            self.energy_weapons.clone(),
+            self.explosives.clone(),
+            self.lockpick.clone(),
+            self.medicine.clone(),
+            self.melee_weapons.clone(),
+            self.pilot.clone(),
+            self.repair.clone(),
+            self.science.clone(),
+            self.small_guns.clone(),
+            self.sneak.clone(),
+            self.speech.clone(),
+            self.survival.clone(),
+            self.throwing.clone(),
+            self.unarmed.clone(),
+        ]
+    }
+    pub fn mut_skill_block(&mut self) -> [&mut SkillBlock; 17] {
+        [
+            &mut self.athletics,
+            &mut self.barter,
+            &mut self.big_guns,
+            &mut self.energy_weapons,
+            &mut self.explosives,
+            &mut self.lockpick,
+            &mut self.medicine,
+            &mut self.melee_weapons,
+            &mut self.pilot,
+            &mut self.repair,
+            &mut self.science,
+            &mut self.small_guns,
+            &mut self.sneak,
+            &mut self.speech,
+            &mut self.survival,
+            &mut self.throwing,
+            &mut self.unarmed,
+        ]
+    }
+    pub fn standard_tags(&self) -> i32 {
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Standard).count() as i32
     }
     pub fn trait_tags(&self) -> i32 {
-        [
-            self.athletics.tagged == TagType::Trait,
-            self.barter.tagged == TagType::Trait,
-            self.big_guns.tagged == TagType::Trait,
-            self.energy_weapons.tagged == TagType::Trait,
-            self.explosives.tagged == TagType::Trait,
-            self.lockpick.tagged == TagType::Trait,
-            self.medicine.tagged == TagType::Trait,
-            self.melee_weapons.tagged == TagType::Trait,
-            self.pilot.tagged == TagType::Trait,
-            self.repair.tagged == TagType::Trait,
-            self.science.tagged == TagType::Trait,
-            self.small_guns.tagged == TagType::Trait,
-            self.sneak.tagged == TagType::Trait,
-            self.speech.tagged == TagType::Trait,
-            self.survival.tagged == TagType::Trait,
-            self.throwing.tagged == TagType::Trait,
-            self.unarmed.tagged == TagType::Trait,
-        ].iter().filter(|&&b| b).count() as i32
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Trait).count() as i32
     }
     pub fn perk_tags(&self) -> i32 {
-        [
-            self.athletics.tagged == TagType::Perk,
-            self.barter.tagged == TagType::Perk,
-            self.big_guns.tagged == TagType::Perk,
-            self.energy_weapons.tagged == TagType::Perk,
-            self.explosives.tagged == TagType::Perk,
-            self.lockpick.tagged == TagType::Perk,
-            self.medicine.tagged == TagType::Perk,
-            self.melee_weapons.tagged == TagType::Perk,
-            self.pilot.tagged == TagType::Perk,
-            self.repair.tagged == TagType::Perk,
-            self.science.tagged == TagType::Perk,
-            self.small_guns.tagged == TagType::Perk,
-            self.sneak.tagged == TagType::Perk,
-            self.speech.tagged == TagType::Perk,
-            self.survival.tagged == TagType::Perk,
-            self.throwing.tagged == TagType::Perk,
-            self.unarmed.tagged == TagType::Perk,
-        ].iter().filter(|&&b| b).count() as i32
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Perk).count() as i32
     }
     pub fn total_tags(&self) -> i32 {
         self.standard_tags() + self.trait_tags() + self.perk_tags()
     }
     pub fn zip_skilled(&self) -> Vec<(usize,usize)> {
         let mut zipped = vec![];
-        for i in 0..self.athletics.skilled.len() {
+        let skilled_count = self.athletics.skilled.len();
+        for rank in 0..skilled_count {
             let mut sk_a: usize = 17;
-            let mut sk_b: usize = 17;
-            match self.athletics.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 0} else {sk_b = 0; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 0; sk_b = 0; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.barter.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 1} else {sk_b = 1; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 1; sk_b = 1; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.big_guns.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 2} else {sk_b = 2; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 2; sk_b = 2; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.energy_weapons.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 3} else {sk_b = 3; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 3; sk_b = 3; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.explosives.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 4} else {sk_b = 4; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 4; sk_b = 4; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.lockpick.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 5} else {sk_b = 5; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 5; sk_b = 5; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.medicine.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 6} else {sk_b = 6; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 6; sk_b = 6; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.melee_weapons.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 7} else {sk_b = 7; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 7; sk_b = 7; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.pilot.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 8} else {sk_b = 8; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 8; sk_b = 8; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.repair.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 9} else {sk_b = 9; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 9; sk_b = 9; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.science.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 10} else {sk_b = 10; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 10; sk_b = 10; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.small_guns.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 11} else {sk_b = 11; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 11; sk_b = 11; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.sneak.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 12} else {sk_b = 12; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 12; sk_b = 12; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.speech.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 13} else {sk_b = 13; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 13; sk_b = 13; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.survival.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 14} else {sk_b = 14; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 14; sk_b = 14; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.throwing.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 15} else {sk_b = 15; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 15; sk_b = 15; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
-            }
-            match self.unarmed.is_skilled(i) {
-                1 => {if sk_a == 17 {sk_a = 16} else {sk_b = 16; zipped.push((sk_a,sk_b)); continue}},
-                2 => {sk_a = 16; sk_b = 16; zipped.push((sk_a,sk_b)); continue},
-                _ => {}
+            for (i, skill) in self.skill_block().iter().enumerate() {
+                match skill.is_skilled(rank) {
+                    1 => {if sk_a == 17 {sk_a = i} else {zipped.push((sk_a,i)); continue}},
+                    2 => {zipped.push((i,i)); continue},
+                    _ => {},
+                }
             }
         }
         zipped
     }
     pub fn available_tags(&self, character: &Character) -> Vec<usize> {
         let mut available = vec![];
-        if !self.athletics.is_tagged() { available.push(0) }
-        if !self.barter.is_tagged() { available.push(1) }
-        if !self.big_guns.is_tagged() { available.push(2) }
-        if !self.energy_weapons.is_tagged() { available.push(3) }
-        if !self.explosives.is_tagged() { available.push(4) }
-        if !self.lockpick.is_tagged() { available.push(5) }
-        if !self.medicine.is_tagged() { available.push(6) }
-        if !self.melee_weapons.is_tagged() { available.push(7) }
-        if !self.pilot.is_tagged() { available.push(8) }
-        if !self.repair.is_tagged() { available.push(9) }
-        if !self.science.is_tagged() && !character.traits.iter().any(|t| t.id == 27) { available.push(10) }
-        if !self.small_guns.is_tagged() { available.push(11) }
-        if !self.sneak.is_tagged() { available.push(12) }
-        if !self.speech.is_tagged() { available.push(13) }
-        if !self.survival.is_tagged() { available.push(14) }
-        if !self.throwing.is_tagged() { available.push(15) }
-        if !self.unarmed.is_tagged() { available.push(16) }
+        for (i,skill) in self.skill_block().iter().enumerate() {
+            if !skill.is_tagged() && !(i == 10 && character.has_trait(27)) { available.push(i) }
+        }
         available
     }
     pub fn perk_tagged(&self) -> Vec<usize> {
         let mut tagged = vec![];
-        if self.athletics.tagged == TagType::Perk {tagged.push(0)}
-        if self.barter.tagged == TagType::Perk {tagged.push(1)}
-        if self.big_guns.tagged == TagType::Perk {tagged.push(2)}
-        if self.energy_weapons.tagged == TagType::Perk {tagged.push(3)}
-        if self.explosives.tagged == TagType::Perk {tagged.push(4)}
-        if self.lockpick.tagged == TagType::Perk {tagged.push(5)}
-        if self.medicine.tagged == TagType::Perk {tagged.push(6)}
-        if self.melee_weapons.tagged == TagType::Perk {tagged.push(7)}
-        if self.pilot.tagged == TagType::Perk {tagged.push(8)}
-        if self.repair.tagged == TagType::Perk {tagged.push(9)}
-        if self.science.tagged == TagType::Perk {tagged.push(10)}
-        if self.small_guns.tagged == TagType::Perk {tagged.push(11)}
-        if self.sneak.tagged == TagType::Perk {tagged.push(12)}
-        if self.speech.tagged == TagType::Perk {tagged.push(13)}
-        if self.survival.tagged == TagType::Perk {tagged.push(14)}
-        if self.throwing.tagged == TagType::Perk {tagged.push(15)}
-        if self.unarmed.tagged == TagType::Perk {tagged.push(16)}
+        for (i,skill) in self.skill_block().iter().enumerate() {
+            if skill.tagged == TagType::Perk {tagged.push(i)}
+        }
         tagged
     }
 }
 
+#[derive(Clone)]
 pub struct SkillBlock {
     pub ranks: i32,
     pub tagged: TagType,
@@ -571,7 +482,7 @@ impl SkillBlock {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum TagType {
     None,
     Trait,
@@ -579,6 +490,7 @@ pub enum TagType {
     Standard,
 }
 
+#[derive(Clone)]
 pub struct Perk {
     pub id: i32,
     pub name: String,
@@ -586,6 +498,7 @@ pub struct Perk {
     pub ranks: i32,
 }
 
+#[derive(Clone)]
 pub struct MeleeModifiers {
     pub melee: i32,
     pub unarmed: i32,
@@ -602,6 +515,7 @@ impl MeleeModifiers {
     }
 }
 
+#[derive(Clone)]
 pub struct Limbs {
     pub head: Limb,
     pub torso: Limb,
@@ -642,6 +556,7 @@ impl Limbs {
     }
 }
 
+#[derive(Clone)]
 pub struct Limb {
     pub active: bool,
     pub ph_dr: i32,
@@ -674,6 +589,7 @@ impl Limb {
     }
 }
 
+#[derive(Clone)]
 pub struct Weapon {
     pub id: i32,
     pub name: String,
@@ -692,6 +608,7 @@ pub struct Weapon {
     pub mods: Vec<WeaponMods>,
 }
 
+#[derive(Clone)]
 pub enum DamageType {
     Ph,
     En,
@@ -703,6 +620,7 @@ pub enum DamageType {
     None,
 }
 
+#[derive(Clone)]
 pub struct WeaponMods {
     pub slot: WeaponSlot,
     pub installed: bool,
@@ -727,6 +645,7 @@ pub struct WeaponMods {
     pub special_ability: String,
 }
 
+#[derive(Clone)]
 pub enum WeaponSlot {
     None,
     Receiver,
@@ -746,22 +665,26 @@ pub enum WeaponSlot {
     Frame,
 }
 
+#[derive(Clone)]
 pub struct AmmoData {
     pub id: i32,
     pub name: String,
     pub wgt: i32
 }
 
+#[derive(Clone)]
 pub struct Ammo {
     pub ammo: AmmoData,
     pub variants: Vec<AmmoData>,
 }
 
+#[derive(Clone)]
 pub struct AmmoInv {
     pub ammo: AmmoData,
     pub quantity: i32,
 }
 
+#[derive(Clone)]
 pub struct Apparel {
     pub id: i32,
     pub name: String,
@@ -776,6 +699,7 @@ pub struct Apparel {
     pub equipped: bool,
 }
 
+#[derive(Clone)]
 pub enum ApparelType {
     Clothing,
     Outfit,
@@ -785,6 +709,7 @@ pub enum ApparelType {
     RobotArmor,
 }
 
+#[derive(Clone)]
 pub enum BodyLocation {
     None,
     Head,
@@ -802,6 +727,7 @@ pub enum BodyLocation {
     Wheel,
 }
 
+#[derive(Clone)]
 pub struct RobotModule {
     pub id: i32,
     pub name: String,
@@ -810,6 +736,7 @@ pub struct RobotModule {
     pub wgt: i32,
 }
 
+#[derive(Clone)]
 pub struct Consumable {
     pub id: i32,
     pub name: String,
@@ -823,6 +750,7 @@ pub struct Consumable {
     pub quantity: i32,
 }
 
+#[derive(Clone)]
 pub enum ConsumableType {
     Chem,
     Food,
@@ -831,6 +759,7 @@ pub enum ConsumableType {
     Publication,
 }
 
+#[derive(Clone)]
 pub struct Gear {
     pub id: i32,
     pub name: String,
@@ -839,6 +768,7 @@ pub struct Gear {
     pub quantity: i32,
 }
 
+#[derive(Clone)]
 pub struct Junk {
     pub common: i32,
     pub uncommon: i32,

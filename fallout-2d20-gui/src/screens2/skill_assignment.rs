@@ -33,19 +33,19 @@ pub struct SkillState {
 impl SkillState {
     pub fn new(character: Character) -> Self {
         let total_points = character.total_skill();
-        let extra_trait_options = if character.traits.iter().any(|t| [1,24].contains(&t.id)) {
+        let extra_trait_options = if character.has_any_trait(vec![1,24]) {
             vec![3,9,10]
-        } else if character.traits.iter().any(|t| [5,11,21].contains(&t.id)) {
+        } else if character.has_any_trait(vec![5,11,21]) {
             vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
-        } else if character.traits.iter().any(|t| t.id == 2) {
+        } else if character.has_trait(2) {
             vec![14]
-        } else if character.traits.iter().any(|t| t.id == 12) {
+        } else if character.has_trait(12) {
             vec![3,11]
-        } else if character.traits.iter().any(|t| t.id == 13) {
+        } else if character.has_trait(13) {
             vec![1,6,9,10,13]
         } else { vec![] };
-        let extra_trait_count = if character.traits.iter().any(|t| [1, 2, 5, 11, 12, 21, 24].contains(&t.id)) { 1 } else if character.traits.iter().any(|t| t.id == 13) { 2 } else { 0 };
-        let forced_trait = character.traits.iter().any(|t| t.id == 2);
+        let extra_trait_count = if character.has_any_trait(vec![1, 2, 5, 11, 12, 21, 24]) { 1 } else if character.has_trait(13) { 2 } else { 0 };
+        let forced_trait = character.has_trait(2);
         Self {
             extra_trait_options,
             extra_tags: vec![],
@@ -97,7 +97,7 @@ pub fn render_skill_assignment(
             "Extra Tag Skills ({}/{}): select skill(s)", state.extra_trait_options.len(), state.extra_trait_count
         ));
         ui.spacing();
-
+        /*
         macro_rules! build_extra_tags {
             (
                 $ui:expr,
@@ -143,6 +143,30 @@ pub fn render_skill_assignment(
         if state.extra_trait_options.contains(&14) { build_extra_tags!(ui, state, character, 14, survival) }
         if state.extra_trait_options.contains(&15) { build_extra_tags!(ui, state, character, 15, throwing) }
         if state.extra_trait_options.contains(&16) { build_extra_tags!(ui, state, character, 16, unarmed) }
+        */
+
+
+        let at_limit = character.skills.total_tags() >= state.extra_trait_count;
+        //basically we get a mutable reference to each of the skills so we can iterate over it, i have no idea if this works the way i think it does
+        for (i, skill) in character.skills.mut_skill_block().iter_mut().enumerate() {
+            let is_chosen = skill.tagged == TagType::Trait;
+            let is_forced = state.forced_trait && i == 14;
+            
+            let _g = is_forced.then(|| ui.begin_disabled(true));
+            let mut checked = is_chosen || is_forced;
+            if checked || !at_limit {
+                if ui.checkbox(format!("{}##extratag_{}", SKILLS[i], i), &mut checked) {
+                    if checked {
+                        skill.tagged = TagType::Trait;
+                        state.extra_tags.push(i);
+                    } else if skill.tagged == TagType::Trait {
+                       skill.tagged = TagType::None;
+                        state.extra_tags.retain(|&x| x != i);
+                    }
+                    skill.update();
+                }
+            }
+        }
         ui.spacing();
         ui.separator();
         ui.spacing();
@@ -166,6 +190,7 @@ pub fn render_skill_assignment(
     ui.text_disabled("Max");
     ui.separator();
 
+    /*
     macro_rules! build_skill_block {
         (
             $ui:expr,
@@ -208,11 +233,11 @@ pub fn render_skill_assignment(
             drop(_inc);
 
             ui.same_line_with_pos($col_tag);
-            let tag_limit = $state.extra_trait_count + 3 + if $character.perks.iter().any(|p| p.id == 92) { 1 } else { 0 };
+            let tag_limit = $state.extra_trait_count + 3 + if $character.has_perk(92) { 1 } else { 0 };
             let at_tag_limit = $character.skills.total_tags() <= tag_limit;
             let tag_overflow = ranks > (max - 2);
-            let is_forced = $character.traits.iter().any(|t| t.id == 2) && $index == 14;
-            let is_forbidden = $character.traits.iter().any(|t| t.id == 27) && $index == 10;
+            let is_forced = $character.has_trait(2) && $index == 14;
+            let is_forbidden = $character.has_trait(27) && $index == 10;
             let is_extra_tagged = $state.extra_tags.iter().any(|s| *s == $index);
             let tag_disabled = is_forbidden || is_extra_tagged || is_forced || at_tag_limit || tag_overflow;
 
@@ -261,6 +286,77 @@ pub fn render_skill_assignment(
     build_skill_block!(ui, state, character, 14, survival, col_ranks, col_tag, col_total, col_max, w);
     build_skill_block!(ui, state, character, 15, throwing, col_ranks, col_tag, col_total, col_max, w);
     build_skill_block!(ui, state, character, 16, unarmed, col_ranks, col_tag, col_total, col_max, w);
+    */
+
+
+    let tag_limit = state.extra_trait_count + 3 + if character.has_perk(92) { 1 } else { 0 };
+    let at_tag_limit = character.skills.total_tags() <= tag_limit;
+    let forced_trait = character.has_trait(2);
+    let forbidden_trait = character.has_trait(27);
+    //basically we get a mutable reference to each of the skills so we can iterate over it, i have no idea if this works the way i think it does
+    for (i, skill) in character.skills.mut_skill_block().iter_mut().enumerate() {
+        let ranks = skill.ranks;
+        let tagged = skill.is_tagged();
+        let tag_bonus = if tagged { 2 } else { 0 };
+        let max = skill.max;
+        let input_max = max - tag_bonus;
+        let total = skill.total;
+
+        ui.text(SKILLS[i]);
+        ui.same_line_with_pos(col_ranks);
+        let can_dec = ranks > 0;
+        let can_inc = ranks < input_max && state.available_points > 0;
+
+        let _dec = (!can_dec).then(|| ui.begin_disabled(true));
+        if ui.button(format!("-##r_{}", i)) {
+            skill.ranks -= 1;
+            skill.update();
+        }
+        drop(_dec);
+        ui.same_line();
+        ui.text(format!("{:2}", ranks));
+        ui.same_line();
+        let _inc = (!can_inc).then(|| ui.begin_disabled(true));
+        if ui.button(format!("+##r_{}", i)) {
+            skill.ranks += 1;
+            skill.update();
+        }
+        drop(_inc);
+
+        ui.same_line_with_pos(col_tag);
+        let tag_overflow = ranks > (max - 2);
+        let is_forced = forced_trait && i == 14;
+        let is_forbidden = forbidden_trait && i == 10;
+        let is_extra_tagged = state.extra_tags.iter().any(|s| *s == i);
+        let tag_disabled = is_forbidden || is_extra_tagged || is_forced || at_tag_limit || tag_overflow;
+
+        let _tg = tag_disabled.then(|| ui.begin_disabled(true));
+        let mut tag_val = tagged;
+        if ui.checkbox(format!("##tag_{}", i), &mut tag_val) {
+            if !is_forced && !is_extra_tagged {
+                skill.tagged = if tag_val { TagType::Standard } else { TagType::None }
+            }
+        }
+        drop(_tg);
+
+        ui.same_line_with_pos(col_total);
+        if tagged {
+            render_text_wrapped(false, true, ui, &format!("{}", total), 0.0, w)
+        } else {
+            ui.text(format!("{}", total));
+        }
+
+        ui.same_line_with_pos(col_max);
+        ui.text_disabled(format!("{}", max));
+
+        if is_forbidden {
+            ui.same_line();
+            render_text_wrapped(true, false, ui, "[cannot tag]", 0.0, w);
+        } else if is_forced {
+            ui.same_line();
+            render_text_wrapped(false, true, ui, "[forced]", 0.0, w);
+        }
+    }
 
     return h
 }

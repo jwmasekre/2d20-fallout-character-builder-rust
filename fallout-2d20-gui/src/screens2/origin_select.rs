@@ -170,7 +170,7 @@ impl OriginState {
             character.skills.throwing.max = skill_max;
             character.skills.unarmed.max = skill_max;
         }
-        if character.traits.iter().any(|t| t.id == 13) {
+        if character.has_trait(13) {
             character.skills.athletics.max = 4.min(skill_max);
             character.skills.big_guns.max = 4.min(skill_max);
             character.skills.energy_weapons.max = 4.min(skill_max);
@@ -452,7 +452,7 @@ pub fn render_origin_select(
             ui.spacing();
 
             for (ti, t) in state.traits.iter().enumerate() {
-                let mut checked = character.traits.iter().any(|ct| ct.id == t.id);
+                let mut checked = character.has_trait(t.id);
                 let at_limit = !checked && selected_count >= 2;
                 let y = ui.cursor_pos()[1];
                 ui.set_cursor_pos([label_w, y]);
@@ -463,7 +463,7 @@ pub fn render_origin_select(
                 } else {
                     if ui.checkbox(&format!("##trait_{}", ti), &mut checked) {
                         //this may not work properly, it's behaving really weird with the .iter().any() vs the old way
-                        let test = &mut character.traits.iter().any(|ct| ct.id == t.id);
+                        let test = &mut character.has_trait(t.id);
                         if *test {
                             *test = checked;
                         }

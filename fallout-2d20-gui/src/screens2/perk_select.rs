@@ -21,7 +21,7 @@ impl PerkState {
     pub fn new(db: &Db, character: &Character) -> Self {
         let perks = load_perks(db);
         let taken_count = character.perks.iter().map(|p| p.ranks).sum();
-        let perk_lim = character.level + if character.traits.iter().any(|t| t.id == 10) { 1 } else { 0 };
+        let perk_lim = character.level + if character.has_trait(10) { 1 } else { 0 };
         Self {
             perks,
             taken_count,
@@ -37,7 +37,7 @@ impl PerkState {
     pub fn update(&self, character: &mut Character) -> Self {
         let perks = self.perks.to_vec();
         let taken_count = character.perks.iter().map(|p| p.ranks).sum();
-        let perk_lim = character.level + if character.traits.iter().any(|t| t.id == 10) { 1 } else { 0 };
+        let perk_lim = character.level + if character.has_trait(10) { 1 } else { 0 };
         let show_eligible_only = self.show_eligible_only;
         let filters = self.filters;
         let pending_resolution = self.pending_resolution;
@@ -80,7 +80,7 @@ impl PerkState {
             .any(|&i| self.filters[i])
     }
     fn is_taken(&self, perk: &PerkRow, character: &Character,) -> bool {
-        character.perks.iter().any(|p| p.id == perk.id)
+        character.has_perk(perk.id)
     }
     fn is_eligible(&self, perk: &PerkRow, character: &Character,) -> bool {
         let taken = self.is_taken(perk, character);
@@ -116,8 +116,8 @@ impl PerkState {
         //other limits
         for limit in &perk.limits {
             let lower = limit.to_lowercase();
-            if lower.contains("daring nature") && character.perks.iter().any(|p| p.id == 25) ||
-                lower.contains("cautious nature") && character.perks.iter().any(|p| p.id == 18) ||
+            if lower.contains("daring nature") && character.has_perk(25) ||
+                lower.contains("cautious nature") && character.has_perk(18) ||
                 lower.contains("robot") && character.is_robot() ||
                 lower.contains("ghoul") && character.ghoul ||
                 lower.contains("rads") && (character.is_robot() || character.ghoul || character.is_mutant()) ||
@@ -263,7 +263,7 @@ pub fn render_perk_select(
 ) -> f32 {
     let (w, h) = render_window(ui, window, "##perk_select", "Perk Select");
 
-    ui.text("Perks");
+    ui.text("PERKS");
     ui.separator();
     ui.spacing();
 
