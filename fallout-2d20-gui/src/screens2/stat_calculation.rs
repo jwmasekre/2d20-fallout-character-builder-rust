@@ -1,6 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{character::{Character, CompanionType, MeleeModifiers}, screens2::{skill_assignment::SkillState, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
+use crate::{character::{Character, CompanionType, MeleeModifiers}, screens2::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
 
 pub fn get_staggered_bonus(val: i32) -> i32 {
     match val {
@@ -17,7 +17,7 @@ pub struct BaseDR {
     pub rd_dr: i32,
 }
 
-pub fn compute_stats(character: &mut Character) -> (BaseDR, bool, [i32; 7]) {
+pub fn compute_stats(character: &mut Character) -> (BaseDR, bool) {
     //quick reference for stats
     let str = character.special.strength.value;
     let per = character.special.perception.value;
@@ -26,7 +26,6 @@ pub fn compute_stats(character: &mut Character) -> (BaseDR, bool, [i32; 7]) {
     let int = character.special.intelligence.value;
     let agi = character.special.agility.value;
     let lck = character.special.luck.value;
-    let spec_values = [str,per,end,cha,int,agi,lck];
 
     //carry weight
     let strong_back = (character.perk_ranks(91)) * 25;
@@ -101,7 +100,7 @@ pub fn compute_stats(character: &mut Character) -> (BaseDR, bool, [i32; 7]) {
         CompanionType::None
     };
     //the character struct doesn't have a base dr, so we need to return this
-    (base_dr, is_nocturnal, spec_values)
+    (base_dr, is_nocturnal)
 }
 
 pub fn render_stat_calculation(
@@ -113,7 +112,9 @@ pub fn render_stat_calculation(
 ) -> f32 {
     let (w, h) = render_window(ui, window, "##stat_calculation", "Calculated Stats");
 
-    let (base_dr, nocturnal, special_values) = compute_stats(character);
+    let (base_dr, nocturnal) = compute_stats(character);
+    let char_spec = character.special.special_block();
+    let char_skills = character.skills.skill_block();
 
     ui.text("STATS");
     ui.separator();
@@ -182,13 +183,53 @@ pub fn render_stat_calculation(
     ui.separator();
     ui.spacing();
 
+    ui.text("SPECIAL");
+    ui.separator();
+    ui.spacing();
+
     for i in 0..7 {
-        ui.text(format!("  {:5} {:7}",SPECIAL_LABELS[i].chars().next().unwrap(), special_values[i]));
+        ui.text(format!("  {:5} {:7}",SPECIAL_LABELS[i].chars().next().unwrap(), char_spec[i].value));
     }
 
     ui.spacing();
     ui.separator();
     ui.spacing();
 
+    ui.text("Skills");
+    ui.separator();
+    ui.spacing();
+
+    for i in 0..17 {
+        if char_skills[i].total > 0 {
+            ui.text(format!("  {:24} {} {}", SKILLS[i], char_skills[i].total, if char_skills[i].is_tagged() {"(Tag)"} else {""}));
+        }
+    }
+
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
+
+    ui.text("PERKS");
+    ui.separator();
+    ui.spacing();
+
+    ui.columns(2, "##perk_cols", false);
+    ui.set_column_width(0, d_col_w);
+    ui.set_column_width(1, d_col_w);
+
+    let (perk_l, perk_r) = character.perks.split_at((character.perks.len() + 1) / 2);
+    for perk in perk_l {
+        ui.text(&perk.name);
+        for i in 0..perk.desc.len() {
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i, perk.desc[i]), 0.0, d_col_w - 6.0);
+        }
+    }
+    ui.next_column();
+    for perk in perk_r {
+        ui.text(&perk.name);
+        for i in 0..perk.desc.len() {
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i, perk.desc[i]), d_col_w + 6.0, w - 6.0);
+        }
+    }
     h
 }
