@@ -10,7 +10,8 @@ pub fn render_character_review(
     db: &Db,
     character: &Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##character_review", "Character Review");
+    let Some((w, h, _token)) = render_window(ui, window, "##character_review", "Character Review")
+        else { return 0.0 };
 
     ui.text("REVIEW");
     ui.separator();

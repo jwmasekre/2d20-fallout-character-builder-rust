@@ -184,7 +184,6 @@ fn main() -> Result<()> {
         //function for handling the tabbed windows for the builder:
         pub fn render_tab_bar(
             ui: &Ui,
-            current: AppScreen,
             screen: &mut AppScreen,
             origin: &OriginState,
             special: &SpecialState,
@@ -197,6 +196,7 @@ fn main() -> Result<()> {
             let tab_w = ui.content_region_avail()[0] / BUILD_SCREENS.len() as f32;
 
             //establish which tab is the current tab and which are unlocked
+            let current = screen.clone();
             for (target, label) in BUILD_SCREENS {
                 let is_current  = target == &current;
                 let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, &character);
@@ -244,7 +244,6 @@ fn main() -> Result<()> {
         pub fn render_nav_footer(
             ui: &Ui,
             h: f32,
-            current: AppScreen,
             screen: &mut AppScreen,
             origin: &OriginState,
             special: &SpecialState,
@@ -253,6 +252,7 @@ fn main() -> Result<()> {
             background: &BackgroundState,
             character: &Character,
         ) {
+            let current = screen.clone();
             //figure out which tab/screen we're on
             let idx = BUILD_SCREENS.iter().position(|(s, _)| s == &current).unwrap_or(0);
 
@@ -390,26 +390,39 @@ fn main() -> Result<()> {
                 });
         }
 
-        render_tab_bar(ui, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+        let is_builder_screen = BUILD_SCREENS.iter().any(|(s, _)| s == &screen);
+        if is_builder_screen {
+            //tabs across the top
+            let tab_bar_h = 40.0_f32;
+            ui.window("##tab_bar")
+                .title_bar(false)
+                .resizable(false)
+                .movable(false)
+                .collapsible(false)
+                .no_decoration()
+                .size([win_w as f32, tab_bar_h], imgui::Condition::Always)
+                .position([0.0, BAR_HEIGHT], imgui::Condition::Always)
+                .build(|| {
+                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                });
+        }
 
-        match screen {
+        let content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
                 render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
+                0.0
             }
 /*--------*/AppScreen::OriginSelect => {
                 let state = &mut origin;
-                let h = render_origin_select(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                render_origin_select(&ui, &window, state, &db, &mut character)
             }
 /*--------*/AppScreen::SpecialAssignment => {
                 let state = &mut special.update(&character);
-                let h = render_special_assignment(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                render_special_assignment(&ui, &window, state, &db, &mut character)
             }
 /*--------*/AppScreen::SkillAssignment => {
                 let state = &mut skill;
-                let h = render_skill_assignment(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                render_skill_assignment(&ui, &window, state, &db, &mut character)
             }
 /*--------*/AppScreen::PerkSelect => {
                 let state = &mut perk;
@@ -436,33 +449,49 @@ fn main() -> Result<()> {
                         None => {} //it's still open so don't do anything
                     }
                 }
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                h
             }
 /*--------*/AppScreen::StatCalculation => {
-                let h = render_stat_calculation(&ui, &window, &special, &skill, &mut character);
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                render_stat_calculation(&ui, &window, &special, &skill, &mut character)
             }
 /*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                let h = render_background_select(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                render_background_select(&ui, &window, state, &db, &mut character)
             }
 /*--------*/AppScreen::CharacterReview => {
-                let h = render_character_review(&ui, &window, &db, &character);
-                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                render_character_review(&ui, &window, &db, &character)
             }
 /*--------*/AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);
                 //let state = &mut special;
                 //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
                 //render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, special, skill, perk, background, &character);
+                0.0
             }
 /*--------*/AppScreen::LoadCharacter => {
                 render_placeholder(&ui, &window, "load", &mut screen);
+                0.0
             }
 /*--------*/AppScreen::ImportCharacter => {
                 render_placeholder(&ui, &window, "import", &mut screen);
+                0.0
             }
+            _ => 0.0,
+        };
+
+        if is_builder_screen {
+            //footer on the bottom
+            let (_, win_h) = window.size();
+            ui.window("##nav_footer")
+                .title_bar(false)
+                .resizable(false)
+                .movable(false)
+                .no_decoration()
+                .size([win_w as f32, 48.0], imgui::Condition::Always)
+                .position([0.0, win_h as f32 - 48.0], imgui::Condition::Always)
+                .build(|| {
+                    render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                });
         }
 
         unsafe {

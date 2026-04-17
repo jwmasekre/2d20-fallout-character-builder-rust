@@ -49,7 +49,7 @@ impl OriginState {
             can_ghoul: selected_origin.can_ghoul,
         };
         //grab the old origin; checking if they go from mutant -> non or vice-versa
-        let old_origin = character.origin.as_ref().unwrap().id;
+        let old_origin = if character.origin.is_some() {character.origin.clone().unwrap().id} else {i32::MAX};
         //if they go to mutant from non, add two to str and end
         if [3,16].contains(&selected_origin.id) && ![3,16].contains(&old_origin) {
             character.special.strength.value += 2;
@@ -313,8 +313,8 @@ pub fn render_origin_select(
     db: &Db,
     character: &mut Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##origin_select", "Origin Select");
-
+    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select")
+        else { return 0.0 };
     ui.text("ORIGIN");
     ui.separator();
     ui.spacing();

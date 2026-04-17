@@ -69,7 +69,8 @@ pub fn render_skill_assignment(
     db: &Db, //leaving this here so i can pull in the skill descriptions eventually
     character: &mut Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##skill_assignment", "Skill Assignment");
+    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment")
+        else { return 0.0 };
 
     ui.text("SKILLS");
     ui.separator();

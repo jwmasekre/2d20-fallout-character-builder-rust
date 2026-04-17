@@ -103,7 +103,8 @@ pub fn render_special_assignment(
     db: &Db,
     character: &mut Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##special_assignment", "Special Assignment");
+    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment")
+        else { return 0.0 };
 
     ui.text("SPECIAL");
     ui.separator();

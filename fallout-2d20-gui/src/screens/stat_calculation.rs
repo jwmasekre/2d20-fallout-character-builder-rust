@@ -110,7 +110,8 @@ pub fn render_stat_calculation(
     skill: &SkillState,
     character: &mut Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##stat_calculation", "Calculated Stats");
+    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats")
+        else { return 0.0 };
 
     let (base_dr, nocturnal) = compute_stats(character);
     let char_spec = character.special.special_block();

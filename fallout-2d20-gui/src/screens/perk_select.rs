@@ -272,7 +272,8 @@ pub fn render_perk_select(
     character: &mut Character,
     resolving: bool,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##perk_select", "Perk Select");
+    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select")
+        else { return 0.0 };
 
     ui.text("PERKS");
     ui.separator();

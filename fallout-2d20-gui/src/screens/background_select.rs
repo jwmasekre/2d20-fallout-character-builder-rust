@@ -914,7 +914,8 @@ pub fn render_background_select(
     db: &Db,
     character: &mut Character,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##background_select", "Background Select");
+    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select")
+        else { return 0.0 };
 
     ui.text("BACKGROUND");
     ui.separator();
