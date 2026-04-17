@@ -9,16 +9,13 @@ use imgui::Ui;
 use anyhow::Result;
 
 use crate::{
-    config::{db_path, load_config, save_config, AppConfig},
-    db::Db,
-    theme::{THEMES, apply_theme, BAR_HEIGHT, render_text_wrapped},
-    character::{Character, Player, Party}
+    character::{Character, Party, Player}, config::{AppConfig, db_path, load_config, save_config}, db::Db, screens2::perk_select::PerkResolutionPopup, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 use crate::screens2::main_menu::render_main_menu;
 use crate::screens2::origin_select::{render_origin_select, OriginState};
 use crate::screens2::special_assignment::{render_special_assignment, SpecialState};
 use crate::screens2::skill_assignment::{render_skill_assignment, SkillState};
-use crate::screens2::perk_select::{render_perk_select, PerkState};
+use crate::screens2::perk_select::{render_perk_select, PerkState, render_perk_resolution};
 use crate::screens2::stat_calculation::render_stat_calculation;
 use crate::screens2::background_select::{render_background_select, BackgroundState};
 use crate::screens2::character_review::render_character_review;
@@ -173,16 +170,17 @@ fn main() -> Result<()> {
     let mut party: Option<Party> = None;
     let mut origin = OriginState::new(&db);
     let mut special = SpecialState::new();
-    let mut skill = SkillState::new(character);
-    let mut perk = PerkState::new();
-    let mut background = BackgroundState::new();
+    let mut skill = SkillState::new(character.clone());
+    let mut perk = PerkState::new(&db, &character);
+    let mut perk_resolution: Option<PerkResolutionPopup> = None;
+    let mut background = BackgroundState::new(&db);
 
     //start the render loop
     'main: loop {
         //function for handling the tabbed windows for the builder:
         pub fn render_tab_bar(
             ui: &Ui,
-            current: &AppScreen,
+            current: AppScreen,
             screen: &mut AppScreen,
             origin: &OriginState,
             special: &SpecialState,
@@ -196,7 +194,7 @@ fn main() -> Result<()> {
 
             //establish which tab is the current tab and which are unlocked
             for (target, label) in BUILD_SCREENS {
-                let is_current  = target == current;
+                let is_current  = target == &current;
                 let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, &character);
 
                 //highlight the current tab
@@ -242,7 +240,7 @@ fn main() -> Result<()> {
         pub fn render_nav_footer(
             ui: &Ui,
             h: f32,
-            current: &AppScreen,
+            current: AppScreen,
             screen: &mut AppScreen,
             origin: &OriginState,
             special: &SpecialState,
@@ -252,7 +250,7 @@ fn main() -> Result<()> {
             character: &Character,
         ) {
             //figure out which tab/screen we're on
-            let idx = BUILD_SCREENS.iter().position(|(s, _)| s == current).unwrap_or(0);
+            let idx = BUILD_SCREENS.iter().position(|(s, _)| s == &current).unwrap_or(0);
 
             //define the previous and next screens
             let prev = idx.checked_sub(1).map(|i| &BUILD_SCREENS[i].0);
@@ -388,57 +386,77 @@ fn main() -> Result<()> {
                 });
         }
 
-        render_tab_bar(ui, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+        render_tab_bar(ui, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
 
         match screen {
-            AppScreen::MainMenu => {
+/*--------*/AppScreen::MainMenu => {
                 render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
             }
-            AppScreen::OriginSelect => {
+/*--------*/AppScreen::OriginSelect => {
                 let state = &mut origin;
                 let h = render_origin_select(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::SpecialAssignment => {
+/*--------*/AppScreen::SpecialAssignment => {
                 let state = &mut special.update(&character);
                 let h = render_special_assignment(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::SkillAssignment => {
+/*--------*/AppScreen::SkillAssignment => {
                 let state = &mut skill;
                 let h = render_skill_assignment(&ui, &window, state, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::PerkSelect => {
+/*--------*/AppScreen::PerkSelect => {
                 let state = &mut perk;
-                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character, perk_resolution.is_some());
+                //resolution popup
+                if let Some((p_id, add)) = state.pending_resolution.take() {
+                    let perk = state.perks.iter().find(|p| p.id == p_id).unwrap();
+                    if let Some(popup) = state.begin_resolve(perk, add) {
+                        perk_resolution = Some(popup);
+                    }
+                }
+                //render popup
+                if let Some(popup) = &mut perk_resolution {
+                    let result = render_perk_resolution(ui, &window, popup, state, &mut character);
+                    match result {
+                        Some(false) => {
+                            let perk_index = character.clone().perks.iter().position(|p| p.id == popup.perk_id).unwrap();
+                            character.perks.remove(perk_index);
+                            perk_resolution = None;
+                        }
+                        Some(true) => {
+                            perk_resolution = None;
+                        }
+                        None => {} //it's still open so don't do anything
+                    }
+                }
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::StatCalculation => {
-                let state = &mut stat;
-                let h = render_stat_calculation(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+/*--------*/AppScreen::StatCalculation => {
+                let h = render_stat_calculation(&ui, &window, &special, &skill, &mut character);
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::BackgroundSelect => {
+/*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                let h = render_background_select(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+                let h = render_background_select(&ui, &window, state, &db, &mut character);
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::CharacterReview => {
-                let state = &mut review;
-                let h = render_character_review(&ui, &window, state, &mut screen, &db, &mut character);
-                render_nav_footer(ui, h, &screen, &mut screen, &origin, &special, &skill, perk, background, &character);
+/*--------*/AppScreen::CharacterReview => {
+                let h = render_character_review(&ui, &window, &db, &character);
+                render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, &special, &skill, &perk, &background, &character);
             }
-            AppScreen::CharacterSheet => {
+/*--------*/AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);
                 //let state = &mut special;
                 //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
-                //render_nav_footer(ui, h, &screen, &mut screen, &origin, special, skill, perk, background, &character);
+                //render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, special, skill, perk, background, &character);
             }
-            AppScreen::LoadCharacter => {
+/*--------*/AppScreen::LoadCharacter => {
                 render_placeholder(&ui, &window, "load", &mut screen);
             }
-            AppScreen::ImportCharacter => {
+/*--------*/AppScreen::ImportCharacter => {
                 render_placeholder(&ui, &window, "import", &mut screen);
             }
         }

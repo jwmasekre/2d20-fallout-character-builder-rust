@@ -3,7 +3,7 @@ use imgui::Ui;
 use sdl2::video::Window;
 use serde_json;
 use crate::db::Db;
-use crate::AppScreen;
+use crate::main2::AppScreen;
 use crate::screens2::skill_assignment::SKILLS;
 use crate::theme::{render_text_wrapped, render_window};
 use crate::screens2::special_assignment::{SPECIAL_LABELS};
@@ -124,6 +124,17 @@ impl PerkState {
                 lower.contains("companion") && character.companion != CompanionType::None { return false }
         }
         true
+    }
+    pub fn begin_resolve(&self, perk: &PerkRow, add: bool) -> Option<PerkResolutionPopup> {
+        let resolution = match perk.id {
+            12 => Some(PerkResolution::BwLk { version: None }),
+            45 => Some(PerkResolution::IntenseTraining { selected_stat: None }),
+            83 => Some(PerkResolution::Skilled { skill_a: None, skill_b: None }),
+            92 => Some(PerkResolution::Tag { selected_skill: None }),
+            110 => Some(PerkResolution::MmCf { version: None }),
+            _ => None,
+        };
+        resolution.map(|r| PerkResolutionPopup { perk_id: perk.id, perk_name: perk.name.clone(), resolution: r, perk_add: add, open: true })
     }
     fn is_resolution_complete(popup: &PerkResolutionPopup) -> bool {
         match &popup.resolution {
@@ -487,7 +498,7 @@ pub fn render_perk_select(
     return h
 }
 
-fn render_perk_resolution(
+pub fn render_perk_resolution(
     ui: &Ui,
     window: &Window,
     popup: &mut PerkResolutionPopup,
