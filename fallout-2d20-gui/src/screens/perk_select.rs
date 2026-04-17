@@ -3,10 +3,10 @@ use imgui::Ui;
 use sdl2::video::Window;
 use serde_json;
 use crate::db::Db;
-use crate::main2::AppScreen;
-use crate::screens2::skill_assignment::SKILLS;
+use crate::AppScreen;
+use crate::screens::skill_assignment::SKILLS;
 use crate::theme::{render_text_wrapped, render_window};
-use crate::screens2::special_assignment::{SPECIAL_LABELS};
+use crate::screens::special_assignment::{SPECIAL_LABELS};
 use crate::character::{Character, CompanionType, TagType, Perk};
 
 pub struct PerkState {

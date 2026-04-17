@@ -1,6 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{character::{Character, CompanionType, MeleeModifiers}, screens2::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
+use crate::{character::{Character, CompanionType, MeleeModifiers}, screens::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
 
 pub fn get_staggered_bonus(val: i32) -> i32 {
     match val {

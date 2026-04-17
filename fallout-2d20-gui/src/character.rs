@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::screens2::special_assignment::SpecialState;
+use crate::screens::special_assignment::SpecialState;
 
 #[derive(Clone)]
 pub struct Character {
@@ -116,8 +116,8 @@ impl Character {
 
 #[derive(Clone)]
 pub struct Player {
-    id: Uuid,
-    name: String,
+    pub id: Uuid,
+    pub name: String,
 }
 
 impl Player {
