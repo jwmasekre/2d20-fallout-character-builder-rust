@@ -295,7 +295,7 @@ impl SpecialBlock {
         }
     }
     pub fn can_increase(&self, state: &SpecialState, character: &Character) -> bool {
-        self.value < self.max && state.remaining_points(character) == 0
+        self.value < self.max && state.remaining_points(character) > 0
     }
     pub fn can_decrease(&self, character: &Character) -> bool {
         self.value > 4 + if character.is_mutant() { 2 } else { 0 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::db::Db;
@@ -39,10 +41,13 @@ impl SpecialArray {
 pub const SPECIAL_LABELS: [&str; 7] = ["Strength", "Perception", "Endurance", "Charisma", "Intelligence", "Agility", "Luck"];
 
 //track validity states (no array, )
+#[derive(Debug, PartialEq)]
 pub struct SpecialState {
     selected_array: SpecialArray,
     assignments: [Option<i32>; 7],
-    values: [i32; 7],
+    //values: [i32; 7],
+    can_inc: [bool; 7],
+    can_dec: [bool; 7],
     gifted: bool,
     gifted_count: i32,
     trained: i32,
@@ -52,10 +57,13 @@ pub struct SpecialState {
 
 impl SpecialState {
     pub fn new() -> Self {
+        println!("initialized specialstate");
         Self {
             selected_array: SpecialArray::None,
             assignments: [None; 7],
-            values: [5; 7],
+            //values: [5; 7],
+            can_inc: [true; 7],
+            can_dec: [true; 7],
             gifted: false,
             gifted_count: 0,
             trained: 0,
@@ -63,29 +71,28 @@ impl SpecialState {
             total: 35,
         }
     }
-    pub fn update(&self, character: &Character) -> Self {
-        let selected_array = self.selected_array;
-        let assignments = self.assignments;
-        let values = self.values;
+    pub fn update(&mut self, character: &Character) {
+        println!("updating state");
+        self.total = character.special.special_block().iter().map(|s| s.value).sum();
+        self.selected_array = self.selected_array;
+        self.assignments = self.assignments;
+        //self.values = self.values;
         //check if the character is gifted
-        let gifted = character.is_gifted();
+        self.gifted = character.is_gifted();
         //count number of gifted selections
-        let gifted_count = character.special.special_block().iter().map(|s| s.gifted).filter(|&b| b).count() as i32;
+        self.gifted_count = character.special.special_block().iter().map(|s| s.gifted).filter(|&b| b).count() as i32;
         //check how much intense training the character has
-        let trained = character.perks.iter().find(|p| p.id == 45).unwrap().ranks;
+        self.trained = match character.perks.iter().find(|p| p.id == 45) {
+            Some(perk) => perk.ranks,
+            None => 0,
+        };
         //check how many times intense training has been applied
-        let trained_count: i32 = character.special.special_block().iter().map(|s| s.trained).sum();
-        let total: i32 = character.special.special_block().iter().map(|s| s.value).sum();
-        Self {
-            selected_array,
-            assignments,
-            values,
-            gifted,
-            gifted_count,
-            trained,
-            trained_count,
-            total,
+        self.trained_count = character.special.special_block().iter().map(|s| s.trained).sum();
+        for (i, spec) in character.special.special_block().iter().enumerate() {
+            self.can_inc[i] = spec.value < spec.max && self.remaining_points(character) > 0;
+            self.can_dec[i] = spec.value > 4 + if character.is_mutant() { 2 } else { 0 };
         }
+        println!("updated: {:?}", self);
     }
     pub fn is_complete(&self, character: &Character) -> bool {
         (if self.gifted { self.gifted_count == 2 } else { self.gifted_count == 0 }) &&
@@ -114,6 +121,8 @@ pub fn render_special_assignment(
     ui.same_line();
     ui.set_next_item_width(260.0);
 
+    //println!("{:?}", state);
+
     if let Some(_cb) = ui.begin_combo("##array_select", state.selected_array.label()) {
         for array in [
             SpecialArray::Balanced,
@@ -123,10 +132,12 @@ pub fn render_special_assignment(
         ] {
             let selected = state.selected_array == array;
             if ui.selectable_config(array.label()).selected(selected).build() {
+                println!("selected: {:?}", array);
+                println!("{:?}", state);
                 state.selected_array = array;
                 //clear assignments if we changed arrays
                 state.assignments = [None; 7];
-                state.values = [5; 7];
+                //state.values = [5; 7];
             }
         }
     }
@@ -157,7 +168,8 @@ pub fn render_special_assignment(
     //we want different experiences if the player selects a preset array vs custom
     match state.selected_array {
         SpecialArray::Custom => render_custom(ui, state, label_w, val_w, w, character),
-        _ => render_preset(ui, state, label_w, val_w, w, character)
+        SpecialArray::Balanced | SpecialArray::Focused | SpecialArray::Specialized => render_preset(ui, state, label_w, val_w, w, character),
+        SpecialArray::None => {},
     }
     return h
 }
@@ -171,90 +183,8 @@ fn render_custom(
     w: f32,
     character: &mut Character,
 ) {
-    //this macro may not be necessary if this works as i intend
-
-/*    
-    //either i duplicate code 7 times for the custom special rendering, or i create this once and call the macro with each special stat
-    //this is because character.special is 7 structs, rather than a Vec<specialstatblock; 7>
-    macro_rules! build_special_custom {
-        (
-            $ui:expr,
-            $state:expr,
-            $character:expr,
-            $label_w:expr,
-            $val_w:expr,
-            $w:expr,
-            $index:expr,
-            $field:ident,
-            $mutant_stat:expr
-        ) => {{
-            $ui.text(SPECIAL_LABELS[$index]);
-            $ui.same_line_with_pos($label_w);
-
-            let _dec_guard = (!$character.special.$field.can_decrease($character))
-                .then(|| $ui.begin_disabled(true));
-            if $ui.button(format!("-##dec_{}", stringify!($field))) {
-                $character.special.$field.value -= 1;
-                $state.update($character);
-                $state.values[$index] -= 1;
-            }
-            $ui.same_line();
-
-            $ui.set_next_item_width($val_w);
-            $ui.text(format!("{:2}", $state.values[$index]));
-            $ui.same_line();
-
-            let _inc_guard = (!$character.special.$field.can_increase($state, $character))
-                .then(|| $ui.begin_disabled(true));
-            if $ui.button(format!("+##inc_{}", stringify!($field))) {
-                $character.special.$field.value += 1;
-                $state.update($character);
-                $state.values[$index] += 1;
-            }
-            $ui.same_line();
-
-            if $state.gifted {
-                let disabled = $state.gifted_count >= 2
-                    || $character.special.$field.value >= $character.special.$field.max;
-                let _gifted_guard = disabled.then(|| $ui.begin_disabled(true));
-                let mut checked = $character.special.$field.gifted;
-                if $ui.checkbox(format!("G##gifted_{}", stringify!($field)), &mut checked) {
-                    $character.special.$field.gifted = checked;
-                    $character.special.$field.value += if checked { 1 } else { -1 };
-                    $state.update($character);
-                }
-                $ui.same_line();
-            }
-
-            let display = $character.special.$field.value;
-            let max     = $character.special.$field.max;
-            let mutant  = if $mutant_stat && $character.is_mutant() { 2 } else { 0 };
-            let mod_val = if $character.special.$field.gifted { 1 } else { 0 }
-                + mutant + $character.special.$field.trained;
-            let mod_state = mod_val > 0;
-            render_text_wrapped(
-                !mod_state, mod_state, $ui,
-                &format!("-> {} (+{})", display, mod_val),
-                $label_w, $label_w + $w,
-            );
-
-            if display >= max {
-                $ui.same_line();
-                $ui.text_disabled(&format!("[cap: {}]", max));
-            }
-            $ui.spacing();
-        }};
-    }
-
-    build_special_custom!(ui, state, character, label_w, val_w, w, 0, strength, true);
-    build_special_custom!(ui, state, character, label_w, val_w, w, 1, perception, false);
-    build_special_custom!(ui, state, character, label_w, val_w, w, 2, endurance, true);
-    build_special_custom!(ui, state, character, label_w, val_w, w, 3, charisma, false);
-    build_special_custom!(ui, state, character, label_w, val_w, w, 4, intelligence, false);
-    build_special_custom!(ui, state, character, label_w, val_w, w, 5, agility, false);
-    build_special_custom!(ui, state, character, label_w, val_w, w, 6, luck, false);
-*/
-
+    //println!("custom render");
+/*
     let char_clone = character.clone();
     for (i, special) in character.special.mut_special_block().iter_mut().enumerate() {
 
@@ -262,7 +192,7 @@ fn render_custom(
         ui.text(SPECIAL_LABELS[i]);
         ui.same_line_with_pos(label_w);
 
-        let _dec_guard = (!special.can_decrease(&char_clone))
+        let _dec_guard = (!state.can_dec[i])
             .then(|| ui.begin_disabled(true));
         if ui.button(format!("-##dec_{}", stringify!(SPECIAL_LABELS[i]))) {
             special.value -= 1;
@@ -274,7 +204,7 @@ fn render_custom(
         ui.text(format!("{:2}", state.values[i]));
         ui.same_line();
 
-        let _inc_guard = (!special.can_increase(state, &char_clone))
+        let _inc_guard = (!state.can_inc[i])
             .then(|| ui.begin_disabled(true));
         if ui.button(format!("+##inc_{}", stringify!(SPECIAL_LABELS[i]))) {
             special.value += 1;
@@ -313,6 +243,66 @@ fn render_custom(
         ui.spacing();
     }
     state.update(character);
+*/
+
+    for (i, special) in SPECIAL_LABELS.iter().enumerate() {
+        let mutant_stat = i == 0 || i == 2;
+        ui.text(special);
+        ui.same_line_with_pos(label_w);
+        {
+            let _dec_guard = (!state.can_dec[i]).then(|| ui.begin_disabled(true));
+            //if ui.button(format!("-##dec_{}", stringify!(special))) {
+            if ui.button(format!("-##dec_{}", i)) {
+                println!("decreasing {}", special);
+                character.special.mut_special_block()[i].value -= 1;
+                //state.values[i] -= 1;
+                state.update(character)
+            }
+        }
+        ui.same_line();
+
+        ui.set_next_item_width(val_w);
+        ui.text(format!("{:2}", character.special.special_block()[i].value));
+        ui.same_line();
+
+        {
+            let _inc_guard = (!state.can_inc[i]).then(|| ui.begin_disabled(true));
+            //if ui.button(format!("+##inc_{}", stringify!(special))) {
+            if ui.button(format!("+##inc_{}", i)) {
+                println!("increasing {}", special);
+                character.special.mut_special_block()[i].value += 1;
+                //state.values[i] += 1;
+                state.update(character)
+            }
+        }
+        ui.same_line();
+
+        if state.gifted {
+            let spec = character.special.special_block()[i].clone();
+            let disabled = state.gifted_count >= 2 || spec.value >= spec.max;
+            let _gifted_guard = disabled.then(|| ui.begin_disabled(true));
+            let mut checked = spec.gifted;
+            if ui.checkbox(format!("G##gifted_{}", i), &mut checked) {
+                character.special.mut_special_block()[i].gifted = checked;
+                character.special.mut_special_block()[i].value += if checked { 1 } else { -1 };
+                state.update(character);
+            }
+            ui.same_line();
+        }
+        let spec = character.special.special_block()[i].clone();
+        let display = spec.value;
+        let max = spec.max;
+        let mutant = if mutant_stat && character.is_mutant() { 2 } else { 0 };
+        let mod_val = if spec.gifted { 1 } else { 0 } + mutant + spec.trained;
+        let mod_state = mod_val > 0;
+        render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + w);
+
+        if display >= max {
+            ui.same_line();
+            ui.text_disabled(&format!("[cap: {}]", max));
+        }
+        ui.spacing();
+    }
 }
 
 fn render_preset(
@@ -323,6 +313,7 @@ fn render_preset(
     val_w: f32,
     character: &mut Character,
 ) {
+    //println!("preset render");
     let preset_values = match state.selected_array.values() {
         Some(v) => v,
         None => return,
@@ -338,6 +329,22 @@ fn render_preset(
     ui.same_line();
     let mut sorted = preset_values;
     sorted.sort_unstable_by(|a,b| b.cmp(a));
+    let mut leftover: HashMap<i32,usize> = HashMap::new();
+    for &v in sorted.iter() {
+        let used_count = assigned_values.iter().filter(|&&x| x == v).count();
+        let total_count = preset_values.iter().filter(|&&x| x == v).count();
+        let remaining = total_count - used_count;
+        if remaining > 0 {
+            leftover.insert(v, remaining);
+        }
+    }
+    for (val, num) in leftover {
+        for i in 0..num {
+            ui.same_line();
+            render_text_wrapped(false, true, ui, &format!("[{}]", val), label_w, w);
+        }
+    }
+    /*
     for &v in sorted.iter() {
         let used_count = assigned_values.iter().filter(|&&x| x == v).count();
         let total_count = preset_values.iter().filter(|&&x| x == v).count();
@@ -349,6 +356,8 @@ fn render_preset(
             }
         }
     }
+    */
+
     ui.spacing();
     ui.separator();
     ui.spacing();
@@ -450,7 +459,7 @@ fn render_preset(
     build_special_preset!(ui, state, character, label_w, val_w, w, 5, agility, false);
     build_special_preset!(ui, state, character, label_w, val_w, w, 6, luck, false);
 */
-
+/*
     let char_clone = character.clone();
     for (i, special) in character.special.mut_special_block().iter_mut().enumerate() {
 
@@ -463,8 +472,6 @@ fn render_preset(
         };
         let assigned = state.assignments[i];
         let max = special.max;
-        ui.text(SPECIAL_LABELS[i]);
-        ui.same_line_with_pos(label_w);
 
         ui.set_next_item_width(80.0);
         let combo_label = match assigned {
@@ -483,7 +490,7 @@ fn render_preset(
                 let used_elsewhere = state.assignments
                     .iter()
                     .enumerate()
-                    .filter(|&(i,&av)| i != i && av == Some(v))
+                    .filter(|&(e,&av)| e != i && av == Some(v))
                     .count();
                 let total = preset_values
                     .iter()
@@ -531,5 +538,88 @@ fn render_preset(
         }
         ui.spacing();
     }
-    state.update(character);
+*/
+
+
+    for (i, special) in SPECIAL_LABELS.iter().enumerate() {
+        let mutant_stat = i == 0 || i == 2;
+        ui.text(special);
+        ui.same_line_with_pos(label_w);
+        let preset_values = match state.selected_array.values() {
+            Some(v) => v,
+            None => return,
+        };
+        let assigned = state.assignments[i];
+        let max = character.special.special_block()[i].max.clone();
+
+        ui.set_next_item_width(80.0);
+        let combo_label = match assigned {
+            Some(v) => format!("{}", v),
+            None => "--".to_string(),
+        };
+
+        if let Some(_cb) = ui.begin_combo(format!("##assign_{}", i), &combo_label) {
+            if ui.selectable_config("--").selected(assigned.is_none()).build() {
+                state.assignments[i] = None;
+            }
+            let mut offered: Vec<i32> = preset_values.to_vec();
+            offered.sort_unstable_by(|a,b| b.cmp(a));
+            offered.dedup();
+            for &v in &offered {
+                let used_elsewhere = state.assignments
+                    .iter()
+                    .enumerate()
+                    .filter(|&(e, &av)| e != i && av == Some(v))
+                    .count();
+                let total = preset_values
+                    .iter()
+                    .filter(|&&x| x == v)
+                    .count();
+                let available = total > used_elsewhere;
+                let over_cap = v > max;
+                let disabled = !available || over_cap;
+                {
+                    let _opt_guard = disabled.then(|| ui.begin_disabled(true));
+                    let is_selected = assigned == Some(v);
+                    let label = if over_cap {
+                        format!("{} (exceeds cap {}", v, max)
+                    } else {
+                        format!("{}", v)
+                    };
+                    let mutant = if mutant_stat && character.is_mutant() { 2 } else { 0 };
+                    if ui.selectable_config(&label).selected(is_selected).build() {
+                        state.assignments[i] = Some(v);
+                        //might have issues with special training here idk
+                        character.special.mut_special_block()[i].value = v + mutant;
+                        state.update(character);
+                    }
+                }
+            }
+        }
+        ui.same_line();
+
+        if state.gifted {
+            let disabled = state.gifted_count >= 2 || assigned.map(|v| v >= max).unwrap_or(false) || assigned.is_none();
+            {
+                let _gift_guard = disabled.then(|| ui.begin_disabled(true));
+                let mut checked = character.special.special_block()[i].gifted.clone();
+                if ui.checkbox(format!("G##gifted_{}", i), &mut checked) {
+                    character.special.mut_special_block()[i].gifted = checked;
+                    character.special.mut_special_block()[i].value += if checked { 1 } else { -1 };
+                    state.update(character);
+                }
+            }
+            ui.same_line();
+        }
+        let display = character.special.special_block()[i].value;
+        let mod_val = display - assigned.unwrap_or(0);
+
+        if assigned.is_some() {
+            let mod_state = mod_val > 0;
+            render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + w);
+        } else {
+            ui.text_disabled(" -> ?");
+        }
+        ui.spacing();
+    }
 }

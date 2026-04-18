@@ -153,18 +153,20 @@ pub fn render_skill_assignment(
             let is_chosen = skill.tagged == TagType::Trait;
             let is_forced = state.forced_trait && i == 14;
             
-            let _g = is_forced.then(|| ui.begin_disabled(true));
-            let mut checked = is_chosen || is_forced;
-            if checked || !at_limit {
-                if ui.checkbox(format!("{}##extratag_{}", SKILLS[i], i), &mut checked) {
-                    if checked {
-                        skill.tagged = TagType::Trait;
-                        state.extra_tags.push(i);
-                    } else if skill.tagged == TagType::Trait {
-                       skill.tagged = TagType::None;
-                        state.extra_tags.retain(|&x| x != i);
+            {
+                let _g = is_forced.then(|| ui.begin_disabled(true));
+                let mut checked = is_chosen || is_forced;
+                if checked || !at_limit {
+                    if ui.checkbox(format!("{}##extratag_{}", SKILLS[i], i), &mut checked) {
+                        if checked {
+                            skill.tagged = TagType::Trait;
+                            state.extra_tags.push(i);
+                        } else if skill.tagged == TagType::Trait {
+                        skill.tagged = TagType::None;
+                            state.extra_tags.retain(|&x| x != i);
+                        }
+                        skill.update();
                     }
-                    skill.update();
                 }
             }
         }
@@ -308,21 +310,23 @@ pub fn render_skill_assignment(
         let can_dec = ranks > 0;
         let can_inc = ranks < input_max && state.available_points > 0;
 
-        let _dec = (!can_dec).then(|| ui.begin_disabled(true));
-        if ui.button(format!("-##r_{}", i)) {
-            skill.ranks -= 1;
-            skill.update();
+        {
+            let _dec = (!can_dec).then(|| ui.begin_disabled(true));
+            if ui.button(format!("-##r_{}", i)) {
+                skill.ranks -= 1;
+                skill.update();
+            }
         }
-        drop(_dec);
         ui.same_line();
         ui.text(format!("{:2}", ranks));
         ui.same_line();
-        let _inc = (!can_inc).then(|| ui.begin_disabled(true));
-        if ui.button(format!("+##r_{}", i)) {
-            skill.ranks += 1;
-            skill.update();
+        {
+            let _inc = (!can_inc).then(|| ui.begin_disabled(true));
+            if ui.button(format!("+##r_{}", i)) {
+                skill.ranks += 1;
+                skill.update();
+            }
         }
-        drop(_inc);
 
         ui.same_line_with_pos(col_tag);
         let tag_overflow = ranks > (max - 2);
@@ -331,14 +335,15 @@ pub fn render_skill_assignment(
         let is_extra_tagged = state.extra_tags.iter().any(|s| *s == i);
         let tag_disabled = is_forbidden || is_extra_tagged || is_forced || at_tag_limit || tag_overflow;
 
-        let _tg = tag_disabled.then(|| ui.begin_disabled(true));
-        let mut tag_val = tagged;
-        if ui.checkbox(format!("##tag_{}", i), &mut tag_val) {
-            if !is_forced && !is_extra_tagged {
-                skill.tagged = if tag_val { TagType::Standard } else { TagType::None }
+        {
+            let _tg = tag_disabled.then(|| ui.begin_disabled(true));
+            let mut tag_val = tagged;
+            if ui.checkbox(format!("##tag_{}", i), &mut tag_val) {
+                if !is_forced && !is_extra_tagged {
+                    skill.tagged = if tag_val { TagType::Standard } else { TagType::None }
+                }
             }
         }
-        drop(_tg);
 
         ui.same_line_with_pos(col_total);
         if tagged {
