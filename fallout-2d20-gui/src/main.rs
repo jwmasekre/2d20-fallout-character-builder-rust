@@ -393,7 +393,7 @@ fn main() -> Result<()> {
         let is_builder_screen = BUILD_SCREENS.iter().any(|(s, _)| s == &screen);
         if is_builder_screen {
             //tabs across the top
-            let tab_bar_h = 40.0_f32;
+            let tab_bar_h: f32 = 44.0;
             ui.window("##tab_bar")
                 .title_bar(false)
                 .resizable(false)
