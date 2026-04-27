@@ -3,7 +3,9 @@ use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
 use crate::theme::{render_text_wrapped, render_window};
+use crate::log_on_change;
 
+#[derive(Debug)]
 pub struct OriginState {
     selected: bool,
     trait_count: i32,
@@ -82,10 +84,11 @@ impl OriginState {
     }
     //retrieve the traits based on the current origin
     fn reload_traits(&mut self, db: &Db, character: &mut Character) {
-        //clear traits if the db doesn't return any origins
+        //clear traits
+        self.traits = vec![];
+        character.traits = vec![];
+        //return if the db doesn't return any origins
         if self.origins.is_empty() {
-            self.traits = vec![];
-            character.traits = vec![];
             return;
         }
         //grab the currently selected origin's id
@@ -97,8 +100,8 @@ impl OriginState {
         //if the player selected the ghoul origin, mark the character as a ghoul
         if traits[0].is_ghoul_trait {
             character.ghoul = true;
-        //if the player selected an origin that can't ghoul, mark them as not a ghoul (db is 1-indexed, vec is 0-indexed)
-        } else if !self.origins[(origin_id - 1) as usize].can_ghoul {
+        //if the player selected an origin that can't ghoul, mark them as not a ghoul
+        } else if !self.origins[self.origin_index].can_ghoul {
             character.ghoul = false;
         }
         //if the character is a ghoul, set their trait to the ghoul trait and don't run any other trait logic
@@ -129,6 +132,7 @@ impl OriginState {
             character.traits = vec![];
             self.trait_count = 0;
             self.origin_trait_count = 2;
+            self.traits = traits;
         }
     }
     fn update_trait(&self, character: &mut Character) {
@@ -452,7 +456,11 @@ pub fn render_origin_select(
             ui.text_disabled("Choose up to 2:");
             ui.spacing();
 
+            log_on_change!(state.traits);
+
             for (ti, t) in state.traits.iter().enumerate() {
+                //log_on_change!(ti);
+                //log_on_change!(t);
                 let mut checked = character.has_trait(t.id);
                 let at_limit = !checked && selected_count >= 2;
                 let y = ui.cursor_pos()[1];

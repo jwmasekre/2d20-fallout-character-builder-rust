@@ -3,6 +3,8 @@ mod config;
 mod screens;
 mod character;
 mod theme;
+#[macro_use]
+mod debug;
 
 use std::os::raw::c_void;
 use glow::HasContext;
