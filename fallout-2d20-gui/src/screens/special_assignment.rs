@@ -89,9 +89,9 @@ impl SpecialState {
         self.trained_count = character.special.special_block().iter().map(|s| s.trained).sum();
         for (i, spec) in character.special.special_block().iter().enumerate() {
             self.can_inc[i] = spec.value < spec.max && self.remaining_points(character) > 0;
-            self.can_dec[i] = spec.value > 4 + if character.is_mutant() { 2 } else { 0 };
+            self.can_dec[i] = spec.value > 4;
         }
-        log_on_change!(self);
+        //log_on_change!(self);
     }
     pub fn is_complete(&self, character: &Character) -> bool {
         (if self.gifted { self.gifted_count == 2 } else { self.gifted_count == 0 }) &&
@@ -325,7 +325,7 @@ fn render_preset(
             if ui.selectable_config("--").selected(assigned.is_none()).build() {
                 state.assignments[i] = None;
                 state.update(character);
-                log_on_change!(state.assignments);
+                //log_on_change!(state.assignments);
             }
             let mut offered: Vec<i32> = preset_values.to_vec();
             offered.sort_unstable_by(|a,b| b.cmp(a));
@@ -347,7 +347,7 @@ fn render_preset(
                     let _opt_guard = disabled.then(|| ui.begin_disabled(true));
                     let is_selected = assigned == Some(v);
                     let label = if over_cap {
-                        format!("{} (exceeds cap {}", v, max)
+                        format!("{} (exceeds cap: {}) ", v, max)
                     } else {
                         format!("{}", v)
                     };
