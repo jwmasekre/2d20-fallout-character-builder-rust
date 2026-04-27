@@ -260,19 +260,21 @@ fn render_preset(
 
     ui.text("Available:");
     ui.same_line();
-    //let mut sorted = preset_values;
-    //sorted.sort_unstable_by(|a,b| b.cmp(a));
-    let mut leftover: HashMap<i32,usize> = HashMap::new();
-    //for &v in sorted.iter() {
+    let mut leftover_map: HashMap<i32,usize> = HashMap::new();
     for &v in preset_values.iter() {
         let used_count = assigned_values.iter().filter(|&&x| x == v).count();
         let total_count = preset_values.iter().filter(|&&x| x == v).count();
         let remaining = total_count - used_count;
         if remaining > 0 {
-            leftover.insert(v, remaining);
+            leftover_map.insert(v, remaining);
         }
     }
+    //sorting the hashmap since hashmaps are unsorted
+    let mut leftover: Vec<_> = leftover_map.iter().collect();
+    leftover.sort_by(|a, b| b.0.cmp(a.0));
+
     let mut instance = 0;
+    /*
     let debug_color: [[f32; 4]; 8] = [
         [1.0, 0.0, 0.0, 1.0], //red
         [1.0, 0.5, 0.0, 1.0], //orange
@@ -285,16 +287,15 @@ fn render_preset(
     ];
     let draw_list = ui.get_window_draw_list();
     draw_list.add_line(ui.cursor_screen_pos(), [ui.cursor_screen_pos()[0], ui.cursor_screen_pos()[1] + 16.0], debug_color[instance]).build();
+    */
     for (val, num) in leftover {
-        for _ in 0..num {
+        for _ in 0..*num {
             ui.same_line();
             instance += 1;
             let wrap = 28.0 * (instance as f32);
             let label_wrap = label_w + wrap;
-            draw_list.add_line(ui.cursor_screen_pos(), [ui.cursor_screen_pos()[0], ui.cursor_screen_pos()[1] + 16.0], debug_color[instance]).build();
+            //draw_list.add_line(ui.cursor_screen_pos(), [ui.cursor_screen_pos()[0], ui.cursor_screen_pos()[1] + 16.0], debug_color[instance]).build();
             render_text_wrapped(false, true, ui, &format!("[{}]", val), label_w, label_wrap);
-            //eprintln!("{} - ({}) {}", instance, label_w, wrap);
-            //eprintln!("{}",wrap);
         }
     }
 
