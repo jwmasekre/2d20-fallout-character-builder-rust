@@ -5,6 +5,7 @@ use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::Character;
 use crate::theme::{render_text_wrapped, render_window};
+use crate::log_on_change;
 
 //list of our array options
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,7 +58,6 @@ pub struct SpecialState {
 
 impl SpecialState {
     pub fn new() -> Self {
-        println!("initialized specialstate");
         Self {
             selected_array: SpecialArray::None,
             assignments: [None; 7],
@@ -72,7 +72,6 @@ impl SpecialState {
         }
     }
     pub fn update(&mut self, character: &Character) {
-        println!("updating state");
         self.total = character.special.special_block().iter().map(|s| s.value).sum();
         self.selected_array = self.selected_array;
         self.assignments = self.assignments;
@@ -92,7 +91,7 @@ impl SpecialState {
             self.can_inc[i] = spec.value < spec.max && self.remaining_points(character) > 0;
             self.can_dec[i] = spec.value > 4 + if character.is_mutant() { 2 } else { 0 };
         }
-        println!("updated: {:?}", self);
+        log_on_change!(self);
     }
     pub fn is_complete(&self, character: &Character) -> bool {
         (if self.gifted { self.gifted_count == 2 } else { self.gifted_count == 0 }) &&
@@ -107,7 +106,7 @@ pub fn render_special_assignment(
     ui: &Ui,
     window: &Window,
     state: &mut SpecialState,
-    db: &Db,
+    _db: &Db,
     character: &mut Character,
 ) -> f32 {
     let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment")
@@ -121,8 +120,6 @@ pub fn render_special_assignment(
     ui.same_line();
     ui.set_next_item_width(260.0);
 
-    //println!("{:?}", state);
-
     if let Some(_cb) = ui.begin_combo("##array_select", state.selected_array.label()) {
         for array in [
             SpecialArray::Balanced,
@@ -132,8 +129,8 @@ pub fn render_special_assignment(
         ] {
             let selected = state.selected_array == array;
             if ui.selectable_config(array.label()).selected(selected).build() {
-                println!("selected: {:?}", array);
-                println!("{:?}", state);
+                log_on_change!(array);
+                log_on_change!(state);
                 state.selected_array = array;
                 //clear assignments if we changed arrays
                 state.assignments = [None; 7];
@@ -180,7 +177,7 @@ fn render_custom(
     state: &mut SpecialState,
     label_w: f32,
     val_w: f32,
-    w: f32,
+    _w: f32,
     character: &mut Character,
 ) {
 
@@ -192,7 +189,6 @@ fn render_custom(
             let _dec_guard = (!state.can_dec[i]).then(|| ui.begin_disabled(true));
             //if ui.button(format!("-##dec_{}", stringify!(special))) {
             if ui.button(format!("-##dec_{}", i)) {
-                println!("decreasing {}", special);
                 character.special.mut_special_block()[i].value -= 1;
                 //state.values[i] -= 1;
                 state.update(character)
@@ -208,7 +204,6 @@ fn render_custom(
             let _inc_guard = (!state.can_inc[i]).then(|| ui.begin_disabled(true));
             //if ui.button(format!("+##inc_{}", stringify!(special))) {
             if ui.button(format!("+##inc_{}", i)) {
-                println!("increasing {}", special);
                 character.special.mut_special_block()[i].value += 1;
                 //state.values[i] += 1;
                 state.update(character)
@@ -234,7 +229,7 @@ fn render_custom(
         let mutant = if mutant_stat && character.is_mutant() { 2 } else { 0 };
         let mod_val = if spec.gifted { 1 } else { 0 } + mutant + spec.trained;
         let mod_state = mod_val > 0;
-        render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + w);
+        render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + 900.0);
 
         if display >= max {
             ui.same_line();
@@ -248,11 +243,10 @@ fn render_preset(
     ui: &Ui,
     state: &mut SpecialState,
     label_w: f32,
-    w: f32,
-    val_w: f32,
+    _w: f32,
+    _val_w: f32,
     character: &mut Character,
 ) {
-    //println!("preset render");
     let preset_values = match state.selected_array.values() {
         Some(v) => v,
         None => return,
@@ -266,10 +260,11 @@ fn render_preset(
 
     ui.text("Available:");
     ui.same_line();
-    let mut sorted = preset_values;
-    sorted.sort_unstable_by(|a,b| b.cmp(a));
+    //let mut sorted = preset_values;
+    //sorted.sort_unstable_by(|a,b| b.cmp(a));
     let mut leftover: HashMap<i32,usize> = HashMap::new();
-    for &v in sorted.iter() {
+    //for &v in sorted.iter() {
+    for &v in preset_values.iter() {
         let used_count = assigned_values.iter().filter(|&&x| x == v).count();
         let total_count = preset_values.iter().filter(|&&x| x == v).count();
         let remaining = total_count - used_count;
@@ -277,10 +272,29 @@ fn render_preset(
             leftover.insert(v, remaining);
         }
     }
+    let mut instance = 0;
+    let debug_color: [[f32; 4]; 8] = [
+        [1.0, 0.0, 0.0, 1.0], //red
+        [1.0, 0.5, 0.0, 1.0], //orange
+        [1.0, 1.0, 0.0, 1.0], //yellow
+        [0.0, 1.0, 0.0, 1.0], //green
+        [0.0, 1.0, 1.0, 1.0], //cyan
+        [0.0, 0.5, 1.0, 1.0], //blue
+        [0.5, 0.0, 1.0, 1.0], //purple
+        [1.0, 0.0, 1.0, 1.0]  //magenta
+    ];
+    let draw_list = ui.get_window_draw_list();
+    draw_list.add_line(ui.cursor_screen_pos(), [ui.cursor_screen_pos()[0], ui.cursor_screen_pos()[1] + 16.0], debug_color[instance]).build();
     for (val, num) in leftover {
-        for i in 0..num {
+        for _ in 0..num {
             ui.same_line();
-            render_text_wrapped(false, true, ui, &format!("[{}]", val), label_w, w);
+            instance += 1;
+            let wrap = 28.0 * (instance as f32);
+            let label_wrap = label_w + wrap;
+            draw_list.add_line(ui.cursor_screen_pos(), [ui.cursor_screen_pos()[0], ui.cursor_screen_pos()[1] + 16.0], debug_color[instance]).build();
+            render_text_wrapped(false, true, ui, &format!("[{}]", val), label_w, label_wrap);
+            //eprintln!("{} - ({}) {}", instance, label_w, wrap);
+            //eprintln!("{}",wrap);
         }
     }
 
@@ -363,7 +377,7 @@ fn render_preset(
 
         if assigned.is_some() {
             let mod_state = mod_val > 0;
-            render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + w);
+            render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + 900.0);
         } else {
             ui.text_disabled(" -> ?");
         }
