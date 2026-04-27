@@ -34,6 +34,7 @@ impl OriginState {
         }
     }
     pub fn is_complete(&self) -> bool {//do we need to be checking the character to make sure that's good to go too?
+        log_on_change!((self.selected,self.trait_count,self.origin_trait_count));
         self.selected && (self.trait_count == self.origin_trait_count)
     }
     fn update_origin(&mut self, character: &mut Character) {
@@ -130,7 +131,7 @@ impl OriginState {
         //the character's origin has options, so clear out the character's traits and indicate that they've selected 0 out of a max of 2
         } else {
             character.traits = vec![];
-            self.trait_count = 0;
+            self.trait_count = character.traits.len() as i32;
             self.origin_trait_count = 2;
             self.traits = traits;
         }
@@ -270,6 +271,7 @@ fn load_traits(db: &Db, origin_id: i32, state: &mut OriginState) -> Vec<TraitRow
         });
     
     state.origin_trait_count = result.iter().count().min(2) as i32;
+    log_on_change!(state.origin_trait_count);
     match result {
         Ok(rows) => rows.into_iter().map(|r| TraitRow {
             id: r.id as i32,
@@ -297,7 +299,7 @@ fn load_ghoul_traits(db: &Db, state: &mut OriginState) -> Vec<TraitRow> {
             ).fetch_all(&db.pool).await
         });
     
-    state.origin_trait_count = 1;
+    //state.origin_trait_count = 1;
     match result {
         Ok(rows) => rows.into_iter().map(|r| TraitRow {
             id: r.id as i32,
@@ -456,11 +458,7 @@ pub fn render_origin_select(
             ui.text_disabled("Choose up to 2:");
             ui.spacing();
 
-            log_on_change!(state.traits);
-
             for (ti, t) in state.traits.iter().enumerate() {
-                //log_on_change!(ti);
-                //log_on_change!(t);
                 let mut checked = character.has_trait(t.id);
                 let at_limit = !checked && selected_count >= 2;
                 let y = ui.cursor_pos()[1];
@@ -491,6 +489,7 @@ pub fn render_origin_select(
                                 };
                             }
                         }
+                        state.trait_count = character.traits.len() as i32;
                         state.update_trait(character);
                     }
                 }

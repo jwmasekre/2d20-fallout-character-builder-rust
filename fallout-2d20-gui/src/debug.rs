@@ -9,6 +9,7 @@ macro_rules! log_on_change {
         LAST.with(|last| {
             let mut last = last.borrow_mut();
             if last.as_deref() != Some(&current) {
+                println!("\x1b[96m---------------------------\x1b[0m");
                 println!("[{}:{}] {} = {}", file!(), line!(), stringify!($val), current);
                 *last = Some(current);
             }
