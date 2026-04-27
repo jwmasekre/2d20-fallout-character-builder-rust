@@ -3,7 +3,6 @@ use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
 use crate::theme::{render_text_wrapped, render_window};
-use crate::log_on_change;
 
 #[derive(Debug)]
 pub struct OriginState {
@@ -15,7 +14,7 @@ pub struct OriginState {
     origin_label_to_index: Vec<Option<usize>>,
     origins: Vec<OriginRow>,
     traits: Vec<TraitRow>,
-    ghoul_trait: Option<TraitRow>,
+    _ghoul_trait: Option<TraitRow>,
 }
 impl OriginState {
     pub fn new(db: &Db) -> Self {
@@ -25,16 +24,15 @@ impl OriginState {
             selected: false,
             trait_count: 0,
             origin_trait_count: 0,
-            origin_index: 0,
+            origin_index: usize::MAX,
             origin_labels: labels,
             origin_label_to_index: label_map,
             origins,
             traits: vec![],
-            ghoul_trait: None,
+            _ghoul_trait: None,
         }
     }
     pub fn is_complete(&self) -> bool {//do we need to be checking the character to make sure that's good to go too?
-        log_on_change!((self.selected,self.trait_count,self.origin_trait_count));
         self.selected && (self.trait_count == self.origin_trait_count)
     }
     fn update_origin(&mut self, character: &mut Character) {
@@ -204,7 +202,7 @@ pub struct OriginRow {
 #[derive(Debug, Clone)]
 pub struct TraitRow {
     pub id: i32,
-    pub origin_id: i32,
+    pub _origin_id: i32,
     pub name: String,
     pub description: String,
     pub is_ghoul_trait: bool,
@@ -271,11 +269,10 @@ fn load_traits(db: &Db, origin_id: i32, state: &mut OriginState) -> Vec<TraitRow
         });
     
     state.origin_trait_count = result.iter().count().min(2) as i32;
-    log_on_change!(state.origin_trait_count);
     match result {
         Ok(rows) => rows.into_iter().map(|r| TraitRow {
             id: r.id as i32,
-            origin_id: r.origin_id.unwrap_or_default() as i32,
+            _origin_id: r.origin_id.unwrap_or_default() as i32,
             name: r.name.unwrap_or_default(),
             description: r.description.unwrap_or_default(),
             is_ghoul_trait: r.is_ghoul_trait.unwrap_or(0) != 0,
@@ -284,7 +281,7 @@ fn load_traits(db: &Db, origin_id: i32, state: &mut OriginState) -> Vec<TraitRow
     }
 }
 
-fn load_ghoul_traits(db: &Db, state: &mut OriginState) -> Vec<TraitRow> {
+fn load_ghoul_traits(db: &Db, _state: &mut OriginState) -> Vec<TraitRow> {
     let result =
         db.block_on(async {
             sqlx::query!(
@@ -303,7 +300,7 @@ fn load_ghoul_traits(db: &Db, state: &mut OriginState) -> Vec<TraitRow> {
     match result {
         Ok(rows) => rows.into_iter().map(|r| TraitRow {
             id: r.id as i32,
-            origin_id: r.origin_id.unwrap_or_default() as i32,
+            _origin_id: r.origin_id.unwrap_or_default() as i32,
             name: r.name.unwrap_or_default(),
             description: r.description.unwrap_or_default(),
             is_ghoul_trait: r.is_ghoul_trait.unwrap_or(0) != 0,
@@ -361,12 +358,12 @@ pub fn render_origin_select(
     let current_index = state.origin_label_to_index
         .iter()
         .position(|m| *m == Some(state.origin_index))
-        .unwrap_or(0);
+        .unwrap_or(usize::MAX);
 
     let current_label = state.origin_labels
         .get(current_index)
         .map(|s| s.trim())
-        .unwrap_or("-")
+        .unwrap_or("Select an Origin")
         .to_string();
 
     //origin

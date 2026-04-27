@@ -170,10 +170,12 @@ fn main() -> Result<()> {
 
     //initializing all the states on first load as None
     let mut show_about = false;
-    let mut player = Player::new();
+    //let mut player = Player::new();
+    let player = Player::new();
     //let mut party = Party::new();
     let mut character = Character::new(player, None);
-    let mut party: Option<Party> = None;
+    //let mut party: Option<Party> = None;
+    let _party: Option<Party> = None;
     let mut origin = OriginState::new(&db);
     let mut special = SpecialState::new();
     let mut skill = SkillState::new(character.clone());
@@ -353,7 +355,7 @@ fn main() -> Result<()> {
             let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
 
             //center the about window when it's opened or the button is clicked again (not every frame)
-            let condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
+            let _condition = if ui.is_mouse_released(imgui::MouseButton::Left) {
                 imgui::Condition::Appearing
             } else {
                 imgui::Condition::Appearing
@@ -409,7 +411,7 @@ fn main() -> Result<()> {
                 });
         }
 
-        let content_h: f32 = match screen {
+        let _content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
                 render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
                 0.0
@@ -480,7 +482,6 @@ fn main() -> Result<()> {
                 render_placeholder(&ui, &window, "import", &mut screen);
                 0.0
             }
-            _ => 0.0,
         };
 
         if is_builder_screen {
