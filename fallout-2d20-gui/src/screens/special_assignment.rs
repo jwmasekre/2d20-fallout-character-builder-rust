@@ -95,7 +95,10 @@ impl SpecialState {
     }
     pub fn is_complete(&self, character: &Character) -> bool {
         (if self.gifted { self.gifted_count == 2 } else { self.gifted_count == 0 }) &&
-            self.trained == self.trained_count && self.total == 40 + self.trained_count + self.gifted_count + if character.is_mutant() { 4 } else { 0 }
+            self.trained == self.trained_count && self.total == 40 + self.trained_count + self.gifted_count + if character.is_mutant() { 4 } else { 0 } &&
+            ( self.selected_array == SpecialArray::Custom ||
+                !self.assignments.iter().any(|a| a.is_none())
+            )
     }
     pub fn remaining_points(&self, character: &Character) -> i32 {
         40 + if self.gifted { 2 } else { 0 } + self.trained + if character.is_mutant() { 4 } else { 0 } - self.total
@@ -129,8 +132,6 @@ pub fn render_special_assignment(
         ] {
             let selected = state.selected_array == array;
             if ui.selectable_config(array.label()).selected(selected).build() {
-                log_on_change!(array);
-                log_on_change!(state);
                 state.selected_array = array;
                 //clear assignments if we changed arrays
                 state.assignments = [None; 7];
@@ -323,6 +324,8 @@ fn render_preset(
         if let Some(_cb) = ui.begin_combo(format!("##assign_{}", i), &combo_label) {
             if ui.selectable_config("--").selected(assigned.is_none()).build() {
                 state.assignments[i] = None;
+                state.update(character);
+                log_on_change!(state.assignments);
             }
             let mut offered: Vec<i32> = preset_values.to_vec();
             offered.sort_unstable_by(|a,b| b.cmp(a));
