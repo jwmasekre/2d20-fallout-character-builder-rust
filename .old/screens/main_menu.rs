@@ -43,7 +43,7 @@ pub fn render_main_menu(
                 if ui.is_key_pressed_no_repeat(imgui::Key::UpArrow) {
                     *selected = (*selected - 1).max(0);
                 }
-                if ui.is_key_pressed_no_repeat(imgui::Key::Enter) || ui.is_key_pressed(imgui::Key::Space) {
+                if ui.is_key_pressed_no_repeat(imgui::Key::Enter) || ui.is_key_pressed_no_repeat(imgui::Key::Space) {
                     handle_selection(*selected, screen);
                 }
             }

@@ -49,7 +49,7 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
     (AppScreen::CharacterReview, "Review"),
 ];
 
-const VERSION: &str = "0.1.9-alpha.1";
+const VERSION: &str = "0.1.9-alpha.1e (EXPERIMENTAL)";
 const DATE: &str = "20260409";
 
 pub fn screen_unlocked(
@@ -422,6 +422,7 @@ fn main() -> Result<()> {
                 render_special_assignment(&ui, &window, state, &db, &mut character)
             }
 /*--------*/AppScreen::SkillAssignment => {
+                skill = SkillState::new(character.clone());
                 let state = &mut skill;
                 render_skill_assignment(&ui, &window, state, &db, &mut character)
             }
@@ -483,15 +484,17 @@ fn main() -> Result<()> {
         if is_builder_screen {
             //footer on the bottom
             let (_, win_h) = window.size();
+            let footer_h: f32 = 48.0;
             ui.window("##nav_footer")
                 .title_bar(false)
                 .resizable(false)
                 .movable(false)
                 .no_decoration()
-                .size([win_w as f32, 48.0], imgui::Condition::Always)
-                .position([0.0, win_h as f32 - 48.0], imgui::Condition::Always)
+                .size([win_w as f32, footer_h], imgui::Condition::Always)
+                .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
-                    render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                    //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
                 });
         }
 
