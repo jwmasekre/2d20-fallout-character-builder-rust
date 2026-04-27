@@ -46,7 +46,7 @@ pub const SPECIAL_LABELS: [&str; 7] = ["Strength", "Perception", "Endurance", "C
 pub struct SpecialState {
     selected_array: SpecialArray,
     assignments: [Option<i32>; 7],
-    //values: [i32; 7],
+    values: [i32; 7],
     can_inc: [bool; 7],
     can_dec: [bool; 7],
     gifted: bool,
@@ -61,7 +61,7 @@ impl SpecialState {
         Self {
             selected_array: SpecialArray::None,
             assignments: [None; 7],
-            //values: [5; 7],
+            values: [5; 7],
             can_inc: [true; 7],
             can_dec: [true; 7],
             gifted: false,
@@ -88,8 +88,9 @@ impl SpecialState {
         //check how many times intense training has been applied
         self.trained_count = character.special.special_block().iter().map(|s| s.trained).sum();
         for (i, spec) in character.special.special_block().iter().enumerate() {
+            let mut_stat = i == 0 || i == 2;
             self.can_inc[i] = spec.value < spec.max && self.remaining_points(character) > 0;
-            self.can_dec[i] = spec.value > 4;
+            self.can_dec[i] = spec.value > 4 + if character.is_mutant() && mut_stat { 2 } else { 0 };
         }
         //log_on_change!(self);
     }
@@ -191,14 +192,14 @@ fn render_custom(
             //if ui.button(format!("-##dec_{}", stringify!(special))) {
             if ui.button(format!("-##dec_{}", i)) {
                 character.special.mut_special_block()[i].value -= 1;
-                //state.values[i] -= 1;
+                state.values[i] -= 1;
                 state.update(character)
             }
         }
         ui.same_line();
 
         ui.set_next_item_width(val_w);
-        ui.text(format!("{:2}", character.special.special_block()[i].value));
+        ui.text(format!("{:2}", state.values[i]));
         ui.same_line();
 
         {
@@ -206,7 +207,7 @@ fn render_custom(
             //if ui.button(format!("+##inc_{}", stringify!(special))) {
             if ui.button(format!("+##inc_{}", i)) {
                 character.special.mut_special_block()[i].value += 1;
-                //state.values[i] += 1;
+                state.values[i] += 1;
                 state.update(character)
             }
         }
