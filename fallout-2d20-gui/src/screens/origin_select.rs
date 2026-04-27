@@ -470,11 +470,26 @@ pub fn render_origin_select(
                     let _lim_guard = at_limit.then(|| ui.begin_disabled(true));
                     ui.checkbox(&format!("##trait_{}", ti), &mut checked);
                 } else {
+                    let mut checked = character.has_trait(t.id);
                     if ui.checkbox(&format!("##trait_{}", ti), &mut checked) {
                         //this may not work properly, it's behaving really weird with the .iter().any() vs the old way
                         let test = &mut character.has_trait(t.id);
-                        if *test {
-                            *test = checked;
+                        if checked != *test {
+                            if checked {
+                                let ct = Trait {
+                                    id: t.id,
+                                    name: t.name.clone(),
+                                    desc: t.description.clone(),
+                                };
+                                character.traits.push(ct);
+                            } else {
+                                for i in 0..character.traits.len() {
+                                    if character.traits[i].id == t.id {
+                                        character.traits.remove(i);
+                                        break
+                                    }
+                                };
+                            }
                         }
                         state.update_trait(character);
                     }
