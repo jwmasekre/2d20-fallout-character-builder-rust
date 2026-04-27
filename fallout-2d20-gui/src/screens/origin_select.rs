@@ -97,8 +97,8 @@ impl OriginState {
         //if the player selected the ghoul origin, mark the character as a ghoul
         if traits[0].is_ghoul_trait {
             character.ghoul = true;
-        //if the player selected an origin that can't ghoul, mark them as not a ghoul
-        } else if !self.origins[origin_id as usize].can_ghoul {
+        //if the player selected an origin that can't ghoul, mark them as not a ghoul (db is 1-indexed, vec is 0-indexed)
+        } else if !self.origins[(origin_id - 1) as usize].can_ghoul {
             character.ghoul = false;
         }
         //if the character is a ghoul, set their trait to the ghoul trait and don't run any other trait logic
