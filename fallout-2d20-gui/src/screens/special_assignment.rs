@@ -224,6 +224,12 @@ fn render_custom(
                 state.update(character);
             }
             ui.same_line();
+        } else {
+            //clear gifted state on the character
+            if character.special.mut_special_block()[i].gifted {
+                character.special.mut_special_block()[i].gifted = false;
+                character.special.mut_special_block()[i].value -= 1;
+            }
         }
         let spec = character.special.special_block()[i].clone();
         let display = spec.value;
@@ -376,6 +382,12 @@ fn render_preset(
                 }
             }
             ui.same_line();
+        } else {
+            //clear gifted state on the character
+            if character.special.mut_special_block()[i].gifted {
+                character.special.mut_special_block()[i].gifted = false;
+                character.special.mut_special_block()[i].value -= 1;
+            }
         }
         let display = character.special.special_block()[i].value;
         let mod_val = display - assigned.unwrap_or(0);
