@@ -446,8 +446,9 @@ pub fn render_origin_select(
         } else {
             //list all the traits with checkboxes, maximum of two
             let selected_count = character.traits.len();
-            let y = ui.cursor_pos()[1];
-            ui.set_cursor_pos([label_w, y]);
+            //let y = ui.cursor_pos()[1];
+            //ui.set_cursor_pos([label_w, y]);
+            ui.same_line_with_pos(label_w);
             ui.text_disabled("Choose up to 2:");
             ui.spacing();
 
