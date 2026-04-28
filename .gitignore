@@ -2,4 +2,5 @@
 /target
 /.resources/db_loaders_bak
 /.resources/db_schema.sql
+/.resources/fonts
 /fallout-2d20-gui/usr_config.toml

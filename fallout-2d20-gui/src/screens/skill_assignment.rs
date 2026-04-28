@@ -26,7 +26,7 @@ pub struct SkillState {
     pub extra_tags: Vec<usize>,
     pub extra_trait_count: i32,
     pub forced_trait: bool,
-    pub assigned_points: [i32; 17],
+    pub assigned_points: i32,
     pub available_points: i32,
     pub max_assignable: i32,
     pub total_points: i32,
@@ -48,14 +48,17 @@ impl SkillState {
         } else { vec![] };
         let extra_trait_count = if character.has_any_trait(vec![1, 2, 5, 11, 12, 21, 24]) { 1 } else if character.has_trait(13) { 2 } else { 0 };
         let forced_trait = character.has_trait(2);
+        let assigned_points = character.total_skill_ranks();
+        let max_assignable = 9 + character.special.intelligence.value + character.level - 1;
+        let available_points = max_assignable - assigned_points;
         Self {
             extra_trait_options,
             extra_tags: vec![],
             extra_trait_count,
             forced_trait,
-            assigned_points: [0; 17],
-            available_points: 9 + character.special.intelligence.value + character.level - 1,
-            max_assignable: 9 + character.special.intelligence.value + character.level - 1,
+            assigned_points,
+            available_points,
+            max_assignable,
             total_points,
         }
     }
@@ -79,11 +82,12 @@ pub fn render_skill_assignment(
     ui.spacing();
 
     let remaining = state.available_points;
+    log_on_change!(remaining);
     //probably want to do checks related to this
     let tags_standard = character.skills.standard_tags();
     let tags_traits = character.skills.trait_tags();
     let _tags_perks = character.skills.perk_tags();
-    let total: i32 = state.assigned_points.iter().sum();
+    let total = state.assigned_points;
 
     if remaining < 0 {
         render_text_wrapped(true, false, ui, &format!("Skill Points: {}/{} ({})", total, state.max_assignable, remaining), 0.0, w);
@@ -96,7 +100,6 @@ pub fn render_skill_assignment(
     ui.spacing();
 
     if state.extra_trait_options.len() > 0 {
-        log_on_change!(state.extra_trait_options);
         let plural = if state.extra_trait_count == 1 {""} else {"s"};
         ui.text(format!(
             "Extra Tag Skill{} ({}/{}): select skill{}", plural, tags_traits, state.extra_trait_count, plural
@@ -115,6 +118,10 @@ pub fn render_skill_assignment(
             //only treat tag skills selected via a trait as chosen
             let is_chosen = skill.tagged == TagType::Trait;
             let is_forced = state.forced_trait && i == 14;
+            if is_forced {
+                skill.tagged = TagType::Trait;
+                state.extra_tags.push(i);
+            }
             let is_other = skill.tagged == TagType::Perk || skill.tagged == TagType::Standard;
             {
                 let _g = (is_forced || is_other).then(|| ui.begin_disabled(true));
@@ -138,6 +145,13 @@ pub fn render_skill_assignment(
         ui.spacing();
         ui.separator();
         ui.spacing();
+    } else {
+        //clearing out any trait tags, considering there shouldn't be any
+        for skill in character.skills.mut_skill_block().iter_mut() {
+            if skill.tagged == TagType::Trait {
+                skill.tagged = TagType::Standard;
+            }
+        }
     }
     ui.text("Tag Skills and Points:");
     ui.spacing();
@@ -149,7 +163,7 @@ pub fn render_skill_assignment(
 
     ui.text_disabled("Skill");
     ui.same_line_with_pos(col_ranks);
-    ui.text_disabled("Ranks");
+    ui.text_disabled(" Ranks");
     ui.same_line_with_pos(col_tag);
     ui.text_disabled("Tag");
     ui.same_line_with_pos(col_total);
@@ -203,7 +217,6 @@ pub fn render_skill_assignment(
         let is_std_tagged = skill.tagged == TagType::Standard;
         //let is_extra_tagged = state.extra_tags.iter().any(|s| *s == i);
         let tag_disabled = is_forbidden || is_extra_tagged || is_forced || ((at_tag_limit || tag_overflow) && !is_std_tagged);
-        //log_on_change!((tag_overflow, is_forced, is_forbidden, is_extra_tagged));
         {
             let _tg = tag_disabled.then(|| ui.begin_disabled(true));
             let mut tag_val = tagged;
@@ -211,18 +224,19 @@ pub fn render_skill_assignment(
                 if !is_forced && !is_extra_tagged {
                     skill.tagged = if tag_val { TagType::Standard } else { TagType::None }
                 }
+                skill.update();
             }
         }
 
         ui.same_line_with_pos(col_total);
-        if tagged {
-            render_text_wrapped(false, true, ui, &format!("{}", total), 0.0, w)
+        if !tagged {
+            ui.text_disabled(&format!("{:3}", total));
         } else {
-            ui.text(format!("{}", total));
+            ui.text(&format!("{:3}", total));
         }
 
         ui.same_line_with_pos(col_max);
-        ui.text_disabled(format!("{}", max));
+        ui.text_disabled(format!("{:2}", max));
 
         if is_forbidden {
             ui.same_line();

@@ -99,6 +99,9 @@ impl Character {
     pub fn total_skill(&self) -> i32 {
         self.skills.skill_block().iter().map(|s| s.total).sum()
     }
+    pub fn total_skill_ranks(&self) -> i32 {
+        self.skills.skill_block().iter().map(|s| s.ranks).sum()
+    }
     pub fn has_trait(&self, id: i32) -> bool {
         self.traits.iter().any(|t| t.id == id)
     }
