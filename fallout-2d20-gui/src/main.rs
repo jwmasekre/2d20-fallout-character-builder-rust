@@ -426,7 +426,7 @@ fn main() -> Result<()> {
                 render_special_assignment(&ui, &window, state, &db, &mut character)
             }
 /*--------*/AppScreen::SkillAssignment => {
-                skill = SkillState::new(character.clone());
+                skill.update(&character);
                 let state = &mut skill;
                 render_skill_assignment(&ui, &window, state, &db, &mut character)
             }
