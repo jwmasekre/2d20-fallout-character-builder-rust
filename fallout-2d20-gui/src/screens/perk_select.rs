@@ -198,11 +198,13 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
 }
 
 //perks that need to be resolved
+/*
 const PERK_INTENSE_TRAINING: i32 = 45;
 const PERK_SKILLED: i32 = 83;
 const PERK_TAG: i32 = 92;
 const PERK_BW_LK: i32 = 12;
 const PERK_MM_CF: i32 = 110;
+*/
 
 #[derive(PartialEq, Clone)]
 pub enum BwLk {
@@ -267,8 +269,8 @@ pub fn render_perk_select(
     ui: &Ui,
     window: &Window,
     state: &mut PerkState,
-    screen: &mut AppScreen,
-    db: &Db,
+    _screen: &mut AppScreen,
+    _db: &Db,
     character: &mut Character,
     resolving: bool,
 ) -> f32 {
@@ -539,7 +541,7 @@ pub fn render_perk_resolution(
             let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Preference --".to_string());
 
             if let Some(_cb) = ui.begin_combo("##bwlk_choice", preview) {
-                for (i, option) in [BwLk::BlackWidow,BwLk::LadyKiller].iter().enumerate() {
+                for option in [BwLk::BlackWidow,BwLk::LadyKiller].iter() {
                     let sel = *version == Some(option.clone());
                     if ui.selectable_config(option.to_perk_string())
                         .selected(sel)
@@ -551,7 +553,7 @@ pub fn render_perk_resolution(
             }
         }
         PerkResolution::IntenseTraining { selected_stat } => {
-            let (res,inc) = state.pending_resolution.unwrap();
+            let (_,inc) = state.pending_resolution.unwrap();
             if inc {
                 ui.text("Increase one SPECIAL by 1:");
                 ui.spacing();
@@ -622,7 +624,7 @@ pub fn render_perk_resolution(
             }
         }
         PerkResolution::Skilled { skill_a, skill_b } => {
-            let (res,inc) = state.pending_resolution.unwrap();
+            let (_,inc) = state.pending_resolution.unwrap();
             if inc {
                 ui.text("Select two skills to increase:");
                 ui.text_disabled("The same skill can be selected twice");
@@ -632,26 +634,10 @@ pub fn render_perk_resolution(
                 ui.set_next_item_width(200.0);
                 let preview_a = skill_a.map(|i| SKILLS[i]).unwrap_or("-- Select --");
                 let preview_b = skill_b.map(|i| SKILLS[i]).unwrap_or("-- Select --");
-                
-                let at_max: [(bool, bool); 17] = [
-                    (character.skills.athletics.max <= character.skills.athletics.total,character.skills.athletics.max <= character.skills.athletics.total+1),
-                    (character.skills.barter.max <= character.skills.barter.total,character.skills.barter.max <= character.skills.barter.total+1),
-                    (character.skills.big_guns.max <= character.skills.big_guns.total,character.skills.big_guns.max <= character.skills.big_guns.total+1),
-                    (character.skills.energy_weapons.max <= character.skills.energy_weapons.total,character.skills.energy_weapons.max <= character.skills.energy_weapons.total+1),
-                    (character.skills.explosives.max <= character.skills.explosives.total,character.skills.explosives.max <= character.skills.explosives.total+1),
-                    (character.skills.lockpick.max <= character.skills.lockpick.total,character.skills.lockpick.max <= character.skills.lockpick.total+1),
-                    (character.skills.medicine.max <= character.skills.medicine.total,character.skills.medicine.max <= character.skills.medicine.total+1),
-                    (character.skills.melee_weapons.max <= character.skills.melee_weapons.total,character.skills.melee_weapons.max <= character.skills.melee_weapons.total+1),
-                    (character.skills.pilot.max <= character.skills.pilot.total,character.skills.pilot.max <= character.skills.pilot.total+1),
-                    (character.skills.repair.max <= character.skills.repair.total,character.skills.repair.max <= character.skills.repair.total+1),
-                    (character.skills.science.max <= character.skills.science.total,character.skills.science.max <= character.skills.science.total+1),
-                    (character.skills.small_guns.max <= character.skills.small_guns.total,character.skills.small_guns.max <= character.skills.small_guns.total+1),
-                    (character.skills.sneak.max <= character.skills.sneak.total,character.skills.sneak.max <= character.skills.sneak.total+1),
-                    (character.skills.speech.max <= character.skills.speech.total,character.skills.speech.max <= character.skills.speech.total+1),
-                    (character.skills.survival.max <= character.skills.survival.total,character.skills.survival.max <= character.skills.survival.total+1),
-                    (character.skills.throwing.max <= character.skills.throwing.total,character.skills.throwing.max <= character.skills.throwing.total+1),
-                    (character.skills.unarmed.max <= character.skills.unarmed.total,character.skills.unarmed.max <= character.skills.unarmed.total+1),
-                ];
+                let mut at_max = [(false, false); 17];
+                for (i, skill) in character.skills.skill_block().iter().enumerate() {
+                    at_max[i] = (skill.max <= skill.total, skill.max <= skill.total+1)
+                }
                 if let Some(_cb) = ui.begin_combo("##sk_a", preview_a) {
                     for i in 0..17 {
                         let (at, exceed) = at_max[i];
@@ -714,7 +700,7 @@ pub fn render_perk_resolution(
             }
         }
         PerkResolution::Tag { selected_skill } => {
-            let (res,inc) = state.pending_resolution.unwrap();
+            let (_,inc) = state.pending_resolution.unwrap();
             if inc {
                 ui.text("Tag an additional skill:");
                 ui.spacing();
@@ -724,25 +710,10 @@ pub fn render_perk_resolution(
                     .map(|i| SKILLS[i])
                     .unwrap_or("-- Select skill --");
                 let options = character.skills.available_tags(character);
-                let exceeds: [bool; 17] = [
-                    character.skills.athletics.max <= character.skills.athletics.total+1,
-                    character.skills.barter.max <= character.skills.barter.total+1,
-                    character.skills.big_guns.max <= character.skills.big_guns.total+1,
-                    character.skills.energy_weapons.max <= character.skills.energy_weapons.total+1,
-                    character.skills.explosives.max <= character.skills.explosives.total+1,
-                    character.skills.lockpick.max <= character.skills.lockpick.total+1,
-                    character.skills.medicine.max <= character.skills.medicine.total+1,
-                    character.skills.melee_weapons.max <= character.skills.melee_weapons.total+1,
-                    character.skills.pilot.max <= character.skills.pilot.total+1,
-                    character.skills.repair.max <= character.skills.repair.total+1,
-                    character.skills.science.max <= character.skills.science.total+1,
-                    character.skills.small_guns.max <= character.skills.small_guns.total+1,
-                    character.skills.sneak.max <= character.skills.sneak.total+1,
-                    character.skills.speech.max <= character.skills.speech.total+1,
-                    character.skills.survival.max <= character.skills.survival.total+1,
-                    character.skills.throwing.max <= character.skills.throwing.total+1,
-                    character.skills.unarmed.max <= character.skills.unarmed.total+1,
-                ];
+                let mut exceeds = [false; 17];
+                for (i, skill) in character.skills.skill_block().iter().enumerate() {
+                    exceeds[i] = skill.max <= skill.total + 1;
+                }
 
                 if let Some(_cb) = ui.begin_combo("##tag_skill", preview) {
                     for i in 0..options.len() {
@@ -788,7 +759,7 @@ pub fn render_perk_resolution(
             let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Type --".to_string());
 
             if let Some(_cb) = ui.begin_combo("##mmcf_choice", preview) {
-                for (i, option) in [MmCf::MechanicalMenace, MmCf::ClassFreak].iter().enumerate() {
+                for option in [MmCf::MechanicalMenace, MmCf::ClassFreak].iter() {
                     let sel = *version == Some(option.clone());
                     if ui.selectable_config(option.to_perk_string())
                         .selected(sel)
@@ -831,7 +802,7 @@ fn apply_resolution(
             if let Some(perk) = character.perks.iter_mut().find(|p| p.id == popup.perk_id) {perk.name = version.clone().unwrap().to_perk_string().to_string();}
         }
         PerkResolution::IntenseTraining { selected_stat } => {
-            let (res,inc) = state.pending_resolution.unwrap();
+            let (_,inc) = state.pending_resolution.unwrap();
             let dir = if inc { 1 } else { -1 };
             match selected_stat.unwrap() {
                 0 => {character.special.strength.value += dir; character.special.strength.trained += dir},
@@ -845,7 +816,7 @@ fn apply_resolution(
             }
         }
         PerkResolution::Skilled { skill_a, skill_b } => {
-            let (res,inc) = state.pending_resolution.unwrap();
+            let (_,inc) = state.pending_resolution.unwrap();
             if inc {
                 let mut skilled_update = [0; 17];
                 if skill_a == skill_b {
@@ -854,189 +825,45 @@ fn apply_resolution(
                     skilled_update[skill_a.unwrap()] = 1;
                     skilled_update[skill_b.unwrap()] = 1;
                 }
-                character.skills.athletics.skilled.push(skilled_update[0]);
-                character.skills.athletics.total += skilled_update[0];
-                character.skills.barter.skilled.push(skilled_update[1]);
-                character.skills.barter.total += skilled_update[1];
-                character.skills.big_guns.skilled.push(skilled_update[2]);
-                character.skills.big_guns.total += skilled_update[2];
-                character.skills.energy_weapons.skilled.push(skilled_update[3]);
-                character.skills.energy_weapons.total += skilled_update[3];
-                character.skills.explosives.skilled.push(skilled_update[4]);
-                character.skills.explosives.total += skilled_update[4];
-                character.skills.lockpick.skilled.push(skilled_update[5]);
-                character.skills.lockpick.total += skilled_update[5];
-                character.skills.medicine.skilled.push(skilled_update[6]);
-                character.skills.medicine.total += skilled_update[6];
-                character.skills.melee_weapons.skilled.push(skilled_update[7]);
-                character.skills.melee_weapons.total += skilled_update[7];
-                character.skills.pilot.skilled.push(skilled_update[8]);
-                character.skills.pilot.total += skilled_update[8];
-                character.skills.repair.skilled.push(skilled_update[9]);
-                character.skills.repair.total += skilled_update[9];
-                character.skills.science.skilled.push(skilled_update[10]);
-                character.skills.science.total += skilled_update[10];
-                character.skills.small_guns.skilled.push(skilled_update[11]);
-                character.skills.small_guns.total += skilled_update[11];
-                character.skills.sneak.skilled.push(skilled_update[12]);
-                character.skills.sneak.total += skilled_update[12];
-                character.skills.speech.skilled.push(skilled_update[13]);
-                character.skills.speech.total += skilled_update[13];
-                character.skills.survival.skilled.push(skilled_update[14]);
-                character.skills.survival.total += skilled_update[14];
-                character.skills.throwing.skilled.push(skilled_update[15]);
-                character.skills.throwing.total += skilled_update[15];
-                character.skills.unarmed.skilled.push(skilled_update[16]);
-                character.skills.unarmed.total += skilled_update[16];
+                let skills = character.skills.mut_skill_block();
+                for i in 0..17 {
+                    skills[i].skilled.push(skilled_update[i]);
+                    skills[i].total += skilled_update[i];
+                }
             } else {
                 if skill_a == skill_b {
-                    let indices: Vec<usize> = match skill_a.unwrap() {
-                        0 => character.skills.athletics.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        1 => character.skills.barter.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        2 => character.skills.big_guns.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        3 => character.skills.energy_weapons.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        4 => character.skills.explosives.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        5 => character.skills.lockpick.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        6 => character.skills.medicine.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        7 => character.skills.melee_weapons.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        8 => character.skills.pilot.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        9 => character.skills.repair.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        10 => character.skills.science.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        11 => character.skills.small_guns.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        12 => character.skills.sneak.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        13 => character.skills.speech.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        14 => character.skills.survival.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        15 => character.skills.throwing.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        16 => character.skills.unarmed.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect(),
-                        _ => {vec![]}
-                    };
-                    character.skills.athletics.skilled.remove(indices[0]);
-                    character.skills.barter.skilled.remove(indices[0]);
-                    character.skills.big_guns.skilled.remove(indices[0]);
-                    character.skills.energy_weapons.skilled.remove(indices[0]);
-                    character.skills.explosives.skilled.remove(indices[0]);
-                    character.skills.lockpick.skilled.remove(indices[0]);
-                    character.skills.medicine.skilled.remove(indices[0]);
-                    character.skills.melee_weapons.skilled.remove(indices[0]);
-                    character.skills.pilot.skilled.remove(indices[0]);
-                    character.skills.repair.skilled.remove(indices[0]);
-                    character.skills.science.skilled.remove(indices[0]);
-                    character.skills.small_guns.skilled.remove(indices[0]);
-                    character.skills.sneak.skilled.remove(indices[0]);
-                    character.skills.speech.skilled.remove(indices[0]);
-                    character.skills.survival.skilled.remove(indices[0]);
-                    character.skills.throwing.skilled.remove(indices[0]);
-                    character.skills.unarmed.skilled.remove(indices[0]);
-                    character.skills.athletics.total -= 2;
-                    character.skills.barter.total -= 2;
-                    character.skills.big_guns.total -= 2;
-                    character.skills.energy_weapons.total -= 2;
-                    character.skills.explosives.total -= 2;
-                    character.skills.lockpick.total -= 2;
-                    character.skills.medicine.total -= 2;
-                    character.skills.melee_weapons.total -= 2;
-                    character.skills.pilot.total -= 2;
-                    character.skills.repair.total -= 2;
-                    character.skills.science.total -= 2;
-                    character.skills.small_guns.total -= 2;
-                    character.skills.sneak.total -= 2;
-                    character.skills.speech.total -= 2;
-                    character.skills.survival.total -= 2;
-                    character.skills.throwing.total -= 2;
-                    character.skills.unarmed.total -= 2;
-                } else {
-                    let mut indices_a = vec![];
-                    let mut indices_b = vec![];
-                    for (i, skill) in [skill_a,skill_b].iter().enumerate() {
-                        let indices: Vec<usize> = match skill.unwrap() {
-                            0 => character.skills.athletics.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            1 => character.skills.barter.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            2 => character.skills.big_guns.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            3 => character.skills.energy_weapons.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            4 => character.skills.explosives.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            5 => character.skills.lockpick.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            6 => character.skills.medicine.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            7 => character.skills.melee_weapons.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            8 => character.skills.pilot.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            9 => character.skills.repair.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            10 => character.skills.science.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            11 => character.skills.small_guns.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            12 => character.skills.sneak.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            13 => character.skills.speech.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            14 => character.skills.survival.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            15 => character.skills.throwing.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            16 => character.skills.unarmed.skilled.iter().enumerate().filter_map(|(i,s)| if *s == 1 {Some(i)} else {None}).collect(),
-                            _ => {vec![]}
-                        };
-                        if i == 0 { indices_a = indices } else { indices_b = indices }
+                    let skills = character.skills.mut_skill_block();
+                    let indices: Vec<usize> = skills[skill_a.unwrap()].skilled.iter().enumerate().filter_map(|(i,s)| if *s == 2 {Some(i)} else {None}).collect();
+                    for i in 0..17 {
+                        skills[i].skilled.remove(indices[0]);
                     }
-                    let mut index: usize = 0;
-                    for i in 0..indices_a.len() {
-                        if indices_a[i] == 1 && indices_b[i] == 1 {
-                            index = i;
-                            break;
+                    skills[skill_a.unwrap()].total -= 2;
+                } else {
+                    let skills = character.skills.mut_skill_block();
+                    let mut indices: Vec<usize> = vec![];
+                    for i in 0..skills[0].skilled.len() {
+                        if skills[skill_a.unwrap()].skilled[i] == 1 &&
+                            skills[skill_b.unwrap()].skilled[i] == 1 {
+                            indices.push(i)
                         }
                     }
-                    character.skills.athletics.skilled.remove(index);
-                    character.skills.barter.skilled.remove(index);
-                    character.skills.big_guns.skilled.remove(index);
-                    character.skills.energy_weapons.skilled.remove(index);
-                    character.skills.explosives.skilled.remove(index);
-                    character.skills.lockpick.skilled.remove(index);
-                    character.skills.medicine.skilled.remove(index);
-                    character.skills.melee_weapons.skilled.remove(index);
-                    character.skills.pilot.skilled.remove(index);
-                    character.skills.repair.skilled.remove(index);
-                    character.skills.science.skilled.remove(index);
-                    character.skills.small_guns.skilled.remove(index);
-                    character.skills.sneak.skilled.remove(index);
-                    character.skills.speech.skilled.remove(index);
-                    character.skills.survival.skilled.remove(index);
-                    character.skills.throwing.skilled.remove(index);
-                    character.skills.unarmed.skilled.remove(index);
-                    character.skills.athletics.total -= 1;
-                    character.skills.barter.total -= 1;
-                    character.skills.big_guns.total -= 1;
-                    character.skills.energy_weapons.total -= 1;
-                    character.skills.explosives.total -= 1;
-                    character.skills.lockpick.total -= 1;
-                    character.skills.medicine.total -= 1;
-                    character.skills.melee_weapons.total -= 1;
-                    character.skills.pilot.total -= 1;
-                    character.skills.repair.total -= 1;
-                    character.skills.science.total -= 1;
-                    character.skills.small_guns.total -= 1;
-                    character.skills.sneak.total -= 1;
-                    character.skills.speech.total -= 1;
-                    character.skills.survival.total -= 1;
-                    character.skills.throwing.total -= 1;
-                    character.skills.unarmed.total -= 1;
+                    for i in 0..17 {
+                        skills[i].skilled.remove(indices[0]);
+                    }
+                    skills[skill_a.unwrap()].total -= 1;
+                    skills[skill_b.unwrap()].total -= 1;
                 }
             }
         }
         PerkResolution::Tag { selected_skill } => {
-            let (res,inc) = state.pending_resolution.unwrap();
-            let dir = if inc { 1 } else { -1 };
-            match selected_skill.unwrap() {
-                0 => {character.skills.athletics.tagged == TagType::Perk; character.skills.athletics.update()},
-                1 => {character.skills.barter.tagged == TagType::Perk; character.skills.barter.update()},
-                2 => {character.skills.big_guns.tagged == TagType::Perk; character.skills.big_guns.update()},
-                3 => {character.skills.energy_weapons.tagged == TagType::Perk; character.skills.energy_weapons.update()},
-                4 => {character.skills.explosives.tagged == TagType::Perk; character.skills.explosives.update()},
-                5 => {character.skills.lockpick.tagged == TagType::Perk; character.skills.lockpick.update()},
-                6 => {character.skills.medicine.tagged == TagType::Perk; character.skills.medicine.update()},
-                7 => {character.skills.melee_weapons.tagged == TagType::Perk; character.skills.melee_weapons.update()},
-                8 => {character.skills.pilot.tagged == TagType::Perk; character.skills.pilot.update()},
-                9 => {character.skills.repair.tagged == TagType::Perk; character.skills.repair.update()},
-                10 => {character.skills.science.tagged == TagType::Perk; character.skills.science.update()},
-                11 => {character.skills.small_guns.tagged == TagType::Perk; character.skills.small_guns.update()},
-                12 => {character.skills.sneak.tagged == TagType::Perk; character.skills.sneak.update()},
-                13 => {character.skills.speech.tagged == TagType::Perk; character.skills.speech.update()},
-                14 => {character.skills.survival.tagged == TagType::Perk; character.skills.survival.update()},
-                15 => {character.skills.throwing.tagged == TagType::Perk; character.skills.throwing.update()},
-                16 => {character.skills.unarmed.tagged == TagType::Perk; character.skills.unarmed.update()},
-                _ => {},
+            let (_,inc) = state.pending_resolution.unwrap();
+            let skills = character.skills.mut_skill_block();
+            if inc {
+                skills[selected_skill.unwrap()].tagged = TagType::Perk;
+            } else {
+                skills[selected_skill.unwrap()].tagged = TagType::None;
             }
+            skills[selected_skill.unwrap()].update();
         }
         PerkResolution::MmCf { version } => {
             if let Some(perk) = character.perks.iter_mut().find(|p| p.id == popup.perk_id) {perk.name = version.clone().unwrap().to_perk_string().to_string();}
