@@ -1,4 +1,3 @@
-use std::iter::repeat;
 use imgui::Ui;
 use sdl2::video::Window;
 use serde_json;
@@ -97,18 +96,20 @@ impl PerkState {
                 if parts.len() != 2 { continue; }
                 let stat: &str = parts[0].trim();
                 let val: i32 = parts[1].trim().parse().unwrap_or(0);
+                let special = character.special.special_block();
                 let meets = match stat {
-                    "strength"     => { character.special.strength.value >= val }
-                    "perception"   => { character.special.strength.value >= val }
-                    "endurance"    => { character.special.strength.value >= val }
-                    "charisma"     => { character.special.strength.value >= val }
-                    "intelligence" => { character.special.strength.value >= val }
-                    "agility"      => { character.special.strength.value >= val }
-                    "luck"         => { character.special.strength.value >= val }
+                    "strength"     => { special[0].value >= val }
+                    "perception"   => { special[1].value >= val }
+                    "endurance"    => { special[2].value >= val }
+                    "charisma"     => { special[3].value >= val }
+                    "intelligence" => { special[4].value >= val }
+                    "agility"      => { special[5].value >= val }
+                    "luck"         => { special[6].value >= val }
                     _ => { true }
                 };
                 if !meets { return false }
             }
+            //can't have read a book at character creation
             if req.trim().to_lowercase() == "book" {
                 return false
             }
@@ -562,16 +563,11 @@ pub fn render_perk_resolution(
                 let preview = selected_stat
                     .map(|i| SPECIAL_LABELS[i])
                     .unwrap_or("-- Select SPECIAL --");
-
-                let at_max: [bool; 7] = [
-                    character.special.strength.max <= character.special.strength.value,
-                    character.special.perception.max <= character.special.perception.value,
-                    character.special.endurance.max <= character.special.endurance.value,
-                    character.special.charisma.max <= character.special.charisma.value,
-                    character.special.intelligence.max <= character.special.intelligence.value,
-                    character.special.agility.max <= character.special.agility.value,
-                    character.special.luck.max <= character.special.luck.value,
-                ];
+                let mut at_max = [false; 7];
+                let special = character.special.special_block();
+                for i in 0..7 {
+                    at_max[i] = special[i].max <= special[i].value;
+                }
 
                 if let Some(_cb) = ui.begin_combo("##it_stat", preview) {
                     for i in 0..7 {
@@ -595,15 +591,14 @@ pub fn render_perk_resolution(
                 ui.text("Select a trained SPECIAL to reduce:");
                 ui.spacing();
                 ui.set_next_item_width(220.0);
+                let special = character.special.special_block();
 
-                let mut options: Vec<usize> = vec![];
-                options.extend(repeat(0).take(character.special.strength.trained.try_into().unwrap()));
-                options.extend(repeat(1).take(character.special.perception.trained.try_into().unwrap()));
-                options.extend(repeat(2).take(character.special.endurance.trained.try_into().unwrap()));
-                options.extend(repeat(3).take(character.special.charisma.trained.try_into().unwrap()));
-                options.extend(repeat(4).take(character.special.intelligence.trained.try_into().unwrap()));
-                options.extend(repeat(5).take(character.special.agility.trained.try_into().unwrap()));
-                options.extend(repeat(6).take(character.special.luck.trained.try_into().unwrap()));
+                let mut options: Vec<(usize,i32)> = vec![];
+                for (i, stat) in special.iter().enumerate() {
+                    if stat.trained > 0 {
+                        options.push((i,stat.trained))
+                    }
+                }
 
                 let preview = selected_stat
                     .map(|i| SPECIAL_LABELS[i])
@@ -611,9 +606,10 @@ pub fn render_perk_resolution(
 
                 if let Some(_cb) = ui.begin_combo("##it_dec", preview) {
                     for i in 0..options.len() {
-                        let sel = *selected_stat == Some(options[i]);
-                        if ui.selectable_config(SPECIAL_LABELS[options[i]]).selected(sel).build() {
-                            *selected_stat = Some(options[i]);
+                        let (index, number) = options[i];
+                        let sel = *selected_stat == Some(index);
+                        if ui.selectable_config(format!("{} ({})", SPECIAL_LABELS[index], number)).selected(sel).build() {
+                            *selected_stat = Some(index);
                         }
                     }
                 }
@@ -804,16 +800,8 @@ fn apply_resolution(
         PerkResolution::IntenseTraining { selected_stat } => {
             let (_,inc) = state.pending_resolution.unwrap();
             let dir = if inc { 1 } else { -1 };
-            match selected_stat.unwrap() {
-                0 => {character.special.strength.value += dir; character.special.strength.trained += dir},
-                1 => {character.special.perception.value += dir; character.special.perception.trained += dir},
-                2 => {character.special.endurance.value += dir; character.special.endurance.trained += dir},
-                3 => {character.special.charisma.value += dir; character.special.charisma.trained += dir},
-                4 => {character.special.intelligence.value += dir; character.special.intelligence.trained += dir},
-                5 => {character.special.agility.value += dir; character.special.agility.trained += dir},
-                6 => {character.special.luck.value += dir; character.special.luck.trained += dir},
-                _ => {},
-            }
+            character.special.mut_special_block()[selected_stat.unwrap()].value += dir;
+            character.special.mut_special_block()[selected_stat.unwrap()].trained += dir;
         }
         PerkResolution::Skilled { skill_a, skill_b } => {
             let (_,inc) = state.pending_resolution.unwrap();
