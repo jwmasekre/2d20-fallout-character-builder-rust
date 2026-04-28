@@ -434,10 +434,16 @@ fn main() -> Result<()> {
                 let state = &mut perk;
                 let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character, perk_resolution.is_some());
                 //resolution popup
-                if let Some((p_id, add)) = state.pending_resolution.take() {
+                if let Some((p_id, add, name)) = state.pending_resolution.take() {
                     let perk = state.perks.iter().find(|p| p.id == p_id).unwrap();
-                    if let Some(popup) = state.begin_resolve(perk, add) {
-                        perk_resolution = Some(popup);
+                    if add {
+                        if let Some(popup) = state.begin_resolve(perk, add, "".to_string()) {
+                            perk_resolution = Some(popup);
+                        }
+                    } else {
+                        if let Some(popup) = state.begin_resolve(perk, add, name) {
+                            perk_resolution = Some(popup);
+                        }
                     }
                 }
                 //render popup

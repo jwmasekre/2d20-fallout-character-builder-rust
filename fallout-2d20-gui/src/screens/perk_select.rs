@@ -16,7 +16,7 @@ pub struct PerkState {
     pub perk_lim: i32,
     pub show_eligible_only: bool,
     pub filters: [bool; 8],
-    pub pending_resolution: Option<(i32, bool)>,
+    pub pending_resolution: Option<(i32, bool, String)>,
 }
 impl PerkState {
     pub fn new(db: &Db, character: &Character) -> Self {
@@ -116,7 +116,7 @@ impl PerkState {
         }
         true
     }
-    pub fn begin_resolve(&self, perk: &PerkRow, add: bool) -> Option<PerkResolutionPopup> {
+    pub fn begin_resolve(&self, perk: &PerkRow, add: bool, name: String) -> Option<PerkResolutionPopup> {
         let resolution = match perk.id {
             12 => Some(PerkResolution::BwLk { version: None }),
             45 => Some(PerkResolution::IntenseTraining { selected_stat: None }),
@@ -125,7 +125,11 @@ impl PerkState {
             110 => Some(PerkResolution::MmCf { version: None }),
             _ => None,
         };
-        resolution.map(|r| PerkResolutionPopup { perk_id: perk.id, perk_name: perk.name.clone(), resolution: r, perk_add: add, open: true })
+        if name == "".to_string() {
+            resolution.map(|r| PerkResolutionPopup { perk_id: perk.id, perk_name: perk.name.clone(), resolution: r, perk_add: add, open: true })
+        } else {
+            resolution.map(|r| PerkResolutionPopup { perk_id: perk.id, perk_name: name, resolution: r, perk_add: add, open: true })
+        }
     }
     fn is_resolution_complete(popup: &PerkResolutionPopup) -> bool {
         match &popup.resolution {
@@ -339,6 +343,7 @@ pub fn render_perk_select(
         let eligible = state.is_eligible(&perk, &character);
         let at_cap = taken >= max;
         let available = remaining <= 0;
+        let adrenaline_rush = id == 3 && character.special.strength.value >= 10;
 
         //create dividers for each sourcebook
         let src = state.perks[perk_index].sourcebook.clone();
@@ -361,8 +366,9 @@ pub fn render_perk_select(
         let rank_color = [0.20, 0.40, 0.50, 0.3_f32];
         let avail_color = [0.10, 0.25, 0.10, 0.2_f32];
         let unav_color = [0.0, 0.0, 0.0, 0.0_f32];
+        let warn_color = [0.35, 0.20, 0.10, 0.3_f32];
 
-        let tint = if at_cap { cap_color } else if eligible && taken > 0 { rank_color } else if eligible { avail_color } else { unav_color };
+        let tint = if at_cap { cap_color } else if adrenaline_rush { warn_color } else if eligible && taken > 0 { rank_color } else if eligible { avail_color } else { unav_color };
         let rect_fill = imgui::ImColor32::from_rgba_f32s(tint[0], tint[1], tint[2], tint[3]);
         if tint[3] > 0.0 {
             draw_list.add_rect_filled_multicolor(
@@ -398,7 +404,7 @@ pub fn render_perk_select(
         //buttons
         ui.same_line_with_pos(col_btns);
         if taken == 0 {
-            let _g = (!eligible || available).then(|| ui.begin_disabled(true));
+            let _g = (!eligible || available || adrenaline_rush).then(|| ui.begin_disabled(true));
             if ui.button(format!("Take##take_{}", id)) {
                 let cperk = Perk {
                     id,
@@ -408,14 +414,19 @@ pub fn render_perk_select(
                     ranks: 1,
                 };
                 character.perks.push(cperk);
+                state.pending_resolution = Some((id, true, perk.name.clone()));
                 state.update(character);
-                state.pending_resolution = Some((id, true));
             }
             drop(_g);
             ui.same_line();
             let _g2 = true.then(|| ui.begin_disabled(true));
             ui.button(format!("Drop##drop_{}", id));
             drop(_g2);
+            if adrenaline_rush {
+                ui.same_line();
+                ui.set_cursor_pos([ui.cursor_pos()[0], ui.cursor_pos()[1] - 7.0]);
+                ui.text_wrapped("This perk will have no effect...");
+            }
         } else if at_cap {
             let _g = true.then(|| ui.begin_disabled(true));
             ui.button(format!("Rank+##rankp_{}", id));
@@ -425,13 +436,13 @@ pub fn render_perk_select(
                 let cperk_len = character.perks.len();
                 for i in 0..cperk_len {
                     if character.perks[i].id == id {
+                        state.pending_resolution = Some((id, false, character.perks[i].name.clone()));
                         if character.perks[i].ranks > 1 {
                             character.perks[i].ranks -= 1;
                         } else {
                             character.perks.remove(i);
                         }
                         state.update(character);
-                        state.pending_resolution = Some((id, false));
                     }
                 }
             }
@@ -443,7 +454,7 @@ pub fn render_perk_select(
                     if character.perks[i].id == id {
                         character.perks[i].ranks += 1;
                         state.update(character);
-                        state.pending_resolution = Some((id, true));
+                        state.pending_resolution = Some((id, true, character.perks[i].name.clone()));
                     }
                 }
             }
@@ -452,13 +463,13 @@ pub fn render_perk_select(
             if ui.button(format!("Drop##drop_{}", id)) {
                 for i in 0..cperk_len {
                     if character.perks[i].id == id {
+                        state.pending_resolution = Some((id, false, character.perks[i].name.clone()));
                         if character.perks[i].ranks > 1 {
                             character.perks[i].ranks -= 1;
                         } else {
                             character.perks.remove(i);
                         }
                         state.update(character);
-                        state.pending_resolution = Some((id, false));
                     }
                 }
             }
@@ -545,8 +556,8 @@ pub fn render_perk_resolution(
                     }
                 }
             } else {
-                let perk_name = character.perks.iter_mut().find(|p| p.id == popup.perk_id).unwrap().name.clone();
-                ui.text(format!("Removing {}", perk_name))
+                ui.text(format!("Removing {}", popup.perk_name));
+                version.replace(BwLk::BlackWidow);
             }
         }
         PerkResolution::IntenseTraining { selected_stat } => {
@@ -767,10 +778,9 @@ pub fn render_perk_resolution(
                         }
                     }
                 }
-
             } else {
-                let perk_name = character.perks.iter_mut().find(|p| p.id == popup.perk_id).unwrap().name.clone();
-                ui.text(format!("Removing {}", perk_name))
+                ui.text(format!("Removing {}", popup.perk_name));
+                version.replace(MmCf::ClassFreak);
             }
         }
     }
