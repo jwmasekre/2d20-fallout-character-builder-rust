@@ -2,7 +2,9 @@ use imgui::Ui;
 use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
+use crate::screens::skill_assignment::SkillState;
 use crate::theme::{render_text_wrapped, render_window};
+//use crate::log_on_change;
 
 #[derive(Debug)]
 pub struct OriginState {
@@ -315,6 +317,7 @@ pub fn render_origin_select(
     state: &mut OriginState,
     db: &Db,
     character: &mut Character,
+    skill_state: &mut SkillState,
 ) -> f32 {
     let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select")
         else { return 0.0 };
@@ -395,7 +398,8 @@ pub fn render_origin_select(
     //when the player selects an origin, update the origin and reload the traits
     if origin_changed {
         state.update_origin(character);
-        state.reload_traits(db, character)
+        state.reload_traits(db, character);
+        skill_state.reset(character);
     }
 
     ui.spacing();
@@ -430,7 +434,10 @@ pub fn render_origin_select(
         ui.spacing();
         ui.text("Trait");
 
-        if ghoul_changed { state.reload_traits(db, character); }
+        if ghoul_changed {
+            state.reload_traits(db, character);
+            skill_state.reset(character);
+        }
 
         //check if we have any traits
         if state.origin_trait_count == 0 {

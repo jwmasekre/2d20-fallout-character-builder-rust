@@ -3,7 +3,7 @@ use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::{Character, TagType};
 use crate::theme::{render_text_wrapped, render_window};
-use crate::log_on_change;
+//use crate::log_on_change;
 
 pub const SKILLS: [&str; 17] = [
     "Athletics", "Barter", "Big Guns", "Energy Weapons", "Explosives",
@@ -11,15 +11,6 @@ pub const SKILLS: [&str; 17] = [
     "Science", "Small Guns", "Sneak", "Speech", "Survival",
     "Throwing", "Unarmed",
 ];
-
-/*
-pub const SKILL_STRUCTS: [&str; 17] = [
-    "athletics", "barter", "big_guns", "energy_weapons", "explosives",
-    "lockpick", "medicine", "meleeweapons", "pilot", "repair",
-    "science", "smallguns", "sneak", "speech", "survival",
-    "throwing", "unarmed",
-];
-*/
 
 #[derive(Debug)]
 pub struct SkillState {
@@ -71,6 +62,33 @@ impl SkillState {
             total_points,
         }
     }
+    pub fn reset(&mut self, character: &mut Character) {
+        self.total_points = character.total_skill();
+        self.extra_trait_options = if character.has_any_trait(vec![1,24]) {
+            vec![3,9,10]
+        } else if character.has_any_trait(vec![5,11,21]) {
+            vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
+        } else if character.has_trait(2) {
+            vec![14]
+        } else if character.has_trait(12) {
+            vec![3,11]
+        } else if character.has_trait(13) {
+            vec![1,6,9,10,13]
+        } else { vec![] };
+        self.x_extra_trait_options = if character.has_trait(5) && character.has_trait(13) {
+            vec![1,6,9,10,13]
+        } else {vec![]};
+        self.extra_trait_count = if character.has_trait(5) && character.has_trait(13) { 3 } else if character.has_any_trait(vec![1, 2, 5, 11, 12, 21, 24]) { 1 } else if character.has_trait(13) { 2 } else { 0 };
+        self.forced_trait = character.has_trait(2);
+        self.assigned_points = character.total_skill_ranks();
+        self.max_assignable = 9 + character.special.intelligence.value + character.level - 1;
+        self.available_points = self.max_assignable - self.assigned_points;
+        self.extra_tags = vec![];
+        self.x_extra_tags = vec![];
+        for skill in character.skills.mut_skill_block() {
+            if skill.tagged == TagType::Trait {skill.tagged = TagType::None}
+        }
+    }
     pub fn update(&mut self, character: &Character) {
         self.total_points = character.total_skill();
         self.extra_trait_options = if character.has_any_trait(vec![1,24]) {
@@ -96,8 +114,9 @@ impl SkillState {
         self.max_assignable = 9 + character.special.intelligence.value + character.level - 1;
         self.available_points = self.max_assignable - self.assigned_points;
     }
-    pub fn is_complete(&self, _character: &Character) -> bool {
-        self.available_points == 0 && self.extra_tags.len() as i32 == self.extra_trait_count //this might need more checks, which is why character is fed in
+    pub fn is_complete(&self, character: &Character) -> bool {
+        let std_tag_count = character.skills.standard_tags();
+        self.available_points == 0 && self.extra_tags.len() as i32 == self.extra_trait_count && std_tag_count == 3
     }
 }
 
@@ -116,7 +135,6 @@ pub fn render_skill_assignment(
     ui.spacing();
 
     let remaining = state.available_points;
-    log_on_change!(remaining);
     //probably want to do checks related to this
     let tags_standard = character.skills.standard_tags();
     let tags_traits = character.skills.trait_tags();
@@ -136,7 +154,6 @@ pub fn render_skill_assignment(
     //dear lord this is a lot of extra effort for an edge case
     let x_trait = state.x_extra_trait_options.len() > 0;
     if x_trait {
-        log_on_change!(state);
         ui.text_wrapped(format!("state: {:?}", state));
         let x_col = 330.0_f32;
         ui.text(format!("Educated ({}/1)", state.extra_tags.len()));
@@ -150,7 +167,6 @@ pub fn render_skill_assignment(
         for i in 0..17 {
             let skills = character.skills.mut_skill_block();
             let e_chosen = state.extra_tags.contains(&i);
-            //eprintln!("e: {} - {}", i, e_chosen);
             let e_is_other = skills[i].tagged == TagType::Perk || skills[i].tagged == TagType::Standard || state.x_extra_tags.contains(&i);
             let e_disable = e_is_other || (e_at_limit && !e_chosen);
             let g_is_other = skills[i].tagged == TagType::Perk || skills[i].tagged == TagType::Standard || state.extra_tags.contains(&i);
@@ -177,13 +193,10 @@ pub fn render_skill_assignment(
             if state.x_extra_trait_options.contains(&i) {
                 let g_chosen = state.x_extra_tags.contains(&i);
                 let g_disable = g_is_other || (g_at_limit && !g_chosen);
-                //eprintln!("g: {} - {}", i, e_chosen);
                 {
                     let _gg = g_disable.then(|| ui.begin_disabled(true));
                     let g_unlocked = g_chosen;
                     let mut g_checked = g_chosen || g_is_other;
-                    //basically, if we're not at our limit, show all options
-                    //if we are at our limit, only show the ones we have selected
                     if g_unlocked || !e_at_limit || !g_at_limit {
                         if ui.checkbox(format!("{}##g_extratag_{}", SKILLS[i], i), &mut g_checked) {
                             if g_checked {
@@ -221,7 +234,9 @@ pub fn render_skill_assignment(
             let is_forced = state.forced_trait && i == 14;
             if is_forced {
                 skill.tagged = TagType::Trait;
-                state.extra_tags.push(i);
+                if !state.extra_tags.contains(&i) {
+                    state.extra_tags.push(i);
+                }
             }
             let is_other = skill.tagged == TagType::Perk || skill.tagged == TagType::Standard;
             {
@@ -265,6 +280,7 @@ pub fn render_skill_assignment(
         let col_tag    = 270.0_f32;
         let col_total  = 330.0_f32;
         let col_max    = 400.0_f32;
+        //let col_debug  = 500.0_f32;
 
         ui.text_disabled("Skill");
         ui.same_line_with_pos(col_ranks);
@@ -275,6 +291,10 @@ pub fn render_skill_assignment(
         ui.text_disabled("Total");
         ui.same_line_with_pos(col_max);
         ui.text_disabled("Max");
+        /*
+        ui.same_line_with_pos(col_debug);
+        ui.text_disabled("<debug>");
+        */
         ui.separator();
 
         let _tag_limit = state.extra_trait_count + 3 + if character.has_perk(92) { 1 } else { 0 };
@@ -350,6 +370,10 @@ pub fn render_skill_assignment(
                 ui.same_line();
                 render_text_wrapped(false, true, ui, "[forced]", 0.0, w);
             }
+            /*
+            ui.same_line_with_pos(col_debug);
+            let mut debug_string: Vec<String> = vec![];
+            */
         }
     }
 

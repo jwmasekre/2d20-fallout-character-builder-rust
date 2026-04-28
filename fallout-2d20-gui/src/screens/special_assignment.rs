@@ -5,6 +5,7 @@ use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::Character;
 use crate::theme::{render_text_wrapped, render_window};
+//use crate::log_on_change;
 
 //list of our array options
 #[derive(Debug, Clone, Copy, PartialEq)]
