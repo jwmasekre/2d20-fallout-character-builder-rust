@@ -7,7 +7,9 @@ use crate::screens::skill_assignment::SKILLS;
 use crate::theme::{render_text_wrapped, render_window};
 use crate::screens::special_assignment::{SPECIAL_LABELS};
 use crate::character::{Character, CompanionType, TagType, Perk};
+//use crate::log_on_change;
 
+#[derive(Debug)]
 pub struct PerkState {
     pub perks: Vec<PerkRow>,
     pub taken_count: i32,
@@ -33,21 +35,9 @@ impl PerkState {
     pub fn is_complete(&self) -> bool {
         self.perk_lim == self.taken_count
     }
-    pub fn update(&self, character: &mut Character) -> Self {
-        let perks = self.perks.to_vec();
-        let taken_count = character.perks.iter().map(|p| p.ranks).sum();
-        let perk_lim = character.level + if character.has_trait(10) { 1 } else { 0 };
-        let show_eligible_only = self.show_eligible_only;
-        let filters = self.filters;
-        let pending_resolution = self.pending_resolution;
-        Self {
-            perks,
-            taken_count,
-            perk_lim,
-            show_eligible_only,
-            filters,
-            pending_resolution,
-        }
+    pub fn update(&mut self, character: &mut Character) {
+        self.taken_count = character.perks.iter().map(|p| p.ranks).sum();
+        self.perk_lim = character.level + if character.has_trait(10) { 1 } else { 0 };
     }
     fn perk_filter_indices(perk: &PerkRow) -> Vec<usize> {
         let stat_reqs: Vec<&str> = perk.reqs
@@ -323,7 +313,7 @@ pub fn render_perk_select(
     else { return h; };
 
     let col_name = 0.0_f32;
-    let col_reqs = 260.0_f32;
+    let col_reqs = 240.0_f32;
     let col_ranks = 460.0_f32;
     let col_btns = 540.0_f32;
 
@@ -535,26 +525,33 @@ pub fn render_perk_resolution(
 
     match &mut popup.resolution {
         PerkResolution::BwLk { version } => {
-            ui.text("Select a \"Preference\"");
-            ui.spacing();
-            ui.set_next_item_width(220.0);
+            let inc = popup.perk_add;
+            if inc {
+                ui.text("Select a \"Preference\"");
+                ui.spacing();
+                ui.set_next_item_width(220.0);
 
-            let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Preference --".to_string());
+                let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Preference --".to_string());
 
-            if let Some(_cb) = ui.begin_combo("##bwlk_choice", preview) {
-                for option in [BwLk::BlackWidow,BwLk::LadyKiller].iter() {
-                    let sel = *version == Some(option.clone());
-                    if ui.selectable_config(option.to_perk_string())
-                        .selected(sel)
-                        .build() { *version = Some(option.clone()); }
-                    if sel {
-                        ui.set_item_default_focus();
+                if let Some(_cb) = ui.begin_combo("##bwlk_choice", preview) {
+                    for option in [BwLk::BlackWidow,BwLk::LadyKiller].iter() {
+                        let sel = *version == Some(option.clone());
+                        if ui.selectable_config(option.to_perk_string())
+                            .selected(sel)
+                            .build() { version.replace(option.clone()); }
+                        if sel {
+                            ui.set_item_default_focus();
+                        }
                     }
                 }
+            } else {
+                let perk_name = character.perks.iter_mut().find(|p| p.id == popup.perk_id).unwrap().name.clone();
+                ui.text(format!("Removing {}", perk_name))
             }
         }
         PerkResolution::IntenseTraining { selected_stat } => {
-            let (_,inc) = state.pending_resolution.unwrap();
+            //log_on_change!(state);
+            let inc = popup.perk_add;
             if inc {
                 ui.text("Increase one SPECIAL by 1:");
                 ui.spacing();
@@ -579,7 +576,7 @@ pub fn render_perk_resolution(
                         }
                         let sel = *selected_stat == Some(i);
                         if ui.selectable_config(SPECIAL_LABELS[i]).selected(sel).build() {
-                            *selected_stat = Some(i);
+                            selected_stat.replace(i);
                         }
                     }
                 }
@@ -609,7 +606,7 @@ pub fn render_perk_resolution(
                         let (index, number) = options[i];
                         let sel = *selected_stat == Some(index);
                         if ui.selectable_config(format!("{} ({})", SPECIAL_LABELS[index], number)).selected(sel).build() {
-                            *selected_stat = Some(index);
+                            selected_stat.replace(index);
                         }
                     }
                 }
@@ -620,7 +617,7 @@ pub fn render_perk_resolution(
             }
         }
         PerkResolution::Skilled { skill_a, skill_b } => {
-            let (_,inc) = state.pending_resolution.unwrap();
+            let inc = popup.perk_add;
             if inc {
                 ui.text("Select two skills to increase:");
                 ui.text_disabled("The same skill can be selected twice");
@@ -639,38 +636,41 @@ pub fn render_perk_resolution(
                         let (at, exceed) = at_max[i];
                         if at {
                             let _g = ui.begin_disabled(true);
-                            ui.selectable_config(&format!("{} (at cap)", SPECIAL_LABELS[i])).build();
+                            ui.selectable_config(&format!("{} (at cap)", SKILLS[i])).build();
                             drop(_g);
                             continue;
-                        } else if skill_b.unwrap() == i && exceed {
+                        } else if skill_b.unwrap_or(usize::MAX) == i && exceed {
                             let _g = ui.begin_disabled(true);
-                            ui.selectable_config(&format!("{} (would exceed cap)", SPECIAL_LABELS[i])).build();
+                            ui.selectable_config(&format!("{} (would exceed cap)", SKILLS[i])).build();
                             drop(_g);
                             continue;
                         }
                         let sel = *skill_a == Some(i);
-                        if ui.selectable_config(SPECIAL_LABELS[i]).selected(sel).build() {
-                            *skill_a = Some(i);
+                        if ui.selectable_config(SKILLS[i]).selected(sel).build() {
+                            skill_a.replace(i);
                         }
                     }
                 }
+                ui.text("Skill 2:");
+                ui.same_line();
+                ui.set_next_item_width(200.0);
                 if let Some(_cb) = ui.begin_combo("##sk_b", preview_b) {
                     for i in 0..17 {
                         let (at, exceed) = at_max[i];
                         if at {
                             let _g = ui.begin_disabled(true);
-                            ui.selectable_config(&format!("{} (at cap)", SPECIAL_LABELS[i])).build();
+                            ui.selectable_config(&format!("{} (at cap)", SKILLS[i])).build();
                             drop(_g);
                             continue;
-                        } else if skill_a.unwrap() == i && exceed {
+                        } else if skill_a.unwrap_or(usize::MAX) == i && exceed {
                             let _g = ui.begin_disabled(true);
-                            ui.selectable_config(&format!("{} (would exceed cap)", SPECIAL_LABELS[i])).build();
+                            ui.selectable_config(&format!("{} (would exceed cap)", SKILLS[i])).build();
                             drop(_g);
                             continue;
                         }
                         let sel = *skill_b == Some(i);
-                        if ui.selectable_config(SPECIAL_LABELS[i]).selected(sel).build() {
-                            *skill_b = Some(i);
+                        if ui.selectable_config(SKILLS[i]).selected(sel).build() {
+                            skill_b.replace(i);
                         }
                     }
                 }
@@ -686,17 +686,17 @@ pub fn render_perk_resolution(
                 if let Some(_cb) = ui.begin_combo("##sk_dec", preview) {
                     for i in 0..options.len() {
                         let (sk_a, sk_b) = options[i];
-                        let sel = skill_a.unwrap() == sk_a && skill_b.unwrap() == sk_b;
+                        let sel = skill_a.unwrap_or(usize::MAX) == sk_a && skill_b.unwrap_or(usize::MAX) == sk_b;
                         if ui.selectable_config(format!("{}/{}",SKILLS[sk_a],SKILLS[sk_b])).selected(sel).build() {
-                            *skill_a = Some(sk_a);
-                            *skill_b = Some(sk_b);
+                            skill_a.replace(sk_a);
+                            skill_b.replace(sk_b);
                         }
                     }
                 }
             }
         }
         PerkResolution::Tag { selected_skill } => {
-            let (_,inc) = state.pending_resolution.unwrap();
+            let inc = popup.perk_add;
             if inc {
                 ui.text("Tag an additional skill:");
                 ui.spacing();
@@ -722,7 +722,7 @@ pub fn render_perk_resolution(
                         }
                         let sel = *selected_skill == Some(options[i]);
                         if ui.selectable_config(SKILLS[options[i]]).selected(sel).build() {
-                            *selected_skill = Some(options[i]);
+                            selected_skill.replace(options[i]);
                         }
                     }
                 }
@@ -741,29 +741,36 @@ pub fn render_perk_resolution(
                     for i in 0..options.len() {
                         let sel = *selected_skill == Some(options[i]);
                         if ui.selectable_config(SKILLS[options[i]]).selected(sel).build() {
-                            *selected_skill = Some(options[i]);
+                            selected_skill.replace(options[i]);
                         }
                     }
                 }
             }
         }
         PerkResolution::MmCf { version } => {
-            ui.text("Select a Type");
-            ui.spacing();
-            ui.set_next_item_width(220.0);
+            let inc = popup.perk_add;
+            if inc {
+                ui.text("Select a Type");
+                ui.spacing();
+                ui.set_next_item_width(220.0);
 
-            let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Type --".to_string());
+                let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Type --".to_string());
 
-            if let Some(_cb) = ui.begin_combo("##mmcf_choice", preview) {
-                for option in [MmCf::MechanicalMenace, MmCf::ClassFreak].iter() {
-                    let sel = *version == Some(option.clone());
-                    if ui.selectable_config(option.to_perk_string())
-                        .selected(sel)
-                        .build() { *version = Some(option.clone()); }
-                    if sel {
-                        ui.set_item_default_focus();
+                if let Some(_cb) = ui.begin_combo("##mmcf_choice", preview) {
+                    for option in [MmCf::MechanicalMenace, MmCf::ClassFreak].iter() {
+                        let sel = *version == Some(option.clone());
+                        if ui.selectable_config(option.to_perk_string())
+                            .selected(sel)
+                            .build() { version.replace(option.clone()); }
+                        if sel {
+                            ui.set_item_default_focus();
+                        }
                     }
                 }
+
+            } else {
+                let perk_name = character.perks.iter_mut().find(|p| p.id == popup.perk_id).unwrap().name.clone();
+                ui.text(format!("Removing {}", perk_name))
             }
         }
     }
@@ -791,20 +798,22 @@ pub fn render_perk_resolution(
 fn apply_resolution(
     popup: &PerkResolutionPopup,
     character: &mut Character,
-    state: &mut PerkState,
+    _state: &mut PerkState,
 ) {
     match &popup.resolution {
         PerkResolution::BwLk { version } => {
-            if let Some(perk) = character.perks.iter_mut().find(|p| p.id == popup.perk_id) {perk.name = version.clone().unwrap().to_perk_string().to_string();}
+            if popup.perk_add {
+                if let Some(perk) = character.perks.iter_mut().find(|p| p.id == popup.perk_id) {perk.name = version.clone().unwrap().to_perk_string().to_string();}
+            }
         }
         PerkResolution::IntenseTraining { selected_stat } => {
-            let (_,inc) = state.pending_resolution.unwrap();
+            let inc = popup.perk_add;
             let dir = if inc { 1 } else { -1 };
             character.special.mut_special_block()[selected_stat.unwrap()].value += dir;
             character.special.mut_special_block()[selected_stat.unwrap()].trained += dir;
         }
         PerkResolution::Skilled { skill_a, skill_b } => {
-            let (_,inc) = state.pending_resolution.unwrap();
+            let inc = popup.perk_add;
             if inc {
                 let mut skilled_update = [0; 17];
                 if skill_a == skill_b {
@@ -844,7 +853,7 @@ fn apply_resolution(
             }
         }
         PerkResolution::Tag { selected_skill } => {
-            let (_,inc) = state.pending_resolution.unwrap();
+            let inc = popup.perk_add;
             let skills = character.skills.mut_skill_block();
             if inc {
                 skills[selected_skill.unwrap()].tagged = TagType::Perk;
@@ -854,7 +863,9 @@ fn apply_resolution(
             skills[selected_skill.unwrap()].update();
         }
         PerkResolution::MmCf { version } => {
-            if let Some(perk) = character.perks.iter_mut().find(|p| p.id == popup.perk_id) {perk.name = version.clone().unwrap().to_perk_string().to_string();}
+            if popup.perk_add {
+                if let Some(perk) = character.perks.iter_mut().find(|p| p.id == popup.perk_id) {perk.name = version.clone().unwrap().to_perk_string().to_string();}
+            }
         }
     }
 }

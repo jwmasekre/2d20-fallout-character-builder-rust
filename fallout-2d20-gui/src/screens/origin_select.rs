@@ -138,56 +138,18 @@ impl OriginState {
     }
     fn update_trait(&self, character: &mut Character) {
         let skill_max = character.level.clamp(3,6);
-        if character.is_mutant() {
-            character.skills.athletics.max = 4.min(skill_max);
-            character.skills.barter.max = 4.min(skill_max);
-            character.skills.big_guns.max = 4.min(skill_max);
-            character.skills.energy_weapons.max = 4.min(skill_max);
-            character.skills.explosives.max = 4.min(skill_max);
-            character.skills.lockpick.max = 4.min(skill_max);
-            character.skills.medicine.max = 4.min(skill_max);
-            character.skills.melee_weapons.max = 4.min(skill_max);
-            character.skills.pilot.max = 4.min(skill_max);
-            character.skills.repair.max = 4.min(skill_max);
-            character.skills.science.max = 4.min(skill_max);
-            character.skills.small_guns.max = 4.min(skill_max);
-            character.skills.sneak.max = 4.min(skill_max);
-            character.skills.speech.max = 4.min(skill_max);
-            character.skills.survival.max = 4.min(skill_max);
-            character.skills.throwing.max = 4.min(skill_max);
-            character.skills.unarmed.max = 4.min(skill_max);
-        } else {
-            character.skills.athletics.max = skill_max;
-            character.skills.barter.max = skill_max;
-            character.skills.big_guns.max = skill_max;
-            character.skills.energy_weapons.max = skill_max;
-            character.skills.explosives.max = skill_max;
-            character.skills.lockpick.max = skill_max;
-            character.skills.medicine.max = skill_max;
-            character.skills.melee_weapons.max = skill_max;
-            character.skills.pilot.max = skill_max;
-            character.skills.repair.max = skill_max;
-            character.skills.science.max = skill_max;
-            character.skills.small_guns.max = skill_max;
-            character.skills.sneak.max = skill_max;
-            character.skills.speech.max = skill_max;
-            character.skills.survival.max = skill_max;
-            character.skills.throwing.max = skill_max;
-            character.skills.unarmed.max = skill_max;
-        }
-        if character.has_trait(13) {
-            character.skills.athletics.max = 4.min(skill_max);
-            character.skills.big_guns.max = 4.min(skill_max);
-            character.skills.energy_weapons.max = 4.min(skill_max);
-            character.skills.explosives.max = 4.min(skill_max);
-            character.skills.lockpick.max = 4.min(skill_max);
-            character.skills.melee_weapons.max = 4.min(skill_max);
-            character.skills.pilot.max = 4.min(skill_max);
-            character.skills.small_guns.max = 4.min(skill_max);
-            character.skills.sneak.max = 4.min(skill_max);
-            character.skills.survival.max = 4.min(skill_max);
-            character.skills.throwing.max = 4.min(skill_max);
-            character.skills.unarmed.max = 4.min(skill_max);
+        let mutant = character.is_mutant();
+        let good = character.has_trait(13);
+        let skills = character.skills.mut_skill_block();
+        for i in 0..17 {
+            if mutant {
+                skills[i].max = 4.min(skill_max);
+            } else {
+                skills[i].max = skill_max;
+            }
+            if good && [0,2,3,4,5,7,8,11,12,14,15,16].contains(&i) {
+                skills[i].max = 4.min(skill_max);
+            }
         }
     }
 }
@@ -339,16 +301,23 @@ pub fn render_origin_select(
     ui.text("Character Level");
     ui.same_line_with_pos(label_w);
     if ui.button("-##level_dec") {
-        if character.level > 1 { character.level -= 1; }
+        if character.level > 1 {
+            character.level -= 1;
+            state.update_trait(character);
+        }
     }
     ui.same_line();
     ui.text(format!("{}", character.level));
     ui.same_line();
     if ui.button("+##level_inc") {
         character.level += 1;
+        state.update_trait(character);
     }
     //safety net, won't let character level go below 1
-    if character.level < 1 { character.level = 1; }
+    if character.level < 1 {
+        character.level = 1;
+        state.update_trait(character);
+    }
 
     ui.spacing();
     ui.separator();

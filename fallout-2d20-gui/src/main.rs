@@ -445,8 +445,16 @@ fn main() -> Result<()> {
                     let result = render_perk_resolution(ui, &window, popup, state, &mut character);
                     match result {
                         Some(false) => {
-                            let perk_index = character.clone().perks.iter().position(|p| p.id == popup.perk_id).unwrap();
-                            character.perks.remove(perk_index);
+                            if popup.perk_add {
+                                if let Some(i) = character.perks.iter().position(|p| p.id == popup.perk_id) {
+                                    if character.perks[i].ranks > 1 {
+                                        character.perks[i].ranks -= 1;
+                                    } else {
+                                        character.perks.remove(i);
+                                    }
+                                    perk.update(&mut character);
+                                }
+                            }
                             perk_resolution = None;
                         }
                         Some(true) => {

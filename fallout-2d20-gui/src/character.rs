@@ -201,6 +201,7 @@ pub enum CompanionType {
     Robot,
 }
 
+/*
 #[derive(Clone)]
 pub enum SpecialAttr {
     Strength,
@@ -211,6 +212,7 @@ pub enum SpecialAttr {
     Agility,
     Luck,
 }
+*/
 
 #[derive(Clone)]
 pub struct Special {
@@ -454,7 +456,7 @@ impl Skills {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SkillBlock {
     pub ranks: i32,
     pub tagged: TagType,
@@ -485,7 +487,7 @@ impl SkillBlock {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum TagType {
     None,
     Trait,
@@ -493,7 +495,7 @@ pub enum TagType {
     Standard,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Perk {
     pub id: i32,
     pub name: String,
@@ -675,11 +677,13 @@ pub struct AmmoData {
     pub wgt: i32
 }
 
+/*
 #[derive(Clone)]
 pub struct Ammo {
     pub ammo: AmmoData,
     pub variants: Vec<AmmoData>,
 }
+*/
 
 #[derive(Clone)]
 pub struct AmmoInv {

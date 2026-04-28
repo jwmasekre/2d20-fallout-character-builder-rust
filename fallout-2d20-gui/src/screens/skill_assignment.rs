@@ -116,7 +116,7 @@ impl SkillState {
     }
     pub fn is_complete(&self, character: &Character) -> bool {
         let std_tag_count = character.skills.standard_tags();
-        self.available_points == 0 && self.extra_tags.len() as i32 == self.extra_trait_count && std_tag_count == 3
+        self.available_points == 0 && (self.extra_tags.len() + self.x_extra_tags.len()) as i32 == self.extra_trait_count && std_tag_count == 3
     }
 }
 
@@ -154,13 +154,14 @@ pub fn render_skill_assignment(
     //dear lord this is a lot of extra effort for an edge case
     let x_trait = state.x_extra_trait_options.len() > 0;
     if x_trait {
-        ui.text_wrapped(format!("state: {:?}", state));
+        //ui.text_wrapped(format!("state: {:?}", state));
         let x_col = 330.0_f32;
         ui.text(format!("Educated ({}/1)", state.extra_tags.len()));
         ui.same_line_with_pos(x_col);
         ui.text(format!("Good Natured ({}/2)", state.x_extra_tags.len()));
         ui.spacing();
         ui.separator();
+        ui.spacing();
         let e_at_limit = state.extra_tags.len() >= 1;
         let g_at_limit = state.x_extra_tags.len() >= 2;
 
@@ -189,7 +190,9 @@ pub fn render_skill_assignment(
                     }
                 }
             }
-            ui.same_line_with_pos(x_col);
+            if !e_at_limit || !g_at_limit {
+                ui.same_line_with_pos(x_col);
+            }
             if state.x_extra_trait_options.contains(&i) {
                 let g_chosen = state.x_extra_tags.contains(&i);
                 let g_disable = g_is_other || (g_at_limit && !g_chosen);
@@ -210,7 +213,7 @@ pub fn render_skill_assignment(
                         }
                     }
                 }
-            } else {
+            } else if !e_at_limit || !g_at_limit {
                 ui.text_disabled("----------------");
             }
         }
@@ -280,7 +283,7 @@ pub fn render_skill_assignment(
         let col_tag    = 270.0_f32;
         let col_total  = 330.0_f32;
         let col_max    = 400.0_f32;
-        //let col_debug  = 500.0_f32;
+        //let col_debug  = 450.0_f32;
 
         ui.text_disabled("Skill");
         ui.same_line_with_pos(col_ranks);
@@ -340,7 +343,6 @@ pub fn render_skill_assignment(
             let is_forbidden = forbidden_trait && i == 10;
             let is_extra_tagged = skill.tagged == TagType::Perk || skill.tagged == TagType::Trait;
             let is_std_tagged = skill.tagged == TagType::Standard;
-            //let is_extra_tagged = state.extra_tags.iter().any(|s| *s == i);
             let tag_disabled = is_forbidden || is_extra_tagged || is_forced || ((at_tag_limit || tag_overflow) && !is_std_tagged);
             {
                 let _tg = tag_disabled.then(|| ui.begin_disabled(true));
@@ -372,7 +374,8 @@ pub fn render_skill_assignment(
             }
             /*
             ui.same_line_with_pos(col_debug);
-            let mut debug_string: Vec<String> = vec![];
+            //let mut debug_string: Vec<String> = vec![];
+            ui.text_wrapped(format!("{:?}",skill));
             */
         }
     }
