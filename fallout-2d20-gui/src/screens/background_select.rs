@@ -793,55 +793,72 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
         }
     }
 
+    let pack_items: Vec<i32> = repeated_alts.iter()
+        .filter(|&&id| {
+            by_id.get(&id)
+                .and_then(|r| r.alt_id)
+                .map(|alt| repeated.contains(&alt))
+                .unwrap_or(false)
+        })
+        .copied()
+        .collect();
+    let is_single_or_pack = !pack_items.is_empty();
+
     //this is where we actually handle the weird choices
     if let Some(anchor_id) = single_anchor {
         let anchor_row = by_id[&anchor_id];
         let single_opt = apparel_option(anchor_row);
         //checking if it's either to the pick 1 of 2 twice or pick a pack
-        let sibling_ids = &apparel_id_count[&anchor_row.apparel_id];
-        //grab all the alt targets
-        let /*mut*/ sibling_alts: Vec<i32> = sibling_ids.iter()
-            .filter_map(|id| fwd.get(id).copied())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-        //resolve the choice groups (same as the standard options)
-        let double_choices: Vec<Vec<ApparelOption>> = sibling_alts.iter().map(|&start| {
-            let mut cycle: Vec<i32> = vec![];
-            let mut current = start;
-            loop {
-                if cycle.contains(&current) { break }
-                cycle.push(current);
-                match fwd.get(&current) {
-                    Some(&next) => current = next,
-                    None => break,
+        if is_single_or_pack {
+            let pack: Vec<ApparelOption> = pack_items.iter()
+                .filter_map(|id| by_id.get(id).map(|r| apparel_option(r)))
+                .collect();
+            slots.push(ApparelSlot::SingleOrPack { single: single_opt, pack })
+        } else {
+            let sibling_ids = &apparel_id_count[&anchor_row.apparel_id];
+            //grab all the alt targets
+            let sibling_alts: Vec<i32> = sibling_ids.iter()
+                .filter_map(|id| fwd.get(id).copied())
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+            //resolve the choice groups (same as the standard options)
+            let double_choices: Vec<Vec<ApparelOption>> = sibling_alts.iter().map(|&start| {
+                let mut cycle: Vec<i32> = vec![];
+                let mut current = start;
+                loop {
+                    if cycle.contains(&current) { break }
+                    cycle.push(current);
+                    match fwd.get(&current) {
+                        Some(&next) => current = next,
+                        None => break,
+                    }
+                }
+                //does some dedupe to make sure we don't accidentally include options from other groups
+                cycle.iter()
+                    .filter_map(
+                        |id| by_id
+                            .get(id)
+                            .map(|r| apparel_option(r))
+                    )
+                    .collect()
+            }).collect();
+
+            //does some further dedupe to make sure that we don't provide all the options in a double vs the two options for each
+            let mut seen_sets: Vec<HashSet<i32>> = vec![];
+            let mut deduped_choices: Vec<Vec<ApparelOption>> = vec![];
+            for group in double_choices {
+                let id_set: HashSet<i32> = group.iter()
+                    .map(|o| o.bg_apparel_id)
+                    .collect();
+                if !seen_sets.iter().any(|s| s == &id_set) {
+                    seen_sets.push(id_set);
+                    deduped_choices.push(group);
                 }
             }
-            //does some dedupe to make sure we don't accidentally include options from other groups
-            cycle.iter()
-                .filter_map(
-                    |id| by_id
-                        .get(id)
-                        .map(|r| apparel_option(r))
-                )
-                .collect()
-        }).collect();
-
-        //does some further dedupe to make sure that we don't provide all the options in a double vs the two options for each
-        let mut seen_sets: Vec<HashSet<i32>> = vec![];
-        let mut deduped_choices: Vec<Vec<ApparelOption>> = vec![];
-        for group in double_choices {
-            let id_set: HashSet<i32> = group.iter()
-                .map(|o| o.bg_apparel_id)
-                .collect();
-            if !seen_sets.iter().any(|s| s == &id_set) {
-                seen_sets.push(id_set);
-                deduped_choices.push(group);
-            }
+            slots.push(ApparelSlot::SingleOrDouble { single: single_opt, double_choices: deduped_choices });
         }
-        slots.push(ApparelSlot::SingleOrDouble { single: single_opt, double_choices: deduped_choices });
     }
-    //looks like we're missing the "single or pack" logic? need to do some testing
     slots
 }
 
