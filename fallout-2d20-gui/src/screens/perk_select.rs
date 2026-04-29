@@ -1,7 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use serde_json;
-use regex::Regex;
+use fancy_regex::Regex;
 use crate::db::Db;
 use crate::AppScreen;
 use crate::screens::skill_assignment::SKILLS;
@@ -167,7 +167,9 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
             "#
         ).fetch_all(&db.pool).await
     });
-    let desc_reg_pattern = Regex::new(r"\d+:\s*([^0-9]+)").unwrap();
+    //at one point, i had the regex outside of this function, and holy shit did it just nuke performance. we only retrieve perks once, so we don't need to do this every frame lol 
+    //finds everything between each #: when multiple ranks 
+    let desc_reg_pattern = Regex::new(r"\d:\s+(.+?)(?=\s+\d:|$)").unwrap();
     match result {
         Ok(rows) => rows.into_iter().map(|r| {
             let reqs: Vec<String> = r.reqs
@@ -178,7 +180,13 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
                 .as_deref()
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default();
-            let desc_vec: Vec<String> = desc_reg_pattern.captures_iter(&r.description.clone().unwrap_or_default()).map(|cap| cap[1].trim().to_string()).collect();
+            //fancy-regex uses more error handling so this gets complicated
+            let desc_vec: Vec<String> = desc_reg_pattern.captures_iter(&r.description.clone().unwrap_or_default()).filter_map(|res| { match res {
+                Ok(caps) => {
+                    caps.get(1).map(|m| m.as_str().trim().to_string())
+                }
+                _ => None,
+            }}).collect();
             PerkRow {
                 id: r.id as i32,
                 name: r.name.unwrap_or_default(),
@@ -451,8 +459,8 @@ pub fn render_perk_select(
             }
         } else {
             let _g = (!eligible || available).then(|| ui.begin_disabled(true));
-            let cperk_len = character.perks.len();
             if ui.button(format!("Rank+##rankp_{}", id)) {
+                let cperk_len = character.perks.len();
                 for i in 0..cperk_len {
                     if character.perks[i].id == id {
                         character.perks[i].ranks += 1;
@@ -464,6 +472,7 @@ pub fn render_perk_select(
             drop(_g);
             ui.same_line();
             if ui.button(format!("Drop##drop_{}", id)) {
+                let cperk_len = character.perks.len();
                 for i in 0..cperk_len {
                     if character.perks[i].id == id {
                         state.pending_resolution = Some((id, false, character.perks[i].name.clone()));

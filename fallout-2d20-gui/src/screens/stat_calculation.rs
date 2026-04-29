@@ -238,16 +238,27 @@ pub fn render_stat_calculation(
     let (perk_l, perk_r) = character.perks.split_at((character.perks.len() + 1) / 2);
     for perk in perk_l {
         ui.text(&perk.name);
-        for i in 0..perk.desc.len() {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0);
+        if perk.desc.len() > 1 {
+            for i in 0..(perk.ranks as usize) {
+                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0);
+            }
+            ui.spacing();
+        } else {
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), 0.0, d_col_w - 6.0);
+            ui.spacing();
         }
-        ui.spacing();
     }
     ui.next_column();
     for perk in perk_r {
         ui.text(&perk.name);
-        for i in 0..perk.desc.len() {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0, w - 6.0);
+        if perk.desc.len() > 1 {
+            for i in 0..(perk.ranks as usize) {
+                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0, w - 6.0);
+            }
+            ui.spacing();
+        } else {
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), d_col_w + 6.0, w - 6.0);
+            ui.spacing();
         }
         ui.spacing();
     }

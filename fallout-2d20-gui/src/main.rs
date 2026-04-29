@@ -52,7 +52,7 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 ];
 
 const VERSION: &str = "0.1.9-alpha.1e (EXPERIMENTAL)";
-const DATE: &str = "20260409";
+const DATE: &str = "20260429";
 
 pub fn screen_unlocked(
     screen: &AppScreen,
