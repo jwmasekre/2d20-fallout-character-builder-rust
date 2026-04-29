@@ -27,7 +27,7 @@ pub struct BackgroundRow {
 #[derive(Debug, Clone)]
 pub struct WeaponRow {
     pub id: i32,
-    pub bg_id: i32,
+    pub _bg_id: i32,
     pub weapon_id: i32,
     pub weapon_name: String,
     pub mod_id: Option<i32>,
@@ -38,7 +38,7 @@ pub struct WeaponRow {
 #[derive(Debug, Clone)]
 pub struct ApparelRow {
     pub id: i32,
-    pub bg_id: i32,
+    pub _bg_id: i32,
     pub apparel_id: i32,
     pub apparel_name: String,
     pub alt_id: Option<i32>,
@@ -47,7 +47,7 @@ pub struct ApparelRow {
 #[derive(Debug, Clone)]
 pub struct ConsumableRow {
     pub id: i32,
-    pub bg_id: i32,
+    pub _bg_id: i32,
     pub consumable_id: i32,
     pub consumable_name: String,
     pub alt_id: Option<i32>,
@@ -57,7 +57,7 @@ pub struct ConsumableRow {
 #[derive(Debug, Clone)]
 pub struct RobotModuleRow {
     pub id: i32,
-    pub bg_id: i32,
+    pub _bg_id: i32,
     pub module_id: i32,
     pub module_name: String,
     pub alt_id: Option<i32>,
@@ -143,7 +143,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     }).unwrap_or_default();
     let weapons: Vec<WeaponRow> = weapon_rows.into_iter().map(|r| WeaponRow {
         id: r.id as i32,
-        bg_id: r.id as i32,
+        _bg_id: r.id as i32,
         weapon_id: r.weapon_id.unwrap_or_default() as i32,
         weapon_name: r.weapon_name.unwrap_or_default(),
         mod_id: r.mod_id.map(|i| i as i32),
@@ -181,7 +181,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     }).unwrap_or_default();
     let apparel: Vec<ApparelRow> = apparel_rows.into_iter().map(|r| ApparelRow {
         id: r.id as i32,
-        bg_id: r.background_id.unwrap_or_default() as i32,
+        _bg_id: r.background_id.unwrap_or_default() as i32,
         apparel_id: r.apparel_id.unwrap_or_default() as i32,
         apparel_name: r.apparel_name.unwrap_or_default(),
         alt_id: r.alt_id.map(|i| i as i32),
@@ -198,7 +198,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     }).unwrap_or_default();
     let consumables: Vec<ConsumableRow> = consumable_rows.into_iter().map(|r| ConsumableRow {
         id: r.id as i32,
-        bg_id: r.background_id.unwrap_or_default() as i32,
+        _bg_id: r.background_id.unwrap_or_default() as i32,
         consumable_id: r.consumable_id.unwrap_or_default() as i32,
         consumable_name: r.consumable_name.unwrap_or_default(),
         alt_id: r.alt_id.map(|i| i as i32),
@@ -216,7 +216,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     }).unwrap_or_default();
     let robot_modules: Vec<RobotModuleRow> = module_rows.into_iter().map(|r| RobotModuleRow {
         id: r.id as i32,
-        bg_id: r.background_id.unwrap_or_default() as i32,
+        _bg_id: r.background_id.unwrap_or_default() as i32,
         module_id: r.robot_module_id.unwrap_or_default() as i32,
         module_name: r.module_name.unwrap_or_default(),
         alt_id: r.alt_id.map(|i| i as i32),
@@ -266,6 +266,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     }
 }
 
+/*
 //used to handle applying mod effects properly
 pub struct EffectNameSets {
     pub effect_names: HashSet<String>,
@@ -296,6 +297,7 @@ impl EffectNameSets {
         self.quality_names.contains(&name.to_lowercase())
     }
 }
+*/
 
 pub struct BackgroundState {
     pub all_backgrounds: Vec<BackgroundRow>,
@@ -330,7 +332,7 @@ impl BackgroundState {
             })
             .collect()
     }
-    fn reset_selection(&mut self) {
+    pub fn reset_selection(&mut self) {
         self.selected_index = None;
         self.current_background = None;
         self.weapon_selections.clear();
@@ -346,10 +348,21 @@ impl BackgroundState {
         self.apparel_selections = default_apparel_selections(&background.apparel_slots);
         self.consumable_selections = default_selections(&background.consumable_slots);
         self.robot_module_selections = default_selections(&background.robot_module_slots);
+        self.current_background = Some(background);
     }
     pub fn is_complete(&self) -> bool {
-        self.selected_index != None
+        self.selected_index.is_some() && selections_complete(&self.weapon_selections) && selections_complete(&self.apparel_selections) && selections_complete(&self.consumable_selections) && selections_complete(&self.robot_module_selections)
     }
+}
+
+fn selections_complete(sels: &[SlotSelection]) -> bool {
+    sels.iter().all(|s| match s {
+        SlotSelection::Fixed => true,
+        SlotSelection::Chosen(i) => *i != usize::MAX,
+        SlotSelection::ManyForOneChosen(i) => *i != usize::MAX,
+        SlotSelection::SingleOrDoubleChosen { take_single, double_picks } => *take_single || double_picks.iter().all(|p| p.is_some()),
+        SlotSelection::SingleOrPackChosen(_) => true,
+    })
 }
 
 //handling all the options and slots
@@ -673,12 +686,12 @@ fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSlot, sel: &mut SlotSe
             ui.text(format!("Choose: take all of {} OR just {}", weapon_label(get_one), give_up.iter().map(|w| weapon_label(w)).collect::<Vec<_>>().join(" + ")));
             //let mut take_one = chosen == 0;
             let take_one = chosen == 0;
-            if ui.radio_button_bool(format!("Take {}##mfo_one_{}", weapon_label(get_one), index), take_one) {
+            if ui.radio_button_bool(format!("Take all of {}##mfo_one_{}", weapon_label(get_one), index), take_one) {
                 *sel = SlotSelection::ManyForOneChosen(0);
             }
             ui.same_line();
             if ui.radio_button_bool(
-                format!("Give up for {}##mfo_many_{}", give_up.iter().map(|w| weapon_label(w)).collect::<Vec<_>>().join("+"), index),
+                format!("Take just {}##mfo_many_{}", give_up.iter().map(|w| weapon_label(w)).collect::<Vec<_>>().join("+"), index),
                 !take_one
             ) {
                 *sel = SlotSelection::ManyForOneChosen(1);
@@ -712,6 +725,11 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
         .filter(|(_, ids)| ids.len() > 1)
         .flat_map(|(_, ids)| ids.iter().copied())
         .collect();
+    // also making sure we don't count the double choices as their own individual choices
+    let repeated_alts: HashSet<i32> = rows.iter()
+        .filter(|r| repeated.contains(&r.id))
+        .filter_map(|r| r.alt_id)
+        .collect();
 
     //this is where we define all the options
     let mut slots: Vec<ApparelSlot> = vec![];
@@ -740,6 +758,8 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
         if visited.contains(&row.id) || choice_visited.contains(&row.id) {continue;}
         //make sure it's not one of the weird choices
         if repeated.contains(&row.id) {continue;}
+        //make sure it's not one of the double choices
+        if repeated_alts.contains(&row.id) {continue;}
         //make sure it isn't a fixed item (this probably never triggers?)
         if row.alt_id.is_none() {continue;}
 
@@ -780,7 +800,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
         //checking if it's either to the pick 1 of 2 twice or pick a pack
         let sibling_ids = &apparel_id_count[&anchor_row.apparel_id];
         //grab all the alt targets
-        let mut sibling_alts: Vec<i32> = sibling_ids.iter()
+        let /*mut*/ sibling_alts: Vec<i32> = sibling_ids.iter()
             .filter_map(|id| fwd.get(id).copied())
             .collect::<HashSet<_>>()
             .into_iter()
@@ -823,6 +843,76 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
     }
     //looks like we're missing the "single or pack" logic? need to do some testing
     slots
+}
+
+fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSlot, sel: &mut SlotSelection) {
+    match slot {
+        ApparelSlot::Fixed(opt) => {
+            ui.text(format!("  {}", opt.name));
+        }
+        ApparelSlot::Choice(opts) => {
+            let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
+            let preview = if chosen_index < opts.len() {
+                opts[chosen_index].name.clone()
+            } else {
+                format!("Apparel {} - choose...", index + 1)
+            };
+            ui.set_next_item_width(300.0);
+            if let Some(_cb) = ui.begin_combo(format!("##aslot_{}", index), &preview) {
+                for (oi, opt) in opts.iter().enumerate() {
+                    let s = chosen_index == oi;
+                    if ui.selectable_config(&opt.name).selected(s).build() {
+                        *sel = SlotSelection::Chosen(oi);
+                    }
+                }
+            }
+        }
+        ApparelSlot::SingleOrDouble { single, double_choices } => {
+            let (take_single, double_picks) = if let SlotSelection::SingleOrDoubleChosen {
+                take_single, double_picks
+            } = sel {
+                (take_single, double_picks)
+            } else { return; };
+
+            if ui.radio_button_bool(format!("Take {}##sd_single_{}", single.name, index), *take_single) {
+                *take_single = true;
+                double_picks[0].take();
+                double_picks[1].take();
+            }
+            ui.same_line();
+            if ui.radio_button_bool(format!("Take two pieces##sd_double_{}", index), !*take_single) {
+                *take_single = false;
+            }
+            if !*take_single {
+                for (di, choices) in double_choices.iter().enumerate() {
+                    let picked = double_picks[di];
+                    let preview = picked
+                        .map(|i| choices[i].name.clone())
+                        .unwrap_or_else(|| format!("Slot {} - choose...", di + 1));
+                    ui.set_next_item_width(280.0);
+                    if let Some(_cb) = ui.begin_combo(format!("##adbl_{}_{}", index, di), &preview) {
+                        for (oi, opt) in choices.iter().enumerate() {
+                            let s = picked == Some(oi);
+                            if ui.selectable_config(&opt.name).selected(s).build() {
+                                double_picks[di] = Some(oi);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ApparelSlot::SingleOrPack { single, pack } => {
+            let take_single = if let SlotSelection::SingleOrPackChosen(b) = sel { b } else { return; };
+            if ui.radio_button_bool(format!("Take just {}##sp_single_{}", single.name, index), *take_single) {
+                *take_single = true;
+            }
+            ui.same_line();
+            let pack_label = pack.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" + ");
+            if ui.radio_button_bool(format!("Take all of: {}##sp_pack_{}", pack_label, index), !*take_single) {
+                *take_single = false;
+            }
+        }
+    }
 }
 
 pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot> {
@@ -913,6 +1003,43 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
     slots
 }
 
+fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSlot, sel: &mut SlotSelection) {
+    match slot {
+        ConsumableSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
+        ConsumableSlot::Choice(opts) => {
+            let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
+            let preview = if chosen_index < opts.len() {
+                opts[chosen_index].name.clone()
+            } else {
+                format!("Consumable {} - choose...", index + 1)
+            };
+            ui.set_next_item_width(280.0);
+            if let Some(_cb) = ui.begin_combo(format!("##cslot_{}", index), &preview) {
+                for (oi, opt) in opts.iter().enumerate() {
+                    let s = chosen_index == oi;
+                    if ui.selectable_config(&opt.name).selected(s).build() {
+                        *sel = SlotSelection::Chosen(oi);
+                    }
+                }
+            }
+        }
+        ConsumableSlot::ManyForOne(give_up, get_one) => {
+            let chosen = if let SlotSelection::ManyForOneChosen(i) = sel { *i } else { 0 };
+            ui.text(format!("Choose: take all of {} OR just {}",
+                get_one.name,
+                give_up.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(" + "),
+            ));
+            if ui.radio_button_bool(format!("Take just {}##cmfo_one_{}", get_one.name, index), chosen == 0) {
+                *sel = SlotSelection::ManyForOneChosen(0);
+            }
+            ui.same_line();
+            if ui.radio_button_bool(format!("Take all of ##cmfo_many_{}", index), chosen == 1) {
+                *sel = SlotSelection::ManyForOneChosen(1);
+            }
+        }
+    }
+}
+
 //robot module is even simpler
 pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleSlot> {
     let mut fwd: HashMap<i32, i32> = HashMap::new();
@@ -971,6 +1098,29 @@ pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleS
     slots
 }
 
+fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSlot, sel: &mut SlotSelection) {
+    match slot {
+        RobotModuleSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
+        RobotModuleSlot::Choice(opts) => {
+            let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
+            let preview = if chosen_index < opts.len() {
+                opts[chosen_index].name.clone()
+            } else {
+                format!("Module {} - choose...", index + 1)
+            };
+            ui.set_next_item_width(280.0);
+            if let Some(_cb) = ui.begin_combo(format!("##rmslot_{}", index), &preview) {
+                for (oi, opt) in opts.iter().enumerate() {
+                    let s = chosen_index == oi;
+                    if ui.selectable_config(&opt.name).selected(s).build() {
+                        *sel = SlotSelection::Chosen(oi);
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub fn render_background_select(
     ui: &Ui,
     window: &Window,
@@ -988,9 +1138,6 @@ pub fn render_background_select(
     ui.text("Background:");
     ui.same_line();
     ui.set_next_item_width(280.0);
-    let preview = state.selected_index
-        .map(|i| state.all_backgrounds[i].name.as_str())
-        .unwrap_or("Select background...");
     //grab all the available backgrounds for the selected origin
     let bg_names: Vec<(usize, String)> = state.origin_backgrounds(character.clone())
         .into_iter()
@@ -999,7 +1146,7 @@ pub fn render_background_select(
     let preview = state.selected_index
         .and_then(|i| state.all_backgrounds.get(i))
         .map(|bg| bg.name.as_str())
-        .unwrap_or("Select background");
+        .unwrap_or("Select background...");
     if let Some(_cb) = ui.begin_combo("##bg_select", preview) {
         for (i, name) in &bg_names {
             let sel = state.selected_index == Some(*i);
@@ -1029,7 +1176,7 @@ pub fn render_background_select(
     else { return h };
 
     ui.separator();
-    //weapons (if we have them)
+    //weapons
     if !bg.weapon_slots.is_empty() {
         ui.text("WEAPONS");
         ui.separator();
@@ -1038,8 +1185,126 @@ pub fn render_background_select(
             render_weapon_slot(ui, i, slot, &mut state.weapon_selections[i], &bg.ammo);
             ui.spacing();
         }
+        ui.spacing();
     }
+    //apparel
+    if !bg.apparel_slots.is_empty() {
+        ui.text("APPAREL");
+        ui.separator();
+        ui.spacing();
+        for (i, slot) in bg.apparel_slots.iter().enumerate() {
+            render_apparel_slot(ui, i, slot, &mut state.apparel_selections[i]);
+            ui.spacing();
+        }
+        ui.spacing();
+    }
+    //consumables
+    if !bg.consumable_slots.is_empty() {
+        ui.text("CONSUMABLES");
+        ui.separator();
+        ui.spacing();
+        for (i, slot) in bg.consumable_slots.iter().enumerate() {
+            render_consumable_slot(ui, i, slot, &mut state.consumable_selections[i]);
+            ui.spacing();
+        }
+        ui.spacing();
+    }
+    //robot modules
+    if !bg.robot_module_slots.is_empty() {
+        ui.text("ROBOT MODULES");
+        ui.separator();
+        ui.spacing();
+        for (i, slot) in bg.robot_module_slots.iter().enumerate() {
+            render_robot_module_slot(ui, i, slot, &mut state.robot_module_selections[i]);
+            ui.spacing();
+        }
+        ui.spacing();
+    }
+    //gear
+    if !bg.gear.is_empty() {
+        ui.text("GEAR");
+        ui.separator();
+        ui.spacing();
+        for g in &bg.gear {
+            ui.text(format!("  {}", g.gear_name));
+        }
+        ui.spacing();
+    }
+    //misc
+    ui.text("MISC");
+    ui.separator();
+    ui.spacing();
+    ui.text(format!("  Caps: {}", bg.caps));
+    if !bg.misc.is_empty()   { ui.text(format!("  Misc: {}", bg.misc)); }
+    let mut table_vec: Vec<String> = vec![];
+    if bg.trinket > 0  { table_vec.push(format!("  Trinket x{}", bg.trinket)); }
+    if bg.food > 0     { table_vec.push(format!("  Food x{}", bg.food)); }
+    if bg.forage > 0   { table_vec.push(format!("  Forage x{}", bg.forage)); }
+    if bg.bev > 0      { table_vec.push(format!("  Beverages x{}", bg.bev)); }
+    if bg.chem > 0     { table_vec.push(format!("  Chems x{}", bg.chem)); }
+    if bg.ammo_count > 0  { table_vec.push(format!("  Ammo x{}", bg.ammo_count)); }
+    if bg.aid > 0      { table_vec.push(format!("  Aid x{}", bg.aid)); }
+    if bg.odd > 0      { table_vec.push(format!("  Oddities x{}", bg.odd)); }
+    if bg.outcast > 0  { table_vec.push(format!("  Outcast Equipment x{}", bg.outcast)); }
+    if bg.junk > 0     { table_vec.push(format!("  Junk x{}", bg.junk)); }
+    if table_vec.len() > 0 {
+        ui.text("Table Rolls:");
+        for i in 0..table_vec.len() {
+            ui.text(table_vec[i].clone());
+        }
+    }
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
 
+    ui.text("debug output");
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
 
+    ui.text_disabled("background:");
+    ui.same_line();
+    if state.current_background.is_none() {
+        ui.text("none");
+    } else {
+        let bg = state.current_background.clone().unwrap();
+        ui.text_wrapped(format!("  id: {}   name: {}   caps: {}   misc: {}", bg.id, bg.name, bg.caps, bg.misc));
+        ui.text_wrapped(format!("              trinket: {}  food: {}  forage: {}  bev: {}  chem: {}  ammo: {}  aid: {}  odd: {}  outcast: {}  junk: {}", bg.trinket, bg.food, bg.forage, bg.bev, bg.chem, bg.ammo_count, bg.aid, bg.odd, bg.outcast, bg.junk));
+        ui.text_disabled("  weapon_slots:      ");
+        ui.same_line();
+        ui.text_wrapped(format!("{:?}", bg.weapon_slots));
+        ui.text_disabled("  ammo:              ");
+        ui.same_line();
+        ui.text_wrapped(format!("{:?}", bg.ammo));
+        ui.text_disabled("  apparel_slots:     ");
+        ui.same_line();
+        ui.text_wrapped(format!("{:?}", bg.apparel_slots));
+        ui.text_disabled("  consumable_slots:  ");
+        ui.same_line();
+        ui.text_wrapped(format!("{:?}", bg.consumable_slots));
+        ui.text_disabled("  robotmod_slots:    ");
+        ui.same_line();
+        ui.text_wrapped(format!("{:?}", bg.robot_module_slots));
+        ui.text_disabled("  gear_slots:        ");
+        ui.same_line();
+        ui.text_wrapped(format!("{:?}", bg.gear));
+    }
+    ui.text_disabled("weapons:");
+    ui.same_line();
+    ui.text_wrapped(format!("  {:?}", state.weapon_selections));
+    ui.text_disabled("apparel:");
+    ui.same_line();
+    ui.text_wrapped(format!("  {:?}", state.apparel_selections));
+    ui.text_disabled("consumables:");
+    ui.same_line();
+    ui.text_wrapped(format!("  {:?}", state.consumable_selections));
+    ui.text_disabled("robot modules:");
+    ui.same_line();
+    ui.text_wrapped(format!("  {:?}", state.robot_module_selections));
+
+    //ends the scroll window
+    drop(_child);
     h
 }

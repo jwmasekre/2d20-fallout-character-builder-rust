@@ -1,3 +1,4 @@
+/*
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::{character::Character, db::Db, theme::render_window};
@@ -19,3 +20,4 @@ pub fn render_character_review(
 
     h
 }
+*/

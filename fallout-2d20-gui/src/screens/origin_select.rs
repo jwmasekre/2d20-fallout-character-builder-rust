@@ -3,6 +3,7 @@ use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
 use crate::screens::skill_assignment::SkillState;
+use crate::screens::background_select::BackgroundState;
 use crate::theme::{render_text_wrapped, render_window};
 //use crate::log_on_change;
 
@@ -37,7 +38,7 @@ impl OriginState {
     pub fn is_complete(&self) -> bool {//do we need to be checking the character to make sure that's good to go too?
         self.selected && (self.trait_count == self.origin_trait_count)
     }
-    fn update_origin(&mut self, character: &mut Character) {
+    fn update_origin(&mut self, character: &mut Character, background_state: &mut BackgroundState) {
         //if no origins are returned by the db, return None
         if self.origins.is_empty() { character.origin = None; return }
         //mark that the player has selected an origin
@@ -82,6 +83,8 @@ impl OriginState {
         };
         //update max special
         Special::apply_max(character);
+        //clear out any selected backgrounds
+        background_state.reset_selection();
     }
     //retrieve the traits based on the current origin
     fn reload_traits(&mut self, db: &Db, character: &mut Character) {
@@ -280,6 +283,7 @@ pub fn render_origin_select(
     db: &Db,
     character: &mut Character,
     skill_state: &mut SkillState,
+    background_state: &mut BackgroundState,
 ) -> f32 {
     let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select")
         else { return 0.0 };
@@ -366,7 +370,7 @@ pub fn render_origin_select(
 
     //when the player selects an origin, update the origin and reload the traits
     if origin_changed {
-        state.update_origin(character);
+        state.update_origin(character, background_state);
         state.reload_traits(db, character);
         skill_state.reset(character);
     }

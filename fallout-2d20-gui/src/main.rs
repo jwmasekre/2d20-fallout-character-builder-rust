@@ -436,7 +436,7 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::OriginSelect => {
                 let state = &mut origin;
-                render_origin_select(&ui, &window, state, &db, &mut character, &mut skill)
+                render_origin_select(&ui, &window, state, &db, &mut character, &mut skill, &mut background)
             }
 /*--------*/AppScreen::SpecialAssignment => {
                 //let state = &mut special.update(&character);
