@@ -623,6 +623,70 @@ pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSlot> {
     slots
 }
 
+fn weapon_label(opt: &WeaponOption) -> String {
+    let mut s = opt.name.clone();
+    if let Some(m) = &opt.mod_name { s.push_str(&format!(" w/ {}", m)); }
+    if !opt.extra_mods.is_empty() {
+        s.push_str(&format!(" + {}", opt.extra_mods.join(", ")));
+    }
+    s
+}
+
+fn render_weapon_option_label(ui: &Ui, opt: &WeaponOption) {
+    ui.text(format!("  {}", weapon_label(opt)))
+}
+
+fn render_ammo_for(ui: &Ui, bg_weapon_id: i32, ammo: &[AmmoRow]) {
+    for a in ammo.iter().filter(|a| a.bg_weapon_id == bg_weapon_id) {
+        ui.text_disabled(format!("    Ammo: {} ({})", a.ammo_name, a.quantity));
+    }
+}
+
+fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSlot, sel: &mut SlotSelection, ammo: &[AmmoRow],) {
+    match slot {
+        WeaponSlot::Fixed(opt) => {
+            render_weapon_option_label(ui, opt);
+            render_ammo_for(ui, opt.bg_weapon_id, ammo);
+        }
+        WeaponSlot::Choice(opts) => {
+            let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
+            let preview = if chosen_index < opts.len() {
+                weapon_label(&opts[chosen_index])
+            } else {
+                format!("Weapon {} - choose...", index + 1)
+            };
+            ui.set_next_item_width(300.0);
+            if let Some(_cb) = ui.begin_combo(format!("##wslot_{}", index), &preview) {
+                for (oi, opt) in opts.iter().enumerate() {
+                    let s = chosen_index == oi;
+                    if ui.selectable_config(&weapon_label(opt)).selected(s).build() {
+                        *sel = SlotSelection::Chosen(oi);
+                    }
+                }
+            }
+            if chosen_index < opts.len() {
+                render_ammo_for(ui, opts[chosen_index].bg_weapon_id, ammo);
+            }
+        }
+        WeaponSlot::ManyForOne(give_up, get_one) => {
+            let chosen = if let SlotSelection::ManyForOneChosen(i) = sel { *i } else { 0 };
+            ui.text(format!("Choose: take all of {} OR just {}", weapon_label(get_one), give_up.iter().map(|w| weapon_label(w)).collect::<Vec<_>>().join(" + ")));
+            //let mut take_one = chosen == 0;
+            let take_one = chosen == 0;
+            if ui.radio_button_bool(format!("Take {}##mfo_one_{}", weapon_label(get_one), index), take_one) {
+                *sel = SlotSelection::ManyForOneChosen(0);
+            }
+            ui.same_line();
+            if ui.radio_button_bool(
+                format!("Give up for {}##mfo_many_{}", give_up.iter().map(|w| weapon_label(w)).collect::<Vec<_>>().join("+"), index),
+                !take_one
+            ) {
+                *sel = SlotSelection::ManyForOneChosen(1);
+            }
+        }
+    }
+}
+
 pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
     //this block helps us understand which type of choice we need to present
     //maps each apparel to its professed alternate
@@ -920,6 +984,62 @@ pub fn render_background_select(
     ui.text("BACKGROUND");
     ui.separator();
     ui.spacing();
+
+    ui.text("Background:");
+    ui.same_line();
+    ui.set_next_item_width(280.0);
+    let preview = state.selected_index
+        .map(|i| state.all_backgrounds[i].name.as_str())
+        .unwrap_or("Select background...");
+    //grab all the available backgrounds for the selected origin
+    let bg_names: Vec<(usize, String)> = state.origin_backgrounds(character.clone())
+        .into_iter()
+        .map(|(i, bg)| (i, bg.name.clone()))
+        .collect();
+    let preview = state.selected_index
+        .and_then(|i| state.all_backgrounds.get(i))
+        .map(|bg| bg.name.as_str())
+        .unwrap_or("Select background");
+    if let Some(_cb) = ui.begin_combo("##bg_select", preview) {
+        for (i, name) in &bg_names {
+            let sel = state.selected_index == Some(*i);
+            if ui.selectable_config(name.as_str()).selected(sel).build() {
+                if state.selected_index != Some(*i) {
+                    state.load_background(db, *i);
+                }
+            }
+        }
+    }
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
+    //if there isn't a selected background, inform the player and stop rendering
+    let Some(bg) = &state.current_background else {
+        ui.text_disabled("Select a background to view starting equipment options...");
+        return h;
+    };
+    //create a clone of the background we can reference
+    //avoids borrowing issues
+    let bg = bg.clone();
+    //creates a scrolling child window for the selection (not sure if we ever need this much space but who knows)
+    let list_h = h - 100.0;
+    let Some(_child) = ui.child_window("##equip_scroll")
+        .size([w - 16.0, list_h])
+        .begin()
+    else { return h };
+
+    ui.separator();
+    //weapons (if we have them)
+    if !bg.weapon_slots.is_empty() {
+        ui.text("WEAPONS");
+        ui.separator();
+        ui.spacing();
+        for (i, slot) in bg.weapon_slots.iter().enumerate() {
+            render_weapon_slot(ui, i, slot, &mut state.weapon_selections[i], &bg.ammo);
+            ui.spacing();
+        }
+    }
+
 
     h
 }

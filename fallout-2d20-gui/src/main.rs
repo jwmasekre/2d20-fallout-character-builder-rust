@@ -134,6 +134,24 @@ fn main() -> Result<()> {
     let mut imgui = imgui::Context::create();
     //applies the theme from the user config
     apply_theme(&mut imgui, THEMES[current_theme]);
+    //load custom font (might move to theme.rs)
+    imgui.fonts().clear();
+    let font_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("fonts/Monofonto.ttf");
+    imgui.fonts().add_font(&[imgui::FontSource::TtfData {
+        data: &std::fs::read(&font_path).expect("Failed to load Monofonto.ttf"),
+        size_pixels: 16.0,
+        config: Some(imgui::FontConfig {
+            oversample_h: 2,
+            oversample_v: 2,
+            pixel_snap_h: false,
+            ..imgui::FontConfig::default()
+        }),
+    }]);
+    imgui.fonts().tex_id;
     //sets the path for the db
     let db_path = &db_path(cfg.db_path);
     //sets the file path for imgui ini file
