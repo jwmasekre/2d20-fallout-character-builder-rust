@@ -1,6 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use serde_json;
+use regex::Regex;
 use crate::db::Db;
 use crate::AppScreen;
 use crate::screens::skill_assignment::SKILLS;
@@ -146,7 +147,7 @@ impl PerkState {
 pub struct PerkRow {
     pub id: i32,
     pub name: String,
-    pub description: String,
+    pub description: Vec<String>,
     pub level_req: i32,
     pub ranks: i32,
     pub rank_range: i32,
@@ -166,6 +167,7 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
             "#
         ).fetch_all(&db.pool).await
     });
+    let desc_reg_pattern = Regex::new(r"\d+:\s*([^0-9]+)").unwrap();
     match result {
         Ok(rows) => rows.into_iter().map(|r| {
             let reqs: Vec<String> = r.reqs
@@ -176,11 +178,12 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
                 .as_deref()
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default();
+            let desc_vec: Vec<String> = desc_reg_pattern.captures_iter(&r.description.clone().unwrap_or_default()).map(|cap| cap[1].trim().to_string()).collect();
             PerkRow {
                 id: r.id as i32,
                 name: r.name.unwrap_or_default(),
                 sourcebook: r.sourcebook.unwrap_or_default(),
-                description: r.description.unwrap_or_default(),
+                description: if desc_vec.len() > 0 {desc_vec} else {vec![r.description.unwrap_or_default()]},
                 level_req: r.level_req.unwrap_or_default() as i32,
                 ranks: r.ranks.unwrap_or_default() as i32,
                 rank_range: r.rank_range.unwrap_or_default() as i32,
@@ -410,7 +413,7 @@ pub fn render_perk_select(
                     id,
                     name,
                     //will want to split out the different ranks at some point
-                    desc: vec![desc.clone()],
+                    desc: desc.clone(),
                     ranks: 1,
                 };
                 character.perks.push(cperk);
@@ -477,7 +480,16 @@ pub fn render_perk_select(
         //description
         let y = ui.cursor_pos()[1];
         ui.set_cursor_pos([col_name + 8.0, y]);
-        render_text_wrapped(true, false, ui, &desc, col_name + 8.0, w - 24.0);
+        let mut text_vec = vec![];
+        if desc.clone().len() > 1 {
+            for (i, rank) in desc.iter().enumerate() {
+                text_vec.push(format!("{}: {}", i + 1, *rank));
+            }
+        } else {
+            text_vec.push(desc[0].clone());
+        }
+        let render_desc = text_vec.join(" ");
+        render_text_wrapped(true, false, ui, &render_desc, col_name + 8.0, w - 24.0);
         //requirements and limits
         if !reqs.is_empty() || !lims.is_empty() {
             let y = ui.cursor_pos()[1];

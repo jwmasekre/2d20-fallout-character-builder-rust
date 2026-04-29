@@ -22,8 +22,8 @@ pub fn compute_stats(character: &mut Character) -> (BaseDR, bool) {
     let str = character.special.strength.value;
     let per = character.special.perception.value;
     let end = character.special.endurance.value;
-    let cha = character.special.charisma.value;
-    let int = character.special.intelligence.value;
+    let _cha = character.special.charisma.value;
+    let _int = character.special.intelligence.value;
     let agi = character.special.agility.value;
     let lck = character.special.luck.value;
 
@@ -138,7 +138,7 @@ pub fn render_stat_calculation(
         .size([w - 16.0, list_h])
         .begin()
     else { return h };
-    let d_col_w = (w - 16.0) * 0.5;
+    let d_col_w = (w - 24.0) * 0.5;
 
     ui.text("Derived");
     ui.separator();
@@ -184,12 +184,17 @@ pub fn render_stat_calculation(
     ui.separator();
     ui.spacing();
 
+    ui.columns(1, "##special", false);
+
     ui.text("SPECIAL");
     ui.separator();
     ui.spacing();
 
     for i in 0..7 {
-        ui.text(format!("  {:5} {:7}",SPECIAL_LABELS[i].chars().next().unwrap(), char_spec[i].value));
+        ui.text(format!("     {}:{:4}    ",SPECIAL_LABELS[i].chars().next().unwrap(), char_spec[i].value));
+        if i < 6 {
+            ui.same_line();
+        }
     }
 
     ui.spacing();
@@ -200,9 +205,21 @@ pub fn render_stat_calculation(
     ui.separator();
     ui.spacing();
 
+    let mut active_skills = vec![];
     for i in 0..17 {
         if char_skills[i].total > 0 {
-            ui.text(format!("  {:24} {} {}", SKILLS[i], char_skills[i].total, if char_skills[i].is_tagged() {"(Tag)"} else {""}));
+            active_skills.push((SKILLS[i],char_skills[i].total, if char_skills[i].is_tagged() {"(Tag)"} else {"-----"}))
+        }
+    }
+    let rows = ((active_skills.len() - 1) / 3) + 1;
+
+    for i in 0..rows {
+        ui.text(format!("  {:20} {} {}  ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
+        ui.same_line();
+        ui.text(format!("  {:20} {} {}  ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
+        if active_skills.len() > i + rows * 2 {
+            ui.same_line();
+            ui.text(format!("  {:20} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
         }
     }
 
@@ -210,7 +227,7 @@ pub fn render_stat_calculation(
     ui.separator();
     ui.spacing();
 
-    ui.text("PERKS");
+    ui.text("Perks");
     ui.separator();
     ui.spacing();
 
@@ -222,15 +239,17 @@ pub fn render_stat_calculation(
     for perk in perk_l {
         ui.text(&perk.name);
         for i in 0..perk.desc.len() {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i, perk.desc[i]), 0.0, d_col_w - 6.0);
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0);
         }
+        ui.spacing();
     }
     ui.next_column();
     for perk in perk_r {
         ui.text(&perk.name);
         for i in 0..perk.desc.len() {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i, perk.desc[i]), d_col_w + 6.0, w - 6.0);
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0, w - 6.0);
         }
+        ui.spacing();
     }
     h
 }
