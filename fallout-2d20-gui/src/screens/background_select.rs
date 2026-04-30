@@ -1,4 +1,4 @@
-use crate::{character::Character, db::Db, theme::render_window};
+use crate::{character::{AmmoInv, Apparel, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
@@ -266,7 +266,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     }
 }
 
-/*
+
 //used to handle applying mod effects properly
 pub struct EffectNameSets {
     pub effect_names: HashSet<String>,
@@ -293,11 +293,15 @@ impl EffectNameSets {
                 .collect(),
         }
     }
-    pub fn qual_not_eff(&self, name: &str) -> bool {
-        self.quality_names.contains(&name.to_lowercase())
+    pub fn qual_not_eff(&self, name: &str) -> Option<bool> {
+        let mut res = self.quality_names.contains(&name.to_lowercase());
+        if res { return Some(res) } else {
+            res = self.effect_names.contains(&name.to_lowercase());
+            if res { return Some(!res) } else { None }
+        }
     }
 }
-*/
+
 
 pub struct BackgroundState {
     pub all_backgrounds: Vec<BackgroundRow>,
@@ -355,6 +359,542 @@ impl BackgroundState {
     }
 }
 
+//using this to basically handle the inventory so we can pass it over to review
+//review will apply the inventory on acceptance
+pub struct EquipmentState {
+    pub weapons: Vec<Weapon>,
+    pub ammo: Vec<AmmoInv>,
+    pub apparel: Vec<Apparel>,
+    pub robot_modules: Vec<RobotModule>,
+    pub consumables: Vec<Consumable>,
+    pub gear: Vec<Gear>,
+    pub junk: Junk,
+    pub misc: Vec<String>,
+}
+impl EquipmentState {
+    pub fn new() -> Self {
+        Self {
+            weapons: vec![],
+            ammo: vec![],
+            apparel: vec![],
+            robot_modules: vec![],
+            consumables: vec![],
+            gear: vec![],
+            junk: Junk {
+                common: 0,
+                uncommon: 0,
+                rare: 0,
+            },
+            misc: vec![],
+        }
+    }
+    pub fn load(&mut self, db: &Db, state: &BackgroundState, character: &Character) {
+        self.weapons = resolve_weapons(db, &state.current_background.clone().unwrap(), &state.weapon_selections, character);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WeaponEffect {
+    pub name: String,
+    pub value: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WeaponQuality {
+    pub name: String,
+    pub value: Option<i32>,
+}
+
+fn parse_damage_type(s: &str) -> DamageType {
+    match s {
+        "Ph"    => DamageType::Ph,
+        "En"    => DamageType::En,
+        "Ph/En" => DamageType::PhEn,
+        "Rad"   => DamageType::Rad,
+        "En/Rad"=> DamageType::EnRad,
+        "Poi"   => DamageType::Poi,
+        "All"   => DamageType::All,
+        _       => DamageType::None,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ModEffect {
+    SetDamage(i32),           // "XCD Dam"
+    AddDamage(i32),              // "+XCD Dam"
+    SubDamage(i32),              // "-XCD Dam"
+    SetRate(i32),                // "X Rate"
+    AddRate(i32),                // "+X Rate"
+    SubRate(i32),                // "-X Rate"
+    AddRange(i32),               // "+X Range"
+    SubRange(i32),               // "-X Range"
+    Gain(String, Option<i32>),   // "Gain X" or "Gain X Y"
+    Lose(String, Option<i32>),   // "Lose X" or "Lose X Y"
+    AllowsMods(String),          // "Allows X Mods"
+    AddWeapon(String),           // "Add X weapon"
+    SetDamageType(DamageType),       // "Dam Type = X"
+    SetAmmo(String),             // "Ammo = X"
+    Unknown(String),             // fallback
+}
+
+struct ModEffectList {
+    dam_set: i32,
+    dam_add: i32,
+    dam_sub: i32,
+    rat_set: i32,
+    rat_add: i32,
+    rat_sub: i32,
+    rng_add: i32,
+    rng_sub: i32,
+    e_gain: Vec<(String, Option<i32>)>,
+    q_gain: Vec<(String, Option<i32>)>,
+    e_lose: Vec<(String, Option<i32>)>,
+    q_lose: Vec<(String, Option<i32>)>,
+    mods: String,
+    weap: String,
+    dam_type: DamageType,
+    ammo: Option<String>,
+    unk: String,
+}
+
+impl ModEffectList {
+    fn new() -> Self {
+        Self {
+            dam_set: 0,
+            dam_add: 0,
+            dam_sub: 0,
+            rat_set: 0,
+            rat_add: 0,
+            rat_sub: 0,
+            rng_add: 0,
+            rng_sub: 0,
+            e_gain: vec![],
+            e_lose: vec![],
+            q_gain: vec![],
+            q_lose: vec![],
+            mods: "".to_string(),
+            weap: "".to_string(),
+            dam_type: DamageType::None,
+            ammo: Some("".to_string()),
+            unk: "".to_string(),
+        }
+    }
+}
+
+//need to review
+pub fn parse_mod_effect(s: &str) -> ModEffect {
+    let s = s.trim();
+    // Dam Type = X
+    if let Some(rest) = s.strip_prefix("Dam Type =").or_else(|| s.strip_prefix("Dam Type=")) {
+        let val = rest.trim();
+        let dtype = if val.eq_ignore_ascii_case("Both Physical and Energy") {
+            parse_damage_type("Ph/En")
+        } else {
+            parse_damage_type(val)
+        };
+        return ModEffect::SetDamageType(dtype);
+    }
+    // Ammo = X
+    if let Some(rest) = s.strip_prefix("Ammo =").or_else(|| s.strip_prefix("Ammo=")) {
+        return ModEffect::SetAmmo(rest.trim().to_string());
+    }
+    // Allows X Mods
+    if let Some(rest) = s.strip_prefix("Allows ") {
+        if let Some(mod_name) = rest.strip_suffix(" Mods") {
+            return ModEffect::AllowsMods(mod_name.trim().to_string());
+        }
+    }
+    // Add X weapon
+    if let Some(rest) = s.strip_prefix("Add ") {
+        if let Some(weap) = rest.strip_suffix(" weapon") {
+            return ModEffect::AddWeapon(weap.trim().to_string());
+        }
+    }
+    // Gain X / Gain X Y / Gain X(Y) / Gain X (Y)
+    if let Some(rest) = s.strip_prefix("Gain ") {
+        let (name, val) = parse_name_and_value(rest);
+        return ModEffect::Gain(name, val);
+    }
+    // Lose X / Lose X Y
+    if let Some(rest) = s.strip_prefix("Lose ") {
+        let (name, val) = parse_name_and_value(rest);
+        return ModEffect::Lose(name, val);
+    }
+    // +X Range / -X Range
+    if let Some(rest) = s.strip_suffix(" Range") {
+        if let Some(n) = rest.strip_prefix('+').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::AddRange(n);
+        }
+        if let Some(n) = rest.strip_prefix('-').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::SubRange(n);
+        }
+    }
+    // +X Rate / -X Rate / X Rate
+    if let Some(rest) = s.strip_suffix(" Rate") {
+        if let Some(n) = rest.strip_prefix('+').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::AddRate(n);
+        }
+        if let Some(n) = rest.strip_prefix('-').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::SubRate(n);
+        }
+        if let Ok(n) = rest.parse::<i32>() {
+            return ModEffect::SetRate(n);
+        }
+    }
+    // XCD Dam / +XCD Dam / -XCD Dam
+    if let Some(rest) = s.strip_suffix(" Dam") {
+        if let Some(inner) = rest.strip_prefix('+') {
+            // "+3CD Dam" → extract just the number
+            let n: i32 = inner.trim_end_matches(|c: char| c.is_alphabetic())
+                .parse().unwrap_or(0);
+            return ModEffect::AddDamage(n);
+        }
+        if let Some(inner) = rest.strip_prefix('-') {
+            let n: i32 = inner.trim_end_matches(|c: char| c.is_alphabetic())
+                .parse().unwrap_or(0);
+            return ModEffect::SubDamage(n);
+        }
+        // "3CD Dam" or "2CD Dam" — full replacement
+        return ModEffect::SetDamage(rest.trim_end_matches(|c: char| c.is_alphabetic()).parse().unwrap_or(0));
+    }
+    ModEffect::Unknown(s.to_string())
+}
+
+/// Parse "Name" or "Name 3" or "Name(3)" or "Name (3)"
+fn parse_name_and_value(s: &str) -> (String, Option<i32>) {
+    // Try "Name(X)" or "Name (X)"
+    if let Some(paren_start) = s.rfind('(') {
+        let name = s[..paren_start].trim().to_string();
+        let val_str = s[paren_start+1..].trim_end_matches(')').trim();
+        if let Ok(v) = val_str.parse::<i32>() {
+            return (name, Some(v));
+        }
+    }
+    // Try "Name X" where last token is a number
+    if let Some(last_space) = s.rfind(' ') {
+        let maybe_num = &s[last_space+1..];
+        if let Ok(v) = maybe_num.parse::<i32>() {
+            return (s[..last_space].trim().to_string(), Some(v));
+        }
+    }
+    (s.trim().to_string(), None)
+}
+
+fn apply_gain(
+    effects: &mut Vec<WeaponEffect>,
+    qualities: &mut Vec<WeaponQuality>,
+    name: &str,
+    val: Option<i32>,
+    names: &EffectNameSets,
+    mod_eff: &mut ModEffectList,
+) {
+    if names.qual_not_eff(name).is_some() {
+        if names.qual_not_eff(name).unwrap() {
+            if let Some(existing) = qualities.iter_mut().find(|q| q.name.eq_ignore_ascii_case(name)) {
+                match (existing.value, val) {
+                    (Some(qv), Some(v)) => existing.value = Some(qv + v),
+                    (None, Some(v))     => existing.value = Some(v),
+                    _                   => {}
+                }
+            } else {
+                qualities.push(WeaponQuality { name: name.to_string(), value: val });
+            }
+            mod_eff.q_gain.push((name.to_string(), val));
+        } else {
+            if let Some(existing) = effects.iter_mut().find(|e| e.name.eq_ignore_ascii_case(name)) {
+                match (existing.value, val) {
+                    (Some(ev), Some(v)) => existing.value = Some(ev + v),
+                    (None, Some(v))     => existing.value = Some(v),
+                    _                   => {}
+                }
+            } else {
+                effects.push(WeaponEffect { name: name.to_string(), value: val });
+            }
+            mod_eff.e_gain.push((name.to_string(), val));
+        }
+    } else {
+        eprintln!("[apply_gain] unknown name '{}' — not in dam_effects or qualities", name);
+    }
+}
+
+fn apply_lose(
+    effects: &mut Vec<WeaponEffect>,
+    qualities: &mut Vec<WeaponQuality>,
+    name: &str,
+    val: Option<i32>,
+    names: &EffectNameSets,
+    mod_eff: &mut ModEffectList,
+) {
+    if names.qual_not_eff(name).is_some() {
+        if names.qual_not_eff(name).unwrap() {
+            if let Some(pos) = qualities.iter().position(|q| q.name.eq_ignore_ascii_case(name)) {
+                match (qualities[pos].value, val) {
+                    (Some(qv), Some(v)) if v >= qv => { qualities.remove(pos); }
+                    (Some(qv), Some(v))             => { qualities[pos].value = Some(qv - v); }
+                    _                               => { qualities.remove(pos); }
+                }
+            }
+            mod_eff.q_lose.push((name.to_string(),val))
+        } else {
+            if let Some(pos) = effects.iter().position(|e| e.name.eq_ignore_ascii_case(name)) {
+                match (effects[pos].value, val) {
+                    (Some(ev), Some(v)) if v >= ev => { effects.remove(pos); }
+                    (Some(ev), Some(v))             => { effects[pos].value = Some(ev - v); }
+                    _                               => { effects.remove(pos); }
+                }
+            }
+            mod_eff.e_lose.push((name.to_string(),val))
+        }
+    } else {
+        eprintln!("[apply_lose] unknown name '{}' — not in dam_effects or qualities", name);
+    }
+}
+
+fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotSelection], character: &Character) -> Vec<Weapon> {
+    let names = EffectNameSets::load(db);
+    let ranges = ["R","C","M","L","X"];
+    //grab all the weapon ids that were selected
+    let selected_weapon_ids: Vec<i32> = background.weapon_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (WeaponSelSlot::Fixed(opt), _) => vec![opt.bg_weapon_id],
+            (WeaponSelSlot::Choice(opts), SlotSelection::Chosen(i)) if *i < opts.len() => vec![opts[*i].bg_weapon_id],
+            (WeaponSelSlot::ManyForOne(give_up,get_one ), SlotSelection::ManyForOneChosen(choice)) => if *choice == 0 {
+                vec![get_one.bg_weapon_id]
+            } else {
+                give_up.iter().map(|w| w.bg_weapon_id).collect()
+            },
+            _ => vec![],
+        })
+        .collect();
+    //if nothing is selected, send an empty vector
+    if selected_weapon_ids.is_empty() { return vec![] }
+
+    //grab the entire weapon's data for each selected weapon from the db
+    let id_json = serde_json::to_string(&selected_weapon_ids).unwrap_or_default();
+    let rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT
+                bw.id        AS bg_weapon_id,
+                w.id         AS weapon_id,
+                w.name       AS weapon_name,
+                w.dam, w.dtype, w.rate, w.range, w.wgt,
+                s.name       AS skill_name,
+                a.name       AS ammo_name,
+                a.wgt        AS ammo_wgt,
+                ba.quantity  AS ammo_quantity,
+                wm.id        AS mod_id,
+                wm.name      AS mod_name,
+                wm.prefix    AS mod_prefix,
+                wm.effects   AS mod_effects,
+                wm.wgt       AS mod_wgt
+            FROM background_weapons bw
+            JOIN weapons w   ON w.id  = bw.weapon_id
+            JOIN skills  s   ON s.id  = w.type
+            LEFT JOIN weapon_mods wm ON wm.id = bw.mod_id
+            LEFT JOIN background_ammo ba ON ba.bg_weapon_id = bw.id
+            LEFT JOIN ammo a ON a.id = ba.ammo_id
+            WHERE bw.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let mut result: Vec<Weapon> = vec![];
+
+    for row in &rows {
+        let weapon_id = row.weapon_id;
+        //grab qualities
+        let qual_rows = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT q.name, wq.qual_val
+                   FROM weapon_quals wq
+                   JOIN qualities q ON q.id = wq.qual_id
+                   WHERE wq.weapon_id = ?"#,
+                weapon_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        let mut qualities: Vec<WeaponQuality> = qual_rows.iter().map(|q| WeaponQuality {
+            name: q.name.clone().unwrap_or_default(),
+            value: q.qual_val.map(|v| v as i32),
+        }).collect();
+
+        //grab effects
+        let eff_rows = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT de.name, we.effect_val
+                   FROM weapon_effects we
+                   JOIN dam_effects de ON de.id = we.effect_id
+                   WHERE we.weapon_id = ?"#,
+                weapon_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        let mut effects: Vec<WeaponEffect> = eff_rows.iter().map(|e| WeaponEffect {
+            name: e.name.clone().unwrap_or_default(),
+            value: e.effect_val.map(|v| v as i32),
+        }).collect();
+
+        let damage_str = row.dam.clone().unwrap_or_default();
+        let mut damage: i32 = damage_str.trim_end_matches(|c: char| c.is_alphabetic()).parse().unwrap_or(0);
+        let mut rate = row.rate.unwrap_or_default() as i32;
+        let mut range = row.range.clone().unwrap_or_default();
+        let damage_type_str = row.dtype.clone().unwrap_or("".to_string());
+        let mut dam_type = parse_damage_type(&damage_type_str);
+        let base_wgt = row.wgt.unwrap_or_default() as i32;
+        let mod_wgt = row.mod_wgt.unwrap_or_default() as i32;
+        let weight = base_wgt + mod_wgt;
+        let name = row.weapon_name.clone().unwrap_or_default();
+        let prefix = row.mod_prefix.clone().unwrap_or_default();
+
+        //target number calcs
+        let skill_name = row.skill_name.clone().unwrap_or_default();
+        let special: Vec<i32> = character.special.special_block().iter().map(|s| s.value.clone()).collect();
+        let skills: Vec<i32>  = character.skills.skill_block().iter().map(|s| s.total.clone()).collect();
+        let tags: Vec<bool> = character.skills.skill_block().iter().map(|s| s.is_tagged()).collect();
+        let (spec_index, skill_index, skill) = match skill_name.as_str() {
+            "Melee Weapons" => (0,7,Skill::MeleeWeapons),
+            "Unarmed" => (0,16,Skill::Unarmed),
+            "Small Guns" => (5,11,Skill::SmallGuns),
+            "Throwing" => (5,15,Skill::Throwing),
+            "Energy Weapons" => (1,3,Skill::EnergyWeapons),
+            "Explosives" => (1,4,Skill::Explosives),
+            "Big Guns" => (2,2,Skill::BigGuns),
+            _  => (6,0,Skill::Athletics),
+        };
+        let spec_value = special[spec_index];
+        let skill_total = skills[skill_index];
+        let tag = tags[skill_index];
+        let target = skill_total + spec_value;
+
+        let mut weapon_mod_eff = ModEffectList::new();
+
+        //handle any changes from mods
+        //need to review this
+        if let Some(mod_fx_json) = &row.mod_effects {
+            if let Ok(fx_strings) = serde_json::from_str::<Vec<String>>(mod_fx_json) {
+                for fx_str in &fx_strings {
+                    match parse_mod_effect(fx_str) {
+                        ModEffect::SetDamage(d) => {
+                            damage = d;
+                            weapon_mod_eff.dam_set = d;
+                        }
+                        ModEffect::AddDamage(n) => {
+                            // Extract leading number from e.g. "3CD", add n, reformat
+                            damage += n;
+                            weapon_mod_eff.dam_add = n;
+                        }
+                        ModEffect::SubDamage(n) => {
+                            damage -= n;
+                            if damage < 1 { damage = 1 }
+                            weapon_mod_eff.dam_sub = n;
+                        }
+                        ModEffect::SetRate(r) => {
+                            rate = r;
+                            weapon_mod_eff.rat_set = r;
+                        }
+                        ModEffect::AddRate(r) => {
+                            rate += r;
+                            weapon_mod_eff.rat_add = r;
+                        }
+                        ModEffect::SubRate(r) => {
+                            rate = (rate - r).max(0);
+                            weapon_mod_eff.rat_sub = r;
+                        }
+                        ModEffect::AddRange(_) => {
+                            let range_num = ranges.iter().position(|&r| r == &range).unwrap();
+                            if range_num > 0 || range_num < 4 {
+                                range = ranges[range_num + 1].to_string();
+                            }
+                            weapon_mod_eff.rng_add = 1;
+                        }
+                        ModEffect::SubRange(_) => {
+                            let range_num = ranges.iter().position(|&r| r == &range).unwrap();
+                            if range_num > 1 || range_num < 5 {
+                                range = ranges[range_num - 1].to_string();
+                            }
+                            weapon_mod_eff.rng_sub = 1;
+                        }
+                        ModEffect::Gain(name, val) => {
+                            apply_gain(&mut effects, &mut qualities, &name, val, &names, &mut weapon_mod_eff);
+                        }
+                        ModEffect::Lose(name, val) => {
+                            apply_lose(&mut effects, &mut qualities, &name, val, &names, &mut weapon_mod_eff);
+                        }
+                        ModEffect::SetDamageType(dt) => {
+                            dam_type = dt.clone();
+                            weapon_mod_eff.dam_type = dt;
+                        }
+                        ModEffect::SetAmmo(name) => {
+                            // Ammo swap handled at character sheet save time
+                            weapon_mod_eff.ammo = Some(name);
+                        }
+                        ModEffect::AllowsMods(name) => {
+                            // Structural changes — handled at save time
+                            weapon_mod_eff.mods = name;
+                        }
+                        ModEffect::AddWeapon(name) => {
+                            weapon_mod_eff.weap = name;
+                        }
+                        ModEffect::Unknown(s) => {
+                            eprintln!("Unknown mod effect: {s}");
+                            weapon_mod_eff.unk = s;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut weapon_mods: Vec<WeaponMods> = vec![];
+        weapon_mods.push(WeaponMods {
+            slot: WeaponSlot::None,
+            installed: true,
+            id: row.mod_id.unwrap() as i32,
+            name: row.mod_name.clone().unwrap(),
+            prefix: row.mod_prefix.clone().unwrap(),
+            wgt: row.mod_wgt.unwrap() as i32,
+            damage_set: weapon_mod_eff.dam_set,
+            damage_chg: weapon_mod_eff.dam_add - weapon_mod_eff.dam_sub,
+            rate_set: weapon_mod_eff.rat_set,
+            rate_chg: weapon_mod_eff.rat_add - weapon_mod_eff.rat_sub,
+            ammo_set: weapon_mod_eff.ammo,
+            range_chg: weapon_mod_eff.rng_add - weapon_mod_eff.rng_sub,
+            effect_add: weapon_mod_eff.e_gain,
+            effect_rem: weapon_mod_eff.e_lose,
+            quality_add: weapon_mod_eff.q_gain,
+            quality_rem: weapon_mod_eff.q_lose,
+            slot_add: weapon_mod_eff.mods,
+            damage_type_set: Some(weapon_mod_eff.dam_type),
+            weapon_add: weapon_mod_eff.weap,
+            special_ability: weapon_mod_eff.unk,
+        });
+
+        let weap_eff_str: Vec<String> = effects.iter().map(|e| if e.value != Some(0) && e.value.is_some() { format!("{} {}", e.name, e.value.unwrap()) } else { e.name.clone() }).collect();
+        let weap_qual_str: Vec<String> = qualities.iter().map(|q| if q.value != Some(0) && q.value.is_some() { format!("{} {}", q.name, q.value.unwrap()) } else { q.name.clone() }).collect();
+
+        result.push(Weapon {
+            id: weapon_id.unwrap() as i32,
+            name,
+            prefix,
+            skill,
+            target,
+            tag,
+            damage,
+            effects: weap_eff_str,
+            dam_type,
+            rate,
+            range,
+            qualities: weap_qual_str,
+            ammo: row.ammo_name.clone().unwrap_or("".to_string()),
+            wgt: weight,
+            mods: weapon_mods,
+        });
+
+    }
+    result
+
+}
+
 fn selections_complete(sels: &[SlotSelection]) -> bool {
     sels.iter().all(|s| match s {
         SlotSelection::Fixed => true,
@@ -376,7 +916,7 @@ pub struct WeaponOption {
 }
 
 #[derive(Debug, Clone)]
-pub enum WeaponSlot {
+pub enum WeaponSelSlot {
     Fixed(WeaponOption),
     Choice(Vec<WeaponOption>),
     ManyForOne(Vec<WeaponOption>, WeaponOption),
@@ -390,7 +930,7 @@ pub struct ApparelOption {
 }
 
 #[derive(Debug, Clone)]
-pub enum ApparelSlot {
+pub enum ApparelSelSlot {
     Fixed(ApparelOption),
     Choice(Vec<ApparelOption>),
     SingleOrDouble {
@@ -412,7 +952,7 @@ pub struct ConsumableOption {
 }
 
 #[derive(Debug, Clone)]
-pub enum ConsumableSlot {
+pub enum ConsumableSelSlot {
     Fixed(ConsumableOption),
     Choice(Vec<ConsumableOption>),
     ManyForOne(Vec<ConsumableOption>, ConsumableOption),
@@ -426,7 +966,7 @@ pub struct RobotModuleOption {
 }
 
 #[derive(Debug, Clone)]
-pub enum RobotModuleSlot {
+pub enum RobotModuleSelSlot {
     Fixed(RobotModuleOption),
     Choice(Vec<RobotModuleOption>),
 }
@@ -435,10 +975,10 @@ pub enum RobotModuleSlot {
 pub struct ResolvedBackground {
     pub id: i32,
     pub name: String,
-    pub weapon_slots:   Vec<WeaponSlot>,
-    pub apparel_slots:  Vec<ApparelSlot>,
-    pub consumable_slots: Vec<ConsumableSlot>,
-    pub robot_module_slots: Vec<RobotModuleSlot>,
+    pub weapon_slots:   Vec<WeaponSelSlot>,
+    pub apparel_slots:  Vec<ApparelSelSlot>,
+    pub consumable_slots: Vec<ConsumableSelSlot>,
+    pub robot_module_slots: Vec<RobotModuleSelSlot>,
     pub ammo:  Vec<AmmoRow>,
     pub gear:  Vec<GearRow>,
     pub caps:    i32,
@@ -469,14 +1009,14 @@ pub enum SlotSelection {
 }
 
 trait IsFixed { fn is_fixed(&self) -> bool; }
-impl IsFixed for WeaponSlot {
-    fn is_fixed(&self) -> bool { matches!(self, WeaponSlot::Fixed(_)) }
+impl IsFixed for WeaponSelSlot {
+    fn is_fixed(&self) -> bool { matches!(self, WeaponSelSlot::Fixed(_)) }
 }
-impl IsFixed for ConsumableSlot {
-    fn is_fixed(&self) -> bool { matches!(self, ConsumableSlot::Fixed(_)) }
+impl IsFixed for ConsumableSelSlot {
+    fn is_fixed(&self) -> bool { matches!(self, ConsumableSelSlot::Fixed(_)) }
 }
-impl IsFixed for RobotModuleSlot {
-    fn is_fixed(&self) -> bool { matches!(self, RobotModuleSlot::Fixed(_)) }
+impl IsFixed for RobotModuleSelSlot {
+    fn is_fixed(&self) -> bool { matches!(self, RobotModuleSelSlot::Fixed(_)) }
 }
 
 fn default_selections<T>(slots: &[T]) -> Vec<SlotSelection>
@@ -486,12 +1026,12 @@ where T: IsFixed,
         if s.is_fixed() { SlotSelection::Fixed } else { SlotSelection::Chosen(usize::MAX) }
     }).collect()
 }
-fn default_apparel_selections(slots: &[ApparelSlot]) -> Vec<SlotSelection> {
+fn default_apparel_selections(slots: &[ApparelSelSlot]) -> Vec<SlotSelection> {
     slots.iter().map(|s| match s {
-        ApparelSlot::Fixed(_) => SlotSelection::Fixed,
-        ApparelSlot::Choice(_) => SlotSelection::Chosen(usize::MAX),
-        ApparelSlot::SingleOrDouble { double_choices, .. } => SlotSelection::SingleOrDoubleChosen { take_single: true, double_picks: vec![None; double_choices.len()], },
-        ApparelSlot::SingleOrPack { .. } => SlotSelection::SingleOrPackChosen(true),
+        ApparelSelSlot::Fixed(_) => SlotSelection::Fixed,
+        ApparelSelSlot::Choice(_) => SlotSelection::Chosen(usize::MAX),
+        ApparelSelSlot::SingleOrDouble { double_choices, .. } => SlotSelection::SingleOrDoubleChosen { take_single: true, double_picks: vec![None; double_choices.len()], },
+        ApparelSelSlot::SingleOrPack { .. } => SlotSelection::SingleOrPackChosen(true),
     }).collect()
 }
 
@@ -514,7 +1054,7 @@ fn apparel_option(row: &ApparelRow) -> ApparelOption {
 }
 
 //the big block: translating the db content to choices
-pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSlot> {
+pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSelSlot> {
     //this block helps us understand which type of choice we need to present
     //maps each weapon to its professed alternate
     let mut fwd: HashMap<i32, i32> = HashMap::new();
@@ -532,7 +1072,7 @@ pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSlot> {
     }
 
     //this is where we define all the options
-    let mut slots: Vec<WeaponSlot> = vec![];
+    let mut slots: Vec<WeaponSelSlot> = vec![];
     //this tracks what we've already looked at (so we don't endlessly recurse, or just waste cycles reviewing stuff we've already assigned)
     let mut visited: HashSet<i32> = HashSet::new();
 
@@ -563,10 +1103,10 @@ pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSlot> {
                     opt.extra_mods = same_weapon[1..].iter()
                         .filter_map(|r| r.mod_name.clone())
                         .collect();
-                    slots.push(WeaponSlot::Fixed(opt));
+                    slots.push(WeaponSelSlot::Fixed(opt));
                 } else {
                     visited.insert(row.id);
-                    slots.push(WeaponSlot::Fixed(weapon_option(row)));
+                    slots.push(WeaponSelSlot::Fixed(weapon_option(row)));
                 }
             }
         }
@@ -616,7 +1156,7 @@ pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSlot> {
                 )
                 .collect();
             let get = weapon_option(by_id[&target]);
-            slots.push(WeaponSlot::ManyForOne(give_up, get))
+            slots.push(WeaponSelSlot::ManyForOne(give_up, get))
         } else {
             let options: Vec<WeaponOption> = cycle.iter()
                 .filter_map(
@@ -627,9 +1167,9 @@ pub fn resolve_weapon_slots(rows: Vec<WeaponRow>) -> Vec<WeaponSlot> {
                 .collect();
             //this also might be redundant? not sure we should see this ever come up
             if options.len() == 1 {
-                slots.push(WeaponSlot::Fixed(options.into_iter().next().unwrap()));
+                slots.push(WeaponSelSlot::Fixed(options.into_iter().next().unwrap()));
             } else {
-                slots.push(WeaponSlot::Choice(options));
+                slots.push(WeaponSelSlot::Choice(options));
             }
         }
     }
@@ -655,13 +1195,13 @@ fn render_ammo_for(ui: &Ui, bg_weapon_id: i32, ammo: &[AmmoRow]) {
     }
 }
 
-fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSlot, sel: &mut SlotSelection, ammo: &[AmmoRow],) {
+fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut SlotSelection, ammo: &[AmmoRow],) {
     match slot {
-        WeaponSlot::Fixed(opt) => {
+        WeaponSelSlot::Fixed(opt) => {
             render_weapon_option_label(ui, opt);
             render_ammo_for(ui, opt.bg_weapon_id, ammo);
         }
-        WeaponSlot::Choice(opts) => {
+        WeaponSelSlot::Choice(opts) => {
             let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
             let preview = if chosen_index < opts.len() {
                 weapon_label(&opts[chosen_index])
@@ -681,7 +1221,7 @@ fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSlot, sel: &mut SlotSe
                 render_ammo_for(ui, opts[chosen_index].bg_weapon_id, ammo);
             }
         }
-        WeaponSlot::ManyForOne(give_up, get_one) => {
+        WeaponSelSlot::ManyForOne(give_up, get_one) => {
             let chosen = if let SlotSelection::ManyForOneChosen(i) = sel { *i } else { 0 };
             ui.text(format!("Choose: take all of {} OR just {}", weapon_label(get_one), give_up.iter().map(|w| weapon_label(w)).collect::<Vec<_>>().join(" + ")));
             //let mut take_one = chosen == 0;
@@ -700,7 +1240,7 @@ fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSlot, sel: &mut SlotSe
     }
 }
 
-pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
+pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSelSlot> {
     //this block helps us understand which type of choice we need to present
     //maps each apparel to its professed alternate
     let mut fwd: HashMap<i32, i32> = HashMap::new();
@@ -732,7 +1272,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
         .collect();
 
     //this is where we define all the options
-    let mut slots: Vec<ApparelSlot> = vec![];
+    let mut slots: Vec<ApparelSelSlot> = vec![];
     //this tracks what we've already looked at (so we don't endlessly recurse, or just waste cycles reviewing stuff we've already assigned)
     let mut visited: HashSet<i32> = HashSet::new();
 
@@ -740,7 +1280,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
     for row in &rows {
         if row.alt_id.is_none() && !rev.contains_key(&row.id) && !repeated.contains(&row.id) {
             if visited.insert(row.id) {
-                slots.push(ApparelSlot::Fixed(apparel_option(row)));
+                slots.push(ApparelSelSlot::Fixed(apparel_option(row)));
             }
         }
     }
@@ -787,9 +1327,9 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
             .collect();
         //again, i'm not sure that this should actually trigger
         if options.len() == 1 {
-            slots.push(ApparelSlot::Fixed(options.into_iter().next().unwrap()));
+            slots.push(ApparelSelSlot::Fixed(options.into_iter().next().unwrap()));
         } else {
-            slots.push(ApparelSlot::Choice(options));
+            slots.push(ApparelSelSlot::Choice(options));
         }
     }
 
@@ -813,7 +1353,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
             let pack: Vec<ApparelOption> = pack_items.iter()
                 .filter_map(|id| by_id.get(id).map(|r| apparel_option(r)))
                 .collect();
-            slots.push(ApparelSlot::SingleOrPack { single: single_opt, pack })
+            slots.push(ApparelSelSlot::SingleOrPack { single: single_opt, pack })
         } else {
             let sibling_ids = &apparel_id_count[&anchor_row.apparel_id];
             //grab all the alt targets
@@ -856,18 +1396,18 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSlot> {
                     deduped_choices.push(group);
                 }
             }
-            slots.push(ApparelSlot::SingleOrDouble { single: single_opt, double_choices: deduped_choices });
+            slots.push(ApparelSelSlot::SingleOrDouble { single: single_opt, double_choices: deduped_choices });
         }
     }
     slots
 }
 
-fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSlot, sel: &mut SlotSelection) {
+fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut SlotSelection) {
     match slot {
-        ApparelSlot::Fixed(opt) => {
+        ApparelSelSlot::Fixed(opt) => {
             ui.text(format!("  {}", opt.name));
         }
-        ApparelSlot::Choice(opts) => {
+        ApparelSelSlot::Choice(opts) => {
             let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
             let preview = if chosen_index < opts.len() {
                 opts[chosen_index].name.clone()
@@ -884,7 +1424,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSlot, sel: &mut Slot
                 }
             }
         }
-        ApparelSlot::SingleOrDouble { single, double_choices } => {
+        ApparelSelSlot::SingleOrDouble { single, double_choices } => {
             let (take_single, double_picks) = if let SlotSelection::SingleOrDoubleChosen {
                 take_single, double_picks
             } = sel {
@@ -918,7 +1458,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSlot, sel: &mut Slot
                 }
             }
         }
-        ApparelSlot::SingleOrPack { single, pack } => {
+        ApparelSelSlot::SingleOrPack { single, pack } => {
             let take_single = if let SlotSelection::SingleOrPackChosen(b) = sel { b } else { return; };
             if ui.radio_button_bool(format!("Take just {}##sp_single_{}", single.name, index), *take_single) {
                 *take_single = true;
@@ -932,7 +1472,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSlot, sel: &mut Slot
     }
 }
 
-pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot> {
+pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSelSlot> {
     //this is very similar to the weapon stuff, but without the edge cases
     let mut fwd: HashMap<i32, i32> = HashMap::new();
     let mut rev: HashMap<i32, Vec<i32>> = HashMap::new();
@@ -945,13 +1485,13 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
         }
     }
 
-    let mut slots: Vec<ConsumableSlot> = vec![];
+    let mut slots: Vec<ConsumableSelSlot> = vec![];
     let mut visited: HashSet<i32> = HashSet::new();
 
     for row in &rows {
         if row.alt_id.is_none() && !rev.contains_key(&row.id) {
             if visited.insert(row.id) {
-                slots.push(ConsumableSlot::Fixed(ConsumableOption {
+                slots.push(ConsumableSelSlot::Fixed(ConsumableOption {
                     bg_consumable_id: row.id,
                     consumable_id: row.consumable_id,
                     name: row.consumable_name.clone(),
@@ -999,7 +1539,7 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
                 name: by_id[&target].consumable_name.clone(),
                 wgt: row.wgt,
             };
-            slots.push(ConsumableSlot::ManyForOne(give_up, get));
+            slots.push(ConsumableSelSlot::ManyForOne(give_up, get));
         } else {
             let options: Vec<ConsumableOption> = cycle.iter()
                 .filter_map(|id| by_id.get(id))
@@ -1011,19 +1551,19 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSlot>
                 })
                 .collect();
             if options.len() == 1 {
-                slots.push(ConsumableSlot::Fixed(options.into_iter().next().unwrap()));
+                slots.push(ConsumableSelSlot::Fixed(options.into_iter().next().unwrap()));
             } else {
-                slots.push(ConsumableSlot::Choice(options));
+                slots.push(ConsumableSelSlot::Choice(options));
             }
         }
     }
     slots
 }
 
-fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSlot, sel: &mut SlotSelection) {
+fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: &mut SlotSelection) {
     match slot {
-        ConsumableSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
-        ConsumableSlot::Choice(opts) => {
+        ConsumableSelSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
+        ConsumableSelSlot::Choice(opts) => {
             let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
             let preview = if chosen_index < opts.len() {
                 opts[chosen_index].name.clone()
@@ -1040,7 +1580,7 @@ fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSlot, sel: &mu
                 }
             }
         }
-        ConsumableSlot::ManyForOne(give_up, get_one) => {
+        ConsumableSelSlot::ManyForOne(give_up, get_one) => {
             let chosen = if let SlotSelection::ManyForOneChosen(i) = sel { *i } else { 0 };
             ui.text(format!("Choose: take all of {} OR just {}",
                 get_one.name,
@@ -1058,7 +1598,7 @@ fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSlot, sel: &mu
 }
 
 //robot module is even simpler
-pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleSlot> {
+pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleSelSlot> {
     let mut fwd: HashMap<i32, i32> = HashMap::new();
     let mut rev: HashMap<i32, Vec<i32>> = HashMap::new();
     let by_id: HashMap<i32, &RobotModuleRow> = rows.iter().map(|r| (r.id, r)).collect();
@@ -1070,13 +1610,13 @@ pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleS
         }
     }
 
-    let mut slots: Vec<RobotModuleSlot> = vec![];
+    let mut slots: Vec<RobotModuleSelSlot> = vec![];
     let mut visited: HashSet<i32> = HashSet::new();
 
     for row in &rows {
         if row.alt_id.is_none() && !rev.contains_key(&row.id) {
             if visited.insert(row.id) {
-                slots.push(RobotModuleSlot::Fixed(RobotModuleOption {
+                slots.push(RobotModuleSelSlot::Fixed(RobotModuleOption {
                     bg_module_id: row.id, module_id: row.module_id,
                     name: row.module_name.clone(),
                 }));
@@ -1107,18 +1647,18 @@ pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleS
             })
             .collect();
         if options.len() == 1 {
-            slots.push(RobotModuleSlot::Fixed(options.into_iter().next().unwrap()));
+            slots.push(RobotModuleSelSlot::Fixed(options.into_iter().next().unwrap()));
         } else {
-            slots.push(RobotModuleSlot::Choice(options));
+            slots.push(RobotModuleSelSlot::Choice(options));
         }
     }
     slots
 }
 
-fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSlot, sel: &mut SlotSelection) {
+fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot, sel: &mut SlotSelection) {
     match slot {
-        RobotModuleSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
-        RobotModuleSlot::Choice(opts) => {
+        RobotModuleSelSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
+        RobotModuleSelSlot::Choice(opts) => {
             let chosen_index = if let SlotSelection::Chosen(i) = sel { *i } else { usize::MAX };
             let preview = if chosen_index < opts.len() {
                 opts[chosen_index].name.clone()
@@ -1142,6 +1682,7 @@ pub fn render_background_select(
     ui: &Ui,
     window: &Window,
     state: &mut BackgroundState,
+    equipment: &mut EquipmentState,
     db: &Db,
     character: &mut Character,
 ) -> f32 {

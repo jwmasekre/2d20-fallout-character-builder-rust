@@ -15,16 +15,21 @@ use imgui::Ui;
 use anyhow::Result;
 
 use crate::{
-    character::{Character, Party, Player}, config::{AppConfig, db_path, load_config, save_config}, db::Db, screens::perk_select::PerkResolutionPopup, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
+    character::{Character, Party, Player},
+    config::{AppConfig, db_path, load_config, save_config},
+    db::Db,
+    theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped},
+    screens::{
+        main_menu::render_main_menu,
+        origin_select::{render_origin_select, OriginState},
+        special_assignment::{render_special_assignment, SpecialState},
+        skill_assignment::{render_skill_assignment, SkillState},
+        perk_select::{render_perk_select, PerkState, render_perk_resolution, PerkResolutionPopup},
+        stat_calculation::render_stat_calculation,
+        background_select::{render_background_select, BackgroundState, EquipmentState},
+        character_review::{render_character_review, ReviewState},
+    }
 };
-use crate::screens::main_menu::render_main_menu;
-use crate::screens::origin_select::{render_origin_select, OriginState};
-use crate::screens::special_assignment::{render_special_assignment, SpecialState};
-use crate::screens::skill_assignment::{render_skill_assignment, SkillState};
-use crate::screens::perk_select::{render_perk_select, PerkState, render_perk_resolution};
-use crate::screens::stat_calculation::render_stat_calculation;
-use crate::screens::background_select::{render_background_select, BackgroundState};
-use crate::screens::character_review::render_character_review;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
@@ -200,6 +205,8 @@ fn main() -> Result<()> {
     let mut perk = PerkState::new(&db, &character);
     let mut perk_resolution: Option<PerkResolutionPopup> = None;
     let mut background = BackgroundState::new(&db);
+    let mut equipment = EquipmentState::new();
+    let mut review = ReviewState::new();
 
     //start the render loop
     'main: loop {
@@ -494,10 +501,11 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                render_background_select(&ui, &window, state, &db, &mut character)
+                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character)
             }
 /*--------*/AppScreen::CharacterReview => {
-                render_character_review(&ui, &window, &db, &character)
+                let state = &mut review;
+                render_character_review(&ui, &window, state, &background, &equipment, &db, &character)
             }
 /*--------*/AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);

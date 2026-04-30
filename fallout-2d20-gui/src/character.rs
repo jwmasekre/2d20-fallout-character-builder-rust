@@ -559,6 +559,78 @@ impl Limbs {
             track_right: Limb::new_inactive(),
         }
     }
+    pub fn update_active(&mut self, robot_type: RobotType) {
+        match robot_type {
+            RobotType::Handy => {
+                self.head = Limb::new_inactive();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_inactive();
+                self.arm_right = Limb::new_inactive();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_active();
+                self.arm_1 = Limb::new_active();
+                self.arm_2 = Limb::new_active();
+                self.arm_3 = Limb::new_active();
+                self.thruster = Limb::new_active();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            },
+            RobotType::Robobrain => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_active();
+                self.track_right = Limb::new_active();
+            },
+            RobotType::Securitron => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_active();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            },
+            _ => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_active();
+                self.body = Limb::new_inactive();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_active();
+                self.leg_right = Limb::new_active();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -613,7 +685,7 @@ pub struct Weapon {
     pub mods: Vec<WeaponMods>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DamageType {
     Ph,
     En,
@@ -637,16 +709,18 @@ pub struct WeaponMods {
     pub damage_chg: i32,
     pub rate_set: i32,
     pub rate_chg: i32,
-    pub range_set: i32,
     pub range_chg: i32,
-    pub ammo_set: AmmoData,
-    pub effect_add: Vec<String>,
-    pub effect_rem: Vec<String>,
-    pub quality_add: Vec<String>,
-    pub quality_rem: Vec<String>,
-    pub slot_add: WeaponSlot,
-    pub damage_type_set: DamageType,
-    pub weapon_add: Weapon,
+    //pub ammo_set: Option<AmmoData>,
+    pub ammo_set: Option<String>,
+    pub effect_add:  Vec<(String, Option<i32>)>,
+    pub effect_rem:  Vec<(String, Option<i32>)>,
+    pub quality_add: Vec<(String, Option<i32>)>,
+    pub quality_rem: Vec<(String, Option<i32>)>,
+    //pub slot_add: Option<WeaponSlot>,
+    pub slot_add: String,
+    pub damage_type_set: Option<DamageType>,
+    //pub weapon_add: Option<Weapon>,
+    pub weapon_add: String,
     pub special_ability: String,
 }
 

@@ -85,6 +85,10 @@ impl OriginState {
         Special::apply_max(character);
         //clear out any selected backgrounds
         background_state.reset_selection();
+        //update limbs
+        character.limb_dr.update_active(character.robot.clone());
+        //clear out the robot hat just in case we switch to a non-robot
+        if character.robot == RobotType::None { character.robot_hat.take(); }
     }
     //retrieve the traits based on the current origin
     fn reload_traits(&mut self, db: &Db, character: &mut Character) {
