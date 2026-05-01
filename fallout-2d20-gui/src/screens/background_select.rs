@@ -1109,6 +1109,57 @@ fn resolve_consumables(
     result
 }
 
+fn resolve_robot_modules(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+) -> Vec<RobotModule> {
+    let mut result: Vec<RobotModule> = vec![];
+    let selected_rmod_ids: Vec<i32> = background.robot_module_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (RobotModuleSelSlot::Fixed(opt), _) => vec![opt.bg_module_id],
+            (RobotModuleSelSlot::Choice(opts), SlotSelection::Chosen(i)) => vec![opts[*i].bg_module_id],
+            _ => vec![],
+        })
+        .collect();
+    if selected_rmod_ids.is_empty() { return vec![] } 
+
+    let id_json = serde_json::to_string(&selected_rmod_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                br.id        AS bg_rmod_id,
+                r.id         AS id,
+                r.name       AS name,
+                r.eff        AS effs,
+                r.wgt        AS wgt
+                FROM background_robot_modules br
+            JOIN robot_modules r ON r.id  = br.robot_module_id
+            WHERE br.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        result.push( RobotModule {
+            id: row.id.unwrap_or(0) as i32,
+            name: row.name.unwrap_or("".to_string()),
+            installed: false,
+            effect: vec![row.effs.unwrap_or("".to_string())],
+            wgt: row.wgt.unwrap_or(0) as i32,
+        })
+    }
+    result
+}
+
+gear
+junk
+misc
+
 pub fn roll_cd(roll_str: &str) -> i32 {
     let mut val = 0;
     let mut roll = 0;
