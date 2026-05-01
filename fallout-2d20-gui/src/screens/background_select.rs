@@ -1,4 +1,4 @@
-use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, BodyLocation, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
+use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
@@ -398,6 +398,7 @@ impl EquipmentState {
         if state.current_background.is_some() {
             (self.weapons, self.ammo) = resolve_weapons(db, &state.current_background.clone().unwrap(), &state.weapon_selections, character);
             self.apparel = resolve_apparel(db, &state.current_background.clone().unwrap(), &state.apparel_selections);
+            self.consumables = resolve_consumables(db, &state.current_background.clone().unwrap(), &state.consumable_selections);
         }
     }
 }
@@ -1026,6 +1027,84 @@ fn resolve_apparel(
             covers,
             equipped: false,
         })
+    }
+    result
+}
+
+fn resolve_consumables(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+) -> Vec<Consumable> {
+    let mut result: Vec<Consumable> = vec![];
+    let selected_consumable_ids: Vec<i32> = background.consumable_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (ConsumableSelSlot::Fixed(opt), _) => vec![opt.bg_consumable_id],
+            (ConsumableSelSlot::Choice(opts), SlotSelection::Chosen(i)) => vec![opts[*i].bg_consumable_id],
+            (ConsumableSelSlot::ManyForOne(give_up,get_one ), SlotSelection::ManyForOneChosen(choice)) => if *choice == 0 {
+                vec![get_one.bg_consumable_id]
+            } else {
+                give_up.iter().map(|c| c.bg_consumable_id).collect()
+            },
+            _ => vec![],
+        })
+        .collect();
+    if selected_consumable_ids.is_empty() { return vec![] } 
+
+    let id_json = serde_json::to_string(&selected_consumable_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                bc.id        AS bg_consumable_id,
+                c.id         AS id,
+                c.name       AS name,
+                ct.name      AS c_type, 
+                c.heals      AS health,
+                c.eff        AS effs,
+                c.rads       AS rads,
+                c.wgt        AS wgt,
+                c.duration   AS duration,
+                c.addiction  AS addiction
+            FROM background_consumables bc
+            JOIN consumables c ON c.id  = bc.consumable_id
+            JOIN consumable_types ct ON ct.id  = c.type
+            WHERE bc.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        if result.iter().any(|c| c.id == row.bg_consumable_id.unwrap_or(0) as i32) {
+            let c_loc = result.iter().position(|c| c.id == row.bg_consumable_id.unwrap_or(0) as i32);
+            result[c_loc.unwrap()].quantity += 1;
+        } else {
+            let ct: &str = &row.c_type.clone().unwrap_or("".to_string());
+            let consumable_type: ConsumableType = match ct {
+                "Chem" => ConsumableType::Chem,
+                "Food" => ConsumableType::Food,
+                "Beverage" => ConsumableType::Beverage,
+                "Other" => ConsumableType::Other,
+                "Publication" => ConsumableType::Publication,
+                _ => ConsumableType::Other,
+            };
+            let addiction: i32 = row.addiction.unwrap_or("0".to_string()).parse().expect("NaN");
+            result.push(Consumable {
+                id: row.id.unwrap_or(0) as i32,
+                name: row.name.unwrap_or("".to_string()),
+                consumable_type,
+                health: row.health.unwrap_or(0) as i32,
+                effects: vec![row.effs.unwrap_or("".to_string())],
+                rads: row.rads.unwrap_or(0) as i32,
+                wgt: row.wgt.unwrap_or(0) as i32,
+                duration: row.duration.unwrap_or("".to_string()),
+                addiction,
+                quantity: 1,
+            })
+        }
     }
     result
 }
