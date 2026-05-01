@@ -399,6 +399,8 @@ impl EquipmentState {
             (self.weapons, self.ammo) = resolve_weapons(db, &state.current_background.clone().unwrap(), &state.weapon_selections, character);
             self.apparel = resolve_apparel(db, &state.current_background.clone().unwrap(), &state.apparel_selections);
             self.consumables = resolve_consumables(db, &state.current_background.clone().unwrap(), &state.consumable_selections);
+            self.robot_modules = resolve_robot_modules(db, &state.current_background.clone().unwrap(), &state.robot_module_selections);
+            (self.gear, self.junk, self.misc) = resolve_remaining_eq(db, &state.current_background.clone().unwrap());
         }
     }
 }
@@ -1156,9 +1158,53 @@ fn resolve_robot_modules(
     result
 }
 
-gear
-junk
-misc
+fn resolve_remaining_eq(
+    db: &Db,
+    background: &ResolvedBackground,
+) -> (Vec<Gear>, Junk, Vec<String>) {
+    let mut g_result: Vec<Gear> = vec![];
+
+    let selected_gear_ids: Vec<i32> = background.gear.iter().map(|g| g.gear_id).collect();
+    let id_json = serde_json::to_string(&selected_gear_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                bg.id        AS bg_gear_id,
+                g.id         AS id,
+                g.name       AS name,
+                g.eff        AS effs,
+                g.wgt        AS wgt
+            FROM background_gear bg
+            JOIN gear g ON g.id  = bg.gear_id
+            WHERE bg.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        if g_result.iter().any(|g| g.id == row.bg_gear_id.unwrap_or(0) as i32) {
+            let g_loc = g_result.iter().position(|g| g.id == row.bg_gear_id.unwrap_or(0) as i32);
+            g_result[g_loc.unwrap()].quantity += 1;
+        } else {
+            g_result.push(Gear {
+                id: row.id.unwrap_or(0) as i32,
+                name: row.name.unwrap_or("".to_string()),
+                effect: vec![row.effs.unwrap_or("".to_string())],
+                wgt: row.wgt.unwrap_or(0) as i32,
+                quantity: 1,
+            })
+        }
+    }
+    let junk = Junk {
+        common: roll_cd(&format!("{}CD",background.junk)),
+        uncommon: 0,
+        rare: 0,
+    };
+    (g_result, junk, vec![background.misc.clone()])
+}
 
 pub fn roll_cd(roll_str: &str) -> i32 {
     let mut val = 0;
