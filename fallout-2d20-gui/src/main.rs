@@ -3,6 +3,7 @@ mod config;
 mod screens;
 mod character;
 mod theme;
+mod crt;
 #[macro_use]
 mod debug;
 
@@ -19,6 +20,7 @@ use crate::{
     config::{AppConfig, db_path, load_config, save_config},
     db::Db,
     theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped},
+    crt::CrtEffect,
     screens::{
         main_menu::render_main_menu,
         origin_select::{render_origin_select, OriginState},
@@ -117,7 +119,7 @@ fn main() -> Result<()> {
     video_subsystem.gl_attr().set_context_version(3,2);
 
     let window = video_subsystem
-        .window(&format!("Fallout 2d20 Character Manager v{}",VERSION), 1900, 950)
+        .window(&format!("Fallout 2d20 Character Manager v{}",VERSION), 1280, 960)
         .position_centered()
         .opengl()
         .resizable()
@@ -139,8 +141,11 @@ fn main() -> Result<()> {
 
     //creates the context for imgui functions
     let mut imgui = imgui::Context::create();
+    //create the crt effect
+    let (init_w, init_h) = window.size();
+    let mut crt = CrtEffect::new(&gl, init_w as i32, init_h as i32);
     //applies the theme from the user config
-    apply_theme(&mut imgui, THEMES[current_theme]);
+    apply_theme(&mut imgui, THEMES[current_theme], &mut crt);
     //load custom font (might move to theme.rs)
     imgui.fonts().clear();
     let font_path = std::env::current_exe()
@@ -150,7 +155,7 @@ fn main() -> Result<()> {
         .join("fonts/Monofonto.ttf");
     imgui.fonts().add_font(&[imgui::FontSource::TtfData {
         data: &std::fs::read(&font_path).expect("Failed to load Monofonto.ttf"),
-        size_pixels: 16.0,
+        size_pixels: 20.0,
         config: Some(imgui::FontConfig {
             oversample_h: 2,
             oversample_v: 2,
@@ -324,14 +329,16 @@ fn main() -> Result<()> {
         //listen for events and handle them
         for event in event_pump.poll_iter() {
             imgui_sdl2.handle_event(&mut imgui, &event);
-            if let sdl2::event::Event::Quit { .. } = event {
-                break 'main;
+            match event {
+                sdl2::event::Event::Quit { .. } => break 'main,
+                sdl2::event::Event::Window { win_event: sdl2::event::WindowEvent::Resized(w, h), .. } => crt.resize(&gl, w, h),
+                _ => {},
             }
         }
         
         //if pending theme is not None, apply it and make it None
         if let Some(t) = pending_theme.take() {
-            apply_theme(&mut imgui, THEMES[t]);
+            apply_theme(&mut imgui, THEMES[t], &mut crt);
         }
 
         //create the frame for rendering stuff
@@ -368,6 +375,10 @@ fn main() -> Result<()> {
                         ui.same_line();
                     }
                 }
+                ui.same_line();
+                ui.text_disabled("|");
+                ui.same_line();
+                ui.checkbox("ROBCO Industries (TM) Termlink##crt_toggle", &mut crt.enabled);
                 // About button, right-aligned
                 let button_w = 60.0_f32;
                 let button_x = win_w as f32 - button_w - 8.0;
@@ -547,13 +558,22 @@ fn main() -> Result<()> {
                 });
         }
 
-        unsafe {
-            gl.clear_color(0.05, 0.05, 0.05, 1.0);
-            gl.clear(glow::COLOR_BUFFER_BIT);
+        if crt.enabled {
+            crt.begin_capture(&gl);
+        } else {
+            unsafe {
+                gl.clear_color(0.05, 0.05, 0.05, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+
         }
 
         imgui_sdl2.prepare_render(&ui, &window);
         renderer.render(&mut imgui);
+
+        if crt.enabled {
+            crt.end_capture_and_draw(&gl);
+        }
 
         window.gl_swap_window();
     }

@@ -1,6 +1,8 @@
 use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
 
+use crate::crt::CrtEffect;
+
 pub struct Theme {
     pub name: &'static str,
     pub text: [f32; 4],
@@ -25,7 +27,7 @@ pub struct Theme {
     pub separator: [f32; 4],
 }
 
-pub const BAR_HEIGHT: f32 = 32.0;
+pub const BAR_HEIGHT: f32 = 40.0;
 
 pub const THEME_CAPITAL: Theme = Theme {
     name: "Capital",
@@ -149,7 +151,7 @@ pub const THEME_NUCLEAR_SHADOW: Theme = Theme {
 
 pub const THEMES: [&Theme; 5] = [&THEME_CAPITAL, &THEME_MOJAVE, &THEME_COMMONWEALTH, &THEME_NUCLEAR_WINTER, &THEME_NUCLEAR_SHADOW];
 
-pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
+pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme, crt: &mut CrtEffect) {
     let style = imgui.style_mut();
     style.colors[imgui::StyleColor::Text as usize]             = theme.text;
     style.colors[imgui::StyleColor::TextDisabled as usize]     = theme.text_dim;
@@ -173,6 +175,9 @@ pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
     style.colors[imgui::StyleColor::Separator as usize]        = theme.separator;
     style.colors[imgui::StyleColor::PopupBg as usize]          = theme.window_bg;
     style.colors[imgui::StyleColor::ChildBg as usize]          = theme.window_bg;
+    let dim = theme.text_dim;
+    let max = dim[0].max(dim[1]).max(dim[2]).max(0.001);
+    crt.tint = [dim[0] / max, dim[1] / max, dim[2] / max];
 }
 
 pub fn render_window<'ui>(
