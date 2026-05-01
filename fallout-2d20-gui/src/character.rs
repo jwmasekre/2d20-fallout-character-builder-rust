@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use crate::screens::special_assignment::SpecialState;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Character {
     pub id: Uuid,
     pub name: String,
@@ -117,7 +117,7 @@ impl Character {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Player {
     pub id: Uuid,
     pub name: String,
@@ -132,7 +132,7 @@ impl Player {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Party {
     pub id: Uuid,
     pub name: String,
@@ -153,7 +153,7 @@ impl Party {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Origin {
     pub id: i32,
     pub name: String,
@@ -161,28 +161,28 @@ pub struct Origin {
     pub can_ghoul: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Background {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Trait {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum MutantType {
     None,
     SuperMutant,
     Nightkin,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum RobotType {
     None,
     Handy,
@@ -193,7 +193,7 @@ pub enum RobotType {
     Assaultron,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum CompanionType {
     None,
     Dogmeat,
@@ -202,7 +202,7 @@ pub enum CompanionType {
 }
 
 /*
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SpecialAttr {
     Strength,
     Perception,
@@ -214,7 +214,7 @@ pub enum SpecialAttr {
 }
 */
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Special {
     pub strength: SpecialBlock,
     pub perception: SpecialBlock,
@@ -282,7 +282,7 @@ impl Special {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SpecialBlock {
     pub value: i32,
     pub gifted: bool,
@@ -307,7 +307,7 @@ impl SpecialBlock {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Skill {
     Athletics,
 	Barter,
@@ -328,7 +328,7 @@ pub enum Skill {
 	Unarmed,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Skills {
     pub athletics: SkillBlock,
 	pub barter: SkillBlock,
@@ -503,7 +503,7 @@ pub struct Perk {
     pub ranks: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MeleeModifiers {
     pub melee: i32,
     pub unarmed: i32,
@@ -520,7 +520,7 @@ impl MeleeModifiers {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Limbs {
     pub head: Limb,
     pub torso: Limb,
@@ -633,7 +633,7 @@ impl Limbs {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Limb {
     pub active: bool,
     pub ph_dr: i32,
@@ -666,7 +666,7 @@ impl Limb {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Weapon {
     pub id: i32,
     pub name: String,
@@ -697,7 +697,7 @@ pub enum DamageType {
     None,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WeaponMods {
     pub slot: WeaponSlot,
     pub installed: bool,
@@ -724,7 +724,7 @@ pub struct WeaponMods {
     pub special_ability: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum WeaponSlot {
     None,
     Receiver,
@@ -744,7 +744,7 @@ pub enum WeaponSlot {
     Frame,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AmmoData {
     pub id: i32,
     pub name: String,
@@ -752,20 +752,20 @@ pub struct AmmoData {
 }
 
 /*
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Ammo {
     pub ammo: AmmoData,
     pub variants: Vec<AmmoData>,
 }
 */
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AmmoInv {
     pub ammo: AmmoData,
     pub quantity: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Apparel {
     pub id: i32,
     pub name: String,
@@ -780,7 +780,7 @@ pub struct Apparel {
     pub equipped: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ApparelType {
     Clothing,
     Outfit,
@@ -790,7 +790,7 @@ pub enum ApparelType {
     RobotArmor,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BodyLocation {
     None,
     Head,
@@ -808,7 +808,7 @@ pub enum BodyLocation {
     Wheel,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RobotModule {
     pub id: i32,
     pub name: String,
@@ -817,7 +817,7 @@ pub struct RobotModule {
     pub wgt: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Consumable {
     pub id: i32,
     pub name: String,
@@ -831,7 +831,7 @@ pub struct Consumable {
     pub quantity: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ConsumableType {
     Chem,
     Food,
@@ -840,7 +840,7 @@ pub enum ConsumableType {
     Publication,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Gear {
     pub id: i32,
     pub name: String,
@@ -849,7 +849,7 @@ pub struct Gear {
     pub quantity: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Junk {
     pub common: i32,
     pub uncommon: i32,

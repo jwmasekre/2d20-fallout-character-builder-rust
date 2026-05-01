@@ -1,7 +1,8 @@
-use crate::{character::{AmmoInv, Apparel, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
+use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, BodyLocation, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
+//use rand::rng;
 
 //db structs
 #[derive(Debug, Clone)]
@@ -354,13 +355,18 @@ impl BackgroundState {
         self.robot_module_selections = default_selections(&background.robot_module_slots);
         self.current_background = Some(background);
     }
-    pub fn is_complete(&self) -> bool {
-        self.selected_index.is_some() && selections_complete(&self.weapon_selections) && selections_complete(&self.apparel_selections) && selections_complete(&self.consumable_selections) && selections_complete(&self.robot_module_selections)
+    pub fn is_complete(&self, equipment: &mut EquipmentState, db: &Db, character: &Character) -> bool {
+        let complete = self.selected_index.is_some() && selections_complete(&self.weapon_selections) && selections_complete(&self.apparel_selections) && selections_complete(&self.consumable_selections) && selections_complete(&self.robot_module_selections);
+        if complete {
+            equipment.load(db, self, character);
+        }
+        complete
     }
 }
 
 //using this to basically handle the inventory so we can pass it over to review
 //review will apply the inventory on acceptance
+#[derive(Debug)]
 pub struct EquipmentState {
     pub weapons: Vec<Weapon>,
     pub ammo: Vec<AmmoInv>,
@@ -389,7 +395,10 @@ impl EquipmentState {
         }
     }
     pub fn load(&mut self, db: &Db, state: &BackgroundState, character: &Character) {
-        self.weapons = resolve_weapons(db, &state.current_background.clone().unwrap(), &state.weapon_selections, character);
+        if state.current_background.is_some() {
+            (self.weapons, self.ammo) = resolve_weapons(db, &state.current_background.clone().unwrap(), &state.weapon_selections, character);
+            self.apparel = resolve_apparel(db, &state.current_background.clone().unwrap(), &state.apparel_selections);
+        }
     }
 }
 
@@ -426,8 +435,8 @@ pub enum ModEffect {
     SetRate(i32),                // "X Rate"
     AddRate(i32),                // "+X Rate"
     SubRate(i32),                // "-X Rate"
-    AddRange(i32),               // "+X Range"
-    SubRange(i32),               // "-X Range"
+    AddRange(),               // "+X Range"
+    SubRange(),               // "-X Range"
     Gain(String, Option<i32>),   // "Gain X" or "Gain X Y"
     Lose(String, Option<i32>),   // "Lose X" or "Lose X Y"
     AllowsMods(String),          // "Allows X Mods"
@@ -522,11 +531,11 @@ pub fn parse_mod_effect(s: &str) -> ModEffect {
     }
     // +X Range / -X Range
     if let Some(rest) = s.strip_suffix(" Range") {
-        if let Some(n) = rest.strip_prefix('+').and_then(|r| r.parse::<i32>().ok()) {
-            return ModEffect::AddRange(n);
+        if let Some(_) = rest.strip_prefix('+').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::AddRange();
         }
-        if let Some(n) = rest.strip_prefix('-').and_then(|r| r.parse::<i32>().ok()) {
-            return ModEffect::SubRange(n);
+        if let Some(_) = rest.strip_prefix('-').and_then(|r| r.parse::<i32>().ok()) {
+            return ModEffect::SubRange();
         }
     }
     // +X Rate / -X Rate / X Rate
@@ -650,7 +659,12 @@ fn apply_lose(
     }
 }
 
-fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotSelection], character: &Character) -> Vec<Weapon> {
+fn resolve_weapons(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+    character: &Character
+) -> (Vec<Weapon>,Vec<AmmoInv>) {
     let names = EffectNameSets::load(db);
     let ranges = ["R","C","M","L","X"];
     //grab all the weapon ids that were selected
@@ -668,7 +682,7 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
         })
         .collect();
     //if nothing is selected, send an empty vector
-    if selected_weapon_ids.is_empty() { return vec![] }
+    if selected_weapon_ids.is_empty() { return (vec![],vec![]) }
 
     //grab the entire weapon's data for each selected weapon from the db
     let id_json = serde_json::to_string(&selected_weapon_ids).unwrap_or_default();
@@ -682,6 +696,7 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
                 s.name       AS skill_name,
                 a.name       AS ammo_name,
                 a.wgt        AS ammo_wgt,
+                a.id         AS ammo_id,
                 ba.quantity  AS ammo_quantity,
                 wm.id        AS mod_id,
                 wm.name      AS mod_name,
@@ -701,7 +716,8 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
         )
         .fetch_all(&db.pool).await
     }).unwrap_or_default();
-    let mut result: Vec<Weapon> = vec![];
+    let mut w_result: Vec<Weapon> = vec![];
+    let mut a_result: Vec<AmmoInv> = vec![];
 
     for row in &rows {
         let weapon_id = row.weapon_id;
@@ -746,6 +762,7 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
         let weight = base_wgt + mod_wgt;
         let name = row.weapon_name.clone().unwrap_or_default();
         let prefix = row.mod_prefix.clone().unwrap_or_default();
+        let ammo_name = row.ammo_name.clone().unwrap_or("".to_string());
 
         //target number calcs
         let skill_name = row.skill_name.clone().unwrap_or_default();
@@ -801,14 +818,14 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
                             rate = (rate - r).max(0);
                             weapon_mod_eff.rat_sub = r;
                         }
-                        ModEffect::AddRange(_) => {
+                        ModEffect::AddRange() => {
                             let range_num = ranges.iter().position(|&r| r == &range).unwrap();
                             if range_num > 0 || range_num < 4 {
                                 range = ranges[range_num + 1].to_string();
                             }
                             weapon_mod_eff.rng_add = 1;
                         }
-                        ModEffect::SubRange(_) => {
+                        ModEffect::SubRange() => {
                             let range_num = ranges.iter().position(|&r| r == &range).unwrap();
                             if range_num > 1 || range_num < 5 {
                                 range = ranges[range_num - 1].to_string();
@@ -849,10 +866,10 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
         weapon_mods.push(WeaponMods {
             slot: WeaponSlot::None,
             installed: true,
-            id: row.mod_id.unwrap() as i32,
-            name: row.mod_name.clone().unwrap(),
-            prefix: row.mod_prefix.clone().unwrap(),
-            wgt: row.mod_wgt.unwrap() as i32,
+            id: row.mod_id.unwrap_or(0) as i32,
+            name: row.mod_name.clone().unwrap_or("".to_string()),
+            prefix: row.mod_prefix.clone().unwrap_or("".to_string()),
+            wgt: row.mod_wgt.unwrap_or(0) as i32,
             damage_set: weapon_mod_eff.dam_set,
             damage_chg: weapon_mod_eff.dam_add - weapon_mod_eff.dam_sub,
             rate_set: weapon_mod_eff.rat_set,
@@ -872,8 +889,8 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
         let weap_eff_str: Vec<String> = effects.iter().map(|e| if e.value != Some(0) && e.value.is_some() { format!("{} {}", e.name, e.value.unwrap()) } else { e.name.clone() }).collect();
         let weap_qual_str: Vec<String> = qualities.iter().map(|q| if q.value != Some(0) && q.value.is_some() { format!("{} {}", q.name, q.value.unwrap()) } else { q.name.clone() }).collect();
 
-        result.push(Weapon {
-            id: weapon_id.unwrap() as i32,
+        w_result.push(Weapon {
+            id: weapon_id.unwrap_or(0) as i32,
             name,
             prefix,
             skill,
@@ -885,14 +902,187 @@ fn resolve_weapons(db: &Db, background: &ResolvedBackground, selections: &[SlotS
             rate,
             range,
             qualities: weap_qual_str,
-            ammo: row.ammo_name.clone().unwrap_or("".to_string()),
+            ammo: ammo_name.clone(),
             wgt: weight,
             mods: weapon_mods,
         });
+        a_result.push(AmmoInv {
+            ammo: AmmoData {
+                id: row.ammo_id.unwrap_or(0) as i32,
+                name: ammo_name.clone(),
+                wgt: row.ammo_wgt.unwrap_or(0) as i32,
+            },
+            quantity: roll_cd(&row.ammo_quantity.clone().unwrap_or("".to_string()))
+        })
+    }
+    (w_result,a_result)
+}
 
+fn resolve_apparel(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+) -> Vec<Apparel> {
+    let mut result: Vec<Apparel> = vec![];
+    let selected_apparel_ids: Vec<i32> = background.apparel_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (ApparelSelSlot::Fixed(opt), _) => vec![opt.bg_apparel_id],
+            (ApparelSelSlot::Choice(opts), SlotSelection::Chosen(i)) => vec![opts[*i].bg_apparel_id],
+            (ApparelSelSlot::SingleOrDouble(single, double_choices), SlotSelection::SingleOrDoubleChosen(take_single, double_picks)) => if *take_single {
+                vec![single.bg_apparel_id]
+            } else {
+                vec![double_choices[0][double_picks[0].unwrap()].bg_apparel_id, double_choices[1][double_picks[1].unwrap()].bg_apparel_id]
+            }
+            (ApparelSelSlot::SingleOrPack(single, pack), SlotSelection::SingleOrPackChosen(choice)) => if *choice {
+                vec![single.bg_apparel_id]
+            } else {
+                pack.iter().map(|a| a.bg_apparel_id).collect()
+            },
+            _ => vec![],
+        })
+        .collect();
+    if selected_apparel_ids.is_empty() { return vec![] } 
+
+    let id_json = serde_json::to_string(&selected_apparel_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                ba.id        AS bg_apparel_id,
+                a.id         AS id,
+                a.name       AS name,
+                a.phys_dr    AS ph_dr,
+                a.enrg_dr    AS en_dr,
+                a.rads_dr    AS rd_dr,
+                a.wgt        AS wgt,
+                a.eff        AS effs,
+                at.name      AS a_type
+            FROM background_apparel ba
+            JOIN apparel a   ON a.id  = ba.apparel_id
+            JOIN apparel_types at ON at.id = a.type
+            WHERE ba.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        let apparel_id = row.id.unwrap() as i32;
+        let cover_list = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT
+                    bl.name  AS location
+                FROM body_locations bl
+                JOIN apparel_covers ac ON ac.location_id
+                WHERE ac.apparel_id = ?
+                "#,
+                apparel_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        let mut covers: Vec<BodyLocation> = vec![];
+        for item in cover_list {
+            let location: &str = &item.location.unwrap_or("".to_string());
+            covers.push(match location {
+                "Head" => BodyLocation::Head,
+                "Left Arm" => BodyLocation::ArmLeft,
+                "Right Arm" => BodyLocation::ArmRight,
+                "Torso" => BodyLocation::Torso,
+                "Left Leg" => BodyLocation::LegLeft,
+                "Right Leg" => BodyLocation::LegRight,
+                "Optics" => BodyLocation::Optics,
+                "Arm 1" => BodyLocation::Arm1,
+                "Arm 2" => BodyLocation::Arm2,
+                "Arm 3" => BodyLocation::Arm3,
+                "Body" => BodyLocation::Body,
+                "Thruster" => BodyLocation::Thruster,
+                "Wheel" => BodyLocation::Wheel,
+                _ => BodyLocation::None,
+            })
+        }
+        let effects = vec![row.effs.unwrap_or("".to_string())];
+        let type_string: &str = &row.a_type.unwrap_or("".to_string());
+        let apparel_type = match type_string {
+            "Clothing" => ApparelType::Clothing,
+            "Outfit" => ApparelType::Outfit,
+            "Headgear" => ApparelType::Headgear,
+            "Armor" => ApparelType::Armor,
+            "Power Armor" => ApparelType::PowerArmor,
+            "Robot Armor" => ApparelType::RobotArmor,
+            _ => ApparelType::Clothing
+        };
+
+        result.push(Apparel {
+            id: apparel_id,
+            name: row.name.clone().unwrap_or("".to_string()),
+            prefix: "".to_string(),
+            apparel_type,
+            ph_dr: row.ph_dr.unwrap_or(0) as i32,
+            en_dr: row.en_dr.unwrap_or(0) as i32,
+            rd_dr: row.rd_dr.unwrap_or(0) as i32,
+            wgt: row.wgt.unwrap_or(0) as i32,
+            effects,
+            covers,
+            equipped: false,
+        })
     }
     result
+}
 
+pub fn roll_cd(roll_str: &str) -> i32 {
+    let mut val = 0;
+    let mut roll = 0;
+    if let Some(plus_pos) = roll_str.find('+') {
+        let before = &roll_str[..plus_pos];
+        let after = &roll_str[plus_pos + 1..];
+        if let Some(num) = before
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| s.parse::<i32>().ok())
+            .next()
+        {
+            val = num;
+        }
+        if let Some(num) = after
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| s.parse::<i32>().ok())
+            .next()
+        {
+            roll = num;
+        }
+    } else {
+        if let Some(cd_pos) = roll_str.find('c') {
+            let cd_str = &roll_str[..cd_pos];
+            if let Some(num) = cd_str
+                .split(|c: char| !c.is_ascii_digit())
+                .filter(|s| !s.is_empty())
+                .filter_map(|s| s.parse::<i32>().ok())
+                .next()
+            {
+                roll = num;
+            }
+        } else if let Some(num) = roll_str
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| s.parse::<i32>().ok())
+            .next()
+        {
+            val = num
+        }
+    }
+    let mut result = val;
+    for _ in 0..roll { 
+        let cd = rand::random_range(0..6);
+        result += match cd {
+            0..2 => 0,
+            2..5 => 1,
+            5 => 2,
+            _ => 0, //stupid linter bitching at me thinking i missed a possible int
+        }
+    }
+    result
 }
 
 fn selections_complete(sels: &[SlotSelection]) -> bool {
@@ -900,7 +1090,7 @@ fn selections_complete(sels: &[SlotSelection]) -> bool {
         SlotSelection::Fixed => true,
         SlotSelection::Chosen(i) => *i != usize::MAX,
         SlotSelection::ManyForOneChosen(i) => *i != usize::MAX,
-        SlotSelection::SingleOrDoubleChosen { take_single, double_picks } => *take_single || double_picks.iter().all(|p| p.is_some()),
+        SlotSelection::SingleOrDoubleChosen(take_single, double_picks) => *take_single || double_picks.iter().all(|p| p.is_some()),
         SlotSelection::SingleOrPackChosen(_) => true,
     })
 }
@@ -933,14 +1123,8 @@ pub struct ApparelOption {
 pub enum ApparelSelSlot {
     Fixed(ApparelOption),
     Choice(Vec<ApparelOption>),
-    SingleOrDouble {
-        single: ApparelOption,
-        double_choices: Vec<Vec<ApparelOption>>,
-    },
-    SingleOrPack {
-        single: ApparelOption,
-        pack: Vec<ApparelOption>,
-    },
+    SingleOrDouble(ApparelOption,Vec<Vec<ApparelOption>>),
+    SingleOrPack(ApparelOption,Vec<ApparelOption>),
 }
 
 #[derive(Debug, Clone)]
@@ -1001,10 +1185,7 @@ pub enum SlotSelection {
     Fixed,
     Chosen(usize),
     ManyForOneChosen(usize),
-    SingleOrDoubleChosen {
-        take_single: bool,
-        double_picks: Vec<Option<usize>>,
-    },
+    SingleOrDoubleChosen(bool,Vec<Option<usize>>),
     SingleOrPackChosen(bool),
 }
 
@@ -1030,8 +1211,8 @@ fn default_apparel_selections(slots: &[ApparelSelSlot]) -> Vec<SlotSelection> {
     slots.iter().map(|s| match s {
         ApparelSelSlot::Fixed(_) => SlotSelection::Fixed,
         ApparelSelSlot::Choice(_) => SlotSelection::Chosen(usize::MAX),
-        ApparelSelSlot::SingleOrDouble { double_choices, .. } => SlotSelection::SingleOrDoubleChosen { take_single: true, double_picks: vec![None; double_choices.len()], },
-        ApparelSelSlot::SingleOrPack { .. } => SlotSelection::SingleOrPackChosen(true),
+        ApparelSelSlot::SingleOrDouble(_,double_choices) => SlotSelection::SingleOrDoubleChosen(true,vec![None; double_choices.len()],),
+        ApparelSelSlot::SingleOrPack(..) => SlotSelection::SingleOrPackChosen(true),
     }).collect()
 }
 
@@ -1353,7 +1534,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSelSlot> {
             let pack: Vec<ApparelOption> = pack_items.iter()
                 .filter_map(|id| by_id.get(id).map(|r| apparel_option(r)))
                 .collect();
-            slots.push(ApparelSelSlot::SingleOrPack { single: single_opt, pack })
+            slots.push(ApparelSelSlot::SingleOrPack(single_opt, pack))
         } else {
             let sibling_ids = &apparel_id_count[&anchor_row.apparel_id];
             //grab all the alt targets
@@ -1396,7 +1577,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSelSlot> {
                     deduped_choices.push(group);
                 }
             }
-            slots.push(ApparelSelSlot::SingleOrDouble { single: single_opt, double_choices: deduped_choices });
+            slots.push(ApparelSelSlot::SingleOrDouble(single_opt, deduped_choices));
         }
     }
     slots
@@ -1424,10 +1605,8 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut S
                 }
             }
         }
-        ApparelSelSlot::SingleOrDouble { single, double_choices } => {
-            let (take_single, double_picks) = if let SlotSelection::SingleOrDoubleChosen {
-                take_single, double_picks
-            } = sel {
+        ApparelSelSlot::SingleOrDouble(single, double_choices) => {
+            let (take_single, double_picks) = if let SlotSelection::SingleOrDoubleChosen(take_single, double_picks) = sel {
                 (take_single, double_picks)
             } else { return; };
 
@@ -1458,7 +1637,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut S
                 }
             }
         }
-        ApparelSelSlot::SingleOrPack { single, pack } => {
+        ApparelSelSlot::SingleOrPack(single, pack) => {
             let take_single = if let SlotSelection::SingleOrPackChosen(b) = sel { b } else { return; };
             if ui.radio_button_bool(format!("Take just {}##sp_single_{}", single.name, index), *take_single) {
                 *take_single = true;
@@ -1822,6 +2001,7 @@ pub fn render_background_select(
     ui.separator();
     ui.spacing();
 
+    /*
     ui.text_disabled("background:");
     ui.same_line();
     if state.current_background.is_none() {
@@ -1861,6 +2041,11 @@ pub fn render_background_select(
     ui.text_disabled("robot modules:");
     ui.same_line();
     ui.text_wrapped(format!("  {:?}", state.robot_module_selections));
+    */
+
+    ui.separator();
+    ui.separator();
+    ui.text_wrapped(format!("{:?}", equipment));
 
     //ends the scroll window
     drop(_child);

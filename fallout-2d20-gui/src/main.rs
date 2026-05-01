@@ -66,6 +66,8 @@ pub fn screen_unlocked(
     skill: &SkillState,
     perk: &PerkState,
     background: &BackgroundState,
+    equipment: &mut EquipmentState,
+    db: &Db,
     character: &Character,
 ) -> bool {
     match screen {
@@ -75,7 +77,7 @@ pub fn screen_unlocked(
         AppScreen::PerkSelect => skill.is_complete(character),
         AppScreen::StatCalculation => perk.is_complete(),
         AppScreen::BackgroundSelect => special.is_complete(character) && skill.is_complete(character) && perk.is_complete(),
-        AppScreen::CharacterReview => background.is_complete(),
+        AppScreen::CharacterReview => background.is_complete(equipment, db, character),
         _ => false,
     }
 }
@@ -219,6 +221,8 @@ fn main() -> Result<()> {
             skill: &SkillState,
             perk: &PerkState,
             background: &BackgroundState,
+            equipment: &mut EquipmentState,
+            db: &Db,
             character: &Character,
         ) {
             //evenly space the tabs
@@ -228,7 +232,7 @@ fn main() -> Result<()> {
             let current = screen.clone();
             for (target, label) in BUILD_SCREENS {
                 let is_current  = target == &current;
-                let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, &character);
+                let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, equipment, &db, &character);
 
                 //highlight the current tab
                 if is_current {
@@ -279,6 +283,8 @@ fn main() -> Result<()> {
             skill: &SkillState,
             perk: &PerkState,
             background: &BackgroundState,
+            equipment: &mut EquipmentState,
+            db: &Db,
             character: &Character,
         ) {
             let current = screen.clone();
@@ -302,7 +308,7 @@ fn main() -> Result<()> {
             }
 
             if let Some(next_screen) = next {
-                let unlocked = screen_unlocked(next_screen, origin, special, skill, perk, background, &character);
+                let unlocked = screen_unlocked(next_screen, origin, special, skill, perk, background, equipment, db, &character);
                 //disable the next button if it's not unlocked
                 if !unlocked {
                     let c = ui.push_style_color(imgui::StyleColor::Text, ui.style_color(imgui::StyleColor::TextDisabled));
@@ -432,7 +438,7 @@ fn main() -> Result<()> {
                 .size([win_w as f32, tab_bar_h], imgui::Condition::Always)
                 .position([0.0, BAR_HEIGHT], imgui::Condition::Always)
                 .build(|| {
-                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &background, &mut equipment, &db, &character);
                 });
         }
 
@@ -537,7 +543,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &background, &mut equipment, &db, &character);
                 });
         }
 
