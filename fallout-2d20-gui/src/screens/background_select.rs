@@ -1,4 +1,4 @@
-use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
+use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
@@ -246,6 +246,7 @@ pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
     ResolvedBackground {
         id: background.id,
         name: background.name,
+        desc: background.desc,
         weapon_slots: resolve_weapon_slots(weapons),
         apparel_slots: resolve_apparel_slots(apparel),
         consumable_slots: resolve_consumable_slots(consumables),
@@ -312,6 +313,7 @@ pub struct BackgroundState {
     pub apparel_selections: Vec<SlotSelection>,
     pub consumable_selections: Vec<SlotSelection>,
     pub robot_module_selections: Vec<SlotSelection>,
+    pub equipment_changed: bool,
 }
 
 impl BackgroundState {
@@ -324,6 +326,7 @@ impl BackgroundState {
             apparel_selections: vec![],
             consumable_selections: vec![],
             robot_module_selections: vec![],
+            equipment_changed: false,
         }
     }
     fn origin_backgrounds(&self, character: Character) -> Vec<(usize, &BackgroundRow)> {
@@ -344,6 +347,7 @@ impl BackgroundState {
         self.apparel_selections.clear();
         self.consumable_selections.clear();
         self.robot_module_selections.clear();
+        self.equipment_changed = true;
     }
     fn load_background(&mut self, db: &Db, index: usize) {
         let bg_id = self.all_backgrounds[index].id;
@@ -355,10 +359,11 @@ impl BackgroundState {
         self.robot_module_selections = default_selections(&background.robot_module_slots);
         self.current_background = Some(background);
     }
-    pub fn is_complete(&self, equipment: &mut EquipmentState, db: &Db, character: &Character) -> bool {
+    pub fn is_complete(&mut self, equipment: &mut EquipmentState, db: &Db, character: &Character) -> bool {
         let complete = self.selected_index.is_some() && selections_complete(&self.weapon_selections) && selections_complete(&self.apparel_selections) && selections_complete(&self.consumable_selections) && selections_complete(&self.robot_module_selections);
-        if complete {
+        if complete && self.equipment_changed {
             equipment.load(db, self, character);
+            self.equipment_changed = false;
         }
         complete
     }
@@ -978,7 +983,7 @@ fn resolve_apparel(
                 r#"SELECT
                     bl.name  AS location
                 FROM body_locations bl
-                JOIN apparel_covers ac ON ac.location_id
+                JOIN apparel_covers ac ON ac.location_id = bl.id
                 WHERE ac.apparel_id = ?
                 "#,
                 apparel_id
@@ -1335,6 +1340,7 @@ pub enum RobotModuleSelSlot {
 pub struct ResolvedBackground {
     pub id: i32,
     pub name: String,
+    pub desc: String,
     pub weapon_slots:   Vec<WeaponSelSlot>,
     pub apparel_slots:  Vec<ApparelSelSlot>,
     pub consumable_slots: Vec<ConsumableSelSlot>,
@@ -1552,7 +1558,7 @@ fn render_ammo_for(ui: &Ui, bg_weapon_id: i32, ammo: &[AmmoRow]) {
     }
 }
 
-fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut SlotSelection, ammo: &[AmmoRow],) {
+fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut SlotSelection, ammo: &[AmmoRow]) -> bool {
     match slot {
         WeaponSelSlot::Fixed(opt) => {
             render_weapon_option_label(ui, opt);
@@ -1595,6 +1601,7 @@ fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut Slo
             }
         }
     }
+    true
 }
 
 pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSelSlot> {
@@ -1759,7 +1766,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSelSlot> {
     slots
 }
 
-fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut SlotSelection) {
+fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut SlotSelection) -> bool {
     match slot {
         ApparelSelSlot::Fixed(opt) => {
             ui.text(format!("  {}", opt.name));
@@ -1784,7 +1791,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut S
         ApparelSelSlot::SingleOrDouble(single, double_choices) => {
             let (take_single, double_picks) = if let SlotSelection::SingleOrDoubleChosen(take_single, double_picks) = sel {
                 (take_single, double_picks)
-            } else { return; };
+            } else { return true; };
 
             if ui.radio_button_bool(format!("Take {}##sd_single_{}", single.name, index), *take_single) {
                 *take_single = true;
@@ -1814,7 +1821,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut S
             }
         }
         ApparelSelSlot::SingleOrPack(single, pack) => {
-            let take_single = if let SlotSelection::SingleOrPackChosen(b) = sel { b } else { return; };
+            let take_single = if let SlotSelection::SingleOrPackChosen(b) = sel { b } else { return true; };
             if ui.radio_button_bool(format!("Take just {}##sp_single_{}", single.name, index), *take_single) {
                 *take_single = true;
             }
@@ -1825,6 +1832,7 @@ fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut S
             }
         }
     }
+    true
 }
 
 pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSelSlot> {
@@ -1915,7 +1923,7 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSelSl
     slots
 }
 
-fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: &mut SlotSelection) {
+fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: &mut SlotSelection) -> bool {
     match slot {
         ConsumableSelSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
         ConsumableSelSlot::Choice(opts) => {
@@ -1950,6 +1958,7 @@ fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: 
             }
         }
     }
+    true
 }
 
 //robot module is even simpler
@@ -2010,7 +2019,7 @@ pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleS
     slots
 }
 
-fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot, sel: &mut SlotSelection) {
+fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot, sel: &mut SlotSelection) -> bool {
     match slot {
         RobotModuleSelSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
         RobotModuleSelSlot::Choice(opts) => {
@@ -2031,6 +2040,7 @@ fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot, se
             }
         }
     }
+    true
 }
 
 pub fn render_background_select(
@@ -2066,6 +2076,11 @@ pub fn render_background_select(
             if ui.selectable_config(name.as_str()).selected(sel).build() {
                 if state.selected_index != Some(*i) {
                     state.load_background(db, *i);
+                    character.background = Some(Background {
+                        id: *i as i32,
+                        name: state.current_background.clone().unwrap().name,
+                        desc: state.current_background.clone().unwrap().desc,
+                    });
                 }
             }
         }
@@ -2095,7 +2110,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.weapon_slots.iter().enumerate() {
-            render_weapon_slot(ui, i, slot, &mut state.weapon_selections[i], &bg.ammo);
+            state.equipment_changed = render_weapon_slot(ui, i, slot, &mut state.weapon_selections[i], &bg.ammo);
             ui.spacing();
         }
         ui.spacing();
@@ -2106,7 +2121,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.apparel_slots.iter().enumerate() {
-            render_apparel_slot(ui, i, slot, &mut state.apparel_selections[i]);
+            state.equipment_changed = render_apparel_slot(ui, i, slot, &mut state.apparel_selections[i]);
             ui.spacing();
         }
         ui.spacing();
@@ -2117,7 +2132,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.consumable_slots.iter().enumerate() {
-            render_consumable_slot(ui, i, slot, &mut state.consumable_selections[i]);
+            state.equipment_changed = render_consumable_slot(ui, i, slot, &mut state.consumable_selections[i]);
             ui.spacing();
         }
         ui.spacing();
@@ -2128,7 +2143,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.robot_module_slots.iter().enumerate() {
-            render_robot_module_slot(ui, i, slot, &mut state.robot_module_selections[i]);
+            state.equipment_changed = render_robot_module_slot(ui, i, slot, &mut state.robot_module_selections[i]);
             ui.spacing();
         }
         ui.spacing();
@@ -2221,7 +2236,31 @@ pub fn render_background_select(
 
     ui.separator();
     ui.separator();
-    ui.text_wrapped(format!("{:?}", equipment));
+    ui.text_disabled("weapons   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.weapons));
+    ui.text_disabled("ammo   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.ammo));
+    ui.text_disabled("apparel   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.apparel));
+    ui.text_disabled("consumables   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.consumables));
+    ui.text_disabled("robot modules   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.robot_modules));
+    ui.text_disabled("gear   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.gear));
+    ui.text_disabled("junk   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.junk));
+    ui.text_disabled("misc   ");
+    ui.same_line();
+    ui.text_wrapped(format!("{:?}", equipment.misc));
+
 
     //ends the scroll window
     drop(_child);

@@ -67,7 +67,7 @@ pub fn screen_unlocked(
     special: &SpecialState,
     skill: &SkillState,
     perk: &PerkState,
-    background: &BackgroundState,
+    background: &mut BackgroundState,
     equipment: &mut EquipmentState,
     db: &Db,
     character: &Character,
@@ -225,7 +225,7 @@ fn main() -> Result<()> {
             special: &SpecialState,
             skill: &SkillState,
             perk: &PerkState,
-            background: &BackgroundState,
+            background: &mut BackgroundState,
             equipment: &mut EquipmentState,
             db: &Db,
             character: &Character,
@@ -287,7 +287,7 @@ fn main() -> Result<()> {
             special: &SpecialState,
             skill: &SkillState,
             perk: &PerkState,
-            background: &BackgroundState,
+            background: &mut BackgroundState,
             equipment: &mut EquipmentState,
             db: &Db,
             character: &Character,
@@ -378,7 +378,8 @@ fn main() -> Result<()> {
                 ui.same_line();
                 ui.text_disabled("|");
                 ui.same_line();
-                ui.checkbox("ROBCO Industries (TM) Termlink##crt_toggle", &mut crt.enabled);
+                let robco = if win_w < 1040 {"ROBCO Industries(TM)##crt_toggle"} else {"ROBCO Industries (TM) Termlink##crt_toggle"};
+                ui.checkbox(robco, &mut crt.enabled);
                 // About button, right-aligned
                 let button_w = 60.0_f32;
                 let button_x = win_w as f32 - button_w - 8.0;
@@ -449,7 +450,7 @@ fn main() -> Result<()> {
                 .size([win_w as f32, tab_bar_h], imgui::Condition::Always)
                 .position([0.0, BAR_HEIGHT], imgui::Condition::Always)
                 .build(|| {
-                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &background, &mut equipment, &db, &character);
+                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &db, &character);
                 });
         }
 
@@ -554,7 +555,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &background, &mut equipment, &db, &character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &db, &character);
                 });
         }
 

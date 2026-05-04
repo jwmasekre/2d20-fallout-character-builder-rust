@@ -17,6 +17,20 @@ pub struct BaseDR {
     pub rd_dr: i32,
 }
 
+pub fn get_melee_str(character: &Character) -> String {
+    let mut melee_string_vec: Vec<String> = vec![format!("+{}CD", character.melee_mod.melee)];
+    if character.melee_mod.unarmed > 0 {
+        melee_string_vec.push(format!("+{}CD unarmed", character.melee_mod.melee + character.melee_mod.unarmed))
+    }
+    if character.melee_mod.sneak > 0 {
+        melee_string_vec.push(format!("+{}CD sneak", character.melee_mod.melee + character.melee_mod.sneak))
+    }
+    if character.melee_mod.unarmed > 0 && character.melee_mod.sneak > 0 {
+        melee_string_vec.push(format!("+{}CD unarmed sneak", character.melee_mod.melee + character.melee_mod.sneak + character.melee_mod.unarmed))
+    }
+    melee_string_vec.join(", ")
+}
+
 pub fn compute_stats(character: &mut Character) -> (BaseDR, bool) {
     //quick reference for stats
     let str = character.special.strength.value;
@@ -168,17 +182,9 @@ pub fn render_stat_calculation(
     } else {
         ui.text(format!("Max Health: {}", character.hp_max));
     }
-    let mut melee_string_vec: Vec<String> = vec![format!("+{}CD", character.melee_mod.melee)];
-    if character.melee_mod.unarmed > 0 {
-        melee_string_vec.push(format!("+{}CD unarmed", character.melee_mod.melee + character.melee_mod.unarmed))
-    }
-    if character.melee_mod.sneak > 0 {
-        melee_string_vec.push(format!("+{}CD sneak", character.melee_mod.melee + character.melee_mod.sneak))
-    }
-    if character.melee_mod.unarmed > 0 && character.melee_mod.sneak > 0 {
-        melee_string_vec.push(format!("+{}CD unarmed sneak", character.melee_mod.melee + character.melee_mod.sneak + character.melee_mod.unarmed))
-    }
-    ui.text(format!("Melee Damage: {}", melee_string_vec.join(", ")));
+    let melee_string = get_melee_str(character);
+
+    ui.text(format!("Melee Damage: {}", melee_string));
 
     ui.spacing();
     ui.separator();
@@ -191,7 +197,7 @@ pub fn render_stat_calculation(
     ui.spacing();
 
     for i in 0..7 {
-        ui.text(format!("     {}:{:4}    ",SPECIAL_LABELS[i].chars().next().unwrap(), char_spec[i].value));
+        ui.text(format!("   {}:{:4}   ",SPECIAL_LABELS[i].chars().next().unwrap(), char_spec[i].value));
         if i < 6 {
             ui.same_line();
         }

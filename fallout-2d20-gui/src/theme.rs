@@ -28,6 +28,7 @@ pub struct Theme {
 }
 
 pub const BAR_HEIGHT: f32 = 40.0;
+pub const FOOT_HEIGHT: f32 = 48.0;
 
 pub const THEME_CAPITAL: Theme = Theme {
     name: "Capital",
@@ -188,9 +189,10 @@ pub fn render_window<'ui>(
 ) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
     let bar_h = BAR_HEIGHT;
-    let content_h = win_h as f32 - bar_h;
-    let w = (win_w as f32 * 0.85).min(1100.0);
-    let h = content_h * 0.92;
+    let foot_h = FOOT_HEIGHT;
+    let content_h = win_h as f32 - bar_h - foot_h;
+    let w = (win_w as f32 * 0.95).min(1200.0);
+    let h = content_h * 0.95;
 
     let token = ui.window(label)
         .title_bar(false)
@@ -198,7 +200,7 @@ pub fn render_window<'ui>(
         .movable(false)
         .size([w, h], imgui::Condition::Always)
         .position(
-            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + (content_h - h) * 0.5],
+            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + 22.0 + (content_h - h) * 0.5],
             imgui::Condition::Always,
         )
         .begin()?;
