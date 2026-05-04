@@ -640,7 +640,7 @@ pub struct Limb {
     pub en_dr: i32,
     pub rd_dr: i32,
     pub injuries: i32,
-    pub equipped: Option<Apparel>,
+    pub equipped: Vec<Apparel>,
 }
 
 impl Limb {
@@ -651,7 +651,7 @@ impl Limb {
             en_dr: 0,
             rd_dr: 0,
             injuries: 0,
-            equipped: None,
+            equipped: vec![],
         }
     }
     fn new_inactive() -> Self {
@@ -661,7 +661,7 @@ impl Limb {
             en_dr: 0,
             rd_dr: 0,
             injuries: 0,
-            equipped: None,
+            equipped: vec![],
         }
     }
 }
@@ -780,7 +780,7 @@ pub struct Apparel {
     pub equipped: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ApparelType {
     Clothing,
     Outfit,
@@ -790,7 +790,7 @@ pub enum ApparelType {
     RobotArmor,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BodyLocation {
     None,
     Head,

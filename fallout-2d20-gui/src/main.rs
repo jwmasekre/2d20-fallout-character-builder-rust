@@ -523,7 +523,7 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::CharacterReview => {
                 let state = &mut review;
-                render_character_review(&ui, &window, state, &background, &equipment, &db, &character)
+                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character)
             }
 /*--------*/AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);

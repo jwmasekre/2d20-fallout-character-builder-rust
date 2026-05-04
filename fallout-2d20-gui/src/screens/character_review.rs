@@ -1,11 +1,12 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{character::{Character, Skill, DamageType},
+use std::cmp::Ordering;
+use crate::{character::{Apparel, ApparelType, BodyLocation, Character, DamageType, Skill},
     db::Db,
     screens::{background_select::{BackgroundState, EquipmentState},
     skill_assignment::SKILLS,
     special_assignment::SPECIAL_LABELS,
-    stat_calculation::get_melee_str},
+    stat_calculation::{BaseDR, get_melee_str}},
     theme::render_window
 };
 
@@ -21,14 +22,219 @@ impl ReviewState {
     }
 }
 
+pub fn equip_apparel(
+    character: &mut Character,
+    equipment: &mut EquipmentState,
+    background: &mut BackgroundState,
+) {
+    if background.selected_index.is_none() || background.apparel_selections.is_empty() { return }
+
+    let apparel = equipment.apparel.clone();
+    let mut _armor: Vec<(usize,&Apparel)> = vec![];
+    let mut outfit_dr = BaseDR {
+        ph_dr: 0,
+        en_dr: 0,
+        rd_dr: 0,
+    };
+    let mut outfit_pos = usize::MAX;
+    let mut clothing_dr = BaseDR {
+        ph_dr: 0,
+        en_dr: 0,
+        rd_dr: 0,
+    };
+    let mut clothing_pos = usize::MAX;
+    let headgear: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Headgear).collect();
+    let mut armored_limbs: Vec<BodyLocation> = vec![];
+
+    if character.is_robot() {
+        _armor = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::RobotArmor).collect();
+        let _modules = equipment.robot_modules.clone();
+
+        if !headgear.is_empty() {
+            let (_, hat) = headgear[0];
+            character.robot_hat = Some(hat.clone());
+        }
+        //handle robot modules at some point
+    } else {
+        let outfits: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Outfit).collect();
+        let clothing: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Clothing).collect();
+        _armor = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Armor).collect();
+        (outfit_dr, outfit_pos) = match outfits.len() {
+            0 => (outfit_dr, outfit_pos),
+            1 => (
+                BaseDR {
+                    ph_dr: outfits[0].1.ph_dr,
+                    en_dr: outfits[0].1.en_dr,
+                    rd_dr: outfits[0].1.rd_dr
+                }, outfits[0].0),
+            _ => {
+                let best = outfits
+                    .iter()
+                    .max_by(|a, b| {
+                        match a.1.ph_dr.cmp(&b.1.ph_dr) {
+                            Ordering::Equal => a.1.en_dr.cmp(&b.1.en_dr),
+                            other => other,
+                        }
+                    });
+                let (pos, best_dr) = (best.unwrap().0.clone(), BaseDR {
+                    ph_dr: best.unwrap().1.ph_dr,
+                    en_dr: best.unwrap().1.en_dr,
+                    rd_dr: best.unwrap().1.rd_dr,
+                });
+                (best_dr, pos)
+            },
+        };
+        (clothing_dr, clothing_pos) = match clothing.len() {
+            0 => (clothing_dr, clothing_pos),
+            1 => (
+                BaseDR {
+                    ph_dr: clothing[0].1.ph_dr,
+                    en_dr: clothing[0].1.en_dr,
+                    rd_dr: clothing[0].1.rd_dr
+                }, clothing[0].0),
+            _ => {
+                let best = clothing
+                    .iter()
+                    .max_by(|a, b| {
+                        match a.1.ph_dr.cmp(&b.1.ph_dr) {
+                            Ordering::Equal => a.1.en_dr.cmp(&b.1.en_dr),
+                            other => other,
+                        }
+                    });
+                let (pos, best_dr) = (best.unwrap().0.clone(), BaseDR {
+                    ph_dr: best.unwrap().1.ph_dr,
+                    en_dr: best.unwrap().1.en_dr,
+                    rd_dr: best.unwrap().1.rd_dr,
+                });
+                (best_dr, pos)
+            },
+        };
+    }
+    for item in _armor.clone() {
+        let covers = item.1.covers.clone();
+        for loc in covers {
+            if !armored_limbs.contains(&loc) { armored_limbs.push(loc) }
+        }
+    }
+    let mut top_each: Vec<(usize, &Apparel)> = vec![];
+    for (i, loc) in armored_limbs.iter().enumerate() {
+        let mut loc_armor: Vec<(usize, &Apparel)> = vec![];
+        for item in _armor.clone() {
+            if item.1.covers.contains(&loc) { loc_armor.push(item)}
+        }
+        for item in loc_armor {
+            if top_each.len() <= i {
+                top_each.push(item.clone());
+            } else if top_each[i].1.ph_dr < item.1.ph_dr {
+                top_each[i] = item.clone();
+            } else if top_each[i].1.ph_dr == item.1.ph_dr && top_each[i].1.en_dr < item.1.en_dr {
+                top_each[i] = item.clone();
+            } else if top_each[i].1.ph_dr == item.1.ph_dr && top_each[i].1.en_dr == item.1.en_dr && top_each[i].1.rd_dr == item.1.rd_dr {
+                top_each[i] = item.clone();
+            }
+        }
+    }
+    let mut outfit = false;
+    if outfit_pos != usize::MAX {
+        outfit = true;
+        for loc in apparel[outfit_pos].covers.clone() {
+            let limb_pos = armored_limbs.iter().position(|l| *l == loc);
+            //can't guarantee there's a limb covered by armor here, handle the unwrap correctly
+            if outfit_dr.ph_dr < top_each[limb_pos.unwrap()].1.ph_dr + clothing_dr.ph_dr {
+                outfit = false;
+                break;
+            } else if outfit_dr.ph_dr == top_each[limb_pos.unwrap()].1.ph_dr + clothing_dr.ph_dr && outfit_dr.en_dr < top_each[limb_pos.unwrap()].1.en_dr + clothing_dr.en_dr {
+                outfit = false;
+                break;
+            } else if outfit_dr.ph_dr == top_each[limb_pos.unwrap()].1.ph_dr + clothing_dr.ph_dr && outfit_dr.en_dr == top_each[limb_pos.unwrap()].1.en_dr + clothing_dr.en_dr && outfit_dr.rd_dr < top_each[limb_pos.unwrap()].1.rd_dr + clothing_dr.rd_dr {
+                outfit = false;
+                break;
+            }
+        }
+    }
+    if outfit {
+        equipment.apparel[outfit_pos].equipped = true;
+        for loc in equipment.apparel[outfit_pos].covers.clone() {
+            match loc {
+                BodyLocation::Head => {
+                    character.limb_dr.head.equipped = vec![equipment.apparel[outfit_pos].clone()];
+                },
+                BodyLocation::ArmLeft => {
+                    character.limb_dr.arm_left.equipped = vec![equipment.apparel[outfit_pos].clone()];
+                },
+                BodyLocation::ArmRight => {
+                    character.limb_dr.arm_right.equipped = vec![equipment.apparel[outfit_pos].clone()];
+                },
+                BodyLocation::Torso => {
+                    character.limb_dr.torso.equipped = vec![equipment.apparel[outfit_pos].clone()];
+                },
+                BodyLocation::LegLeft => {
+                    character.limb_dr.leg_left.equipped = vec![equipment.apparel[outfit_pos].clone()];
+                },
+                BodyLocation::LegRight => {
+                    character.limb_dr.leg_right.equipped = vec![equipment.apparel[outfit_pos].clone()];
+                },
+                _ => {},
+            }
+        }
+    } else {
+        if clothing_pos != usize::MAX {
+            equipment.apparel[clothing_pos].equipped = true;
+            for loc in equipment.apparel[outfit_pos].covers.clone() {
+                match loc {
+                    BodyLocation::Head => {
+                        character.limb_dr.head.equipped = vec![equipment.apparel[clothing_pos].clone()];
+                        },
+                    BodyLocation::ArmLeft => {
+                        character.limb_dr.arm_left.equipped = vec![equipment.apparel[clothing_pos].clone()];
+                    },
+                    BodyLocation::ArmRight => {
+                        character.limb_dr.arm_right.equipped = vec![equipment.apparel[clothing_pos].clone()];
+                    },
+                    BodyLocation::Torso => {
+                        character.limb_dr.torso.equipped = vec![equipment.apparel[clothing_pos].clone()];
+                    },
+                    BodyLocation::LegLeft => {
+                        character.limb_dr.leg_left.equipped = vec![equipment.apparel[clothing_pos].clone()];
+                    },
+                    BodyLocation::LegRight => {
+                        character.limb_dr.leg_right.equipped = vec![equipment.apparel[clothing_pos].clone()];
+                    },
+                    _ => {},
+                }
+            }
+        }
+        for (i,loc) in armored_limbs.iter().enumerate() {
+            let item = equipment.apparel[top_each[i].0].clone();
+            match loc {
+                BodyLocation::None => {},
+                BodyLocation::Head => character.limb_dr.head.equipped.push(item),
+                BodyLocation::ArmLeft => character.limb_dr.arm_left.equipped.push(item),
+                BodyLocation::ArmRight => character.limb_dr.arm_right.equipped.push(item),
+                BodyLocation::Torso => character.limb_dr.torso.equipped.push(item),
+                BodyLocation::LegLeft => character.limb_dr.leg_left.equipped.push(item),
+                BodyLocation::LegRight => character.limb_dr.leg_right.equipped.push(item),
+                BodyLocation::Optics => character.limb_dr.optics.equipped.push(item),
+                BodyLocation::Arm1 => character.limb_dr.arm_1.equipped.push(item),
+                BodyLocation::Arm2 => character.limb_dr.arm_2.equipped.push(item),
+                BodyLocation::Arm3 => character.limb_dr.arm_3.equipped.push(item),
+                BodyLocation::Body => character.limb_dr.body.equipped.push(item),
+                BodyLocation::Thruster => character.limb_dr.thruster.equipped.push(item),
+                BodyLocation::Wheel => character.limb_dr.wheel.equipped.push(item),
+            };
+        }
+    }
+    //background.equipment_changed = false;
+}
+
 pub fn render_character_review(
     ui: &Ui,
     window: &Window,
     state: &mut ReviewState,
-    background: &BackgroundState,
-    equipment: &EquipmentState,
+    background: &mut BackgroundState,
+    equipment: &mut EquipmentState,
     _db: &Db,
-    character: &Character,
+    character: &mut Character,
 ) -> f32 {
     let Some((w, h, _token)) = render_window(ui, window, "##character_review", "Character Review")
         else { return 0.0 };
@@ -38,7 +244,8 @@ pub fn render_character_review(
     ui.spacing();
 
     if !state.loaded {
-        //trigger all the clothing 
+        equip_apparel(character, equipment, background);
+        state.loaded = true;
     }
     let Some(_scroll) = ui.child_window("##review_scroll")
         .size([w - 16.0, h - 32.0 - 44.0])
@@ -141,6 +348,125 @@ pub fn render_character_review(
     ui.text_disabled("DR");
     ui.separator();
     ui.spacing();
+    ui.text_disabled("temporary display:");
+
+    if character.limb_dr.head.active {
+        let mut ph: i32 = character.limb_dr.head.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.head.ph_dr;
+        let mut en: i32 = character.limb_dr.head.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.head.en_dr;
+        let mut rd: i32 = character.limb_dr.head.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.head.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "Head", ph, en, rd))
+    };
+    if character.limb_dr.arm_left.active {
+        let mut ph: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.arm_left.ph_dr;
+        let mut en: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.arm_left.en_dr;
+        let mut rd: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.arm_left.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_left", ph, en, rd))
+    };
+    if character.limb_dr.arm_right.active {
+        let mut ph: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.arm_right.ph_dr;
+        let mut en: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.arm_right.en_dr;
+        let mut rd: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.arm_right.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_right", ph, en, rd))
+    };
+    if character.limb_dr.torso.active {
+        let mut ph: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.torso.ph_dr;
+        let mut en: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.torso.en_dr;
+        let mut rd: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.torso.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "torso", ph, en, rd))
+    };
+    if character.limb_dr.leg_left.active {
+        let mut ph: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.leg_left.ph_dr;
+        let mut en: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.leg_left.en_dr;
+        let mut rd: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.leg_left.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "leg_left", ph, en, rd))
+    };
+    if character.limb_dr.leg_right.active {
+        let mut ph: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.leg_right.ph_dr;
+        let mut en: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.leg_right.en_dr;
+        let mut rd: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.leg_right.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "leg_right", ph, en, rd))
+    };
+    if character.limb_dr.optics.active {
+        let mut ph: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.optics.ph_dr;
+        let mut en: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.optics.en_dr;
+        let mut rd: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.optics.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "optics", ph, en, rd))
+    };
+    if character.limb_dr.arm_1.active {
+        let mut ph: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.arm_1.ph_dr;
+        let mut en: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.arm_1.en_dr;
+        let mut rd: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.arm_1.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_1", ph, en, rd))
+    };
+    if character.limb_dr.arm_2.active {
+        let mut ph: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.arm_2.ph_dr;
+        let mut en: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.arm_2.en_dr;
+        let mut rd: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.arm_2.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_2", ph, en, rd))
+    };
+    if character.limb_dr.arm_3.active {
+        let mut ph: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.arm_3.ph_dr;
+        let mut en: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.arm_3.en_dr;
+        let mut rd: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.arm_3.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_3", ph, en, rd))
+    };
+    if character.limb_dr.body.active {
+        let mut ph: i32 = character.limb_dr.body.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.body.ph_dr;
+        let mut en: i32 = character.limb_dr.body.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.body.en_dr;
+        let mut rd: i32 = character.limb_dr.body.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.body.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "body", ph, en, rd))
+    };
+    if character.limb_dr.thruster.active {
+        let mut ph: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.thruster.ph_dr;
+        let mut en: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.thruster.en_dr;
+        let mut rd: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.thruster.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "thruster", ph, en, rd))
+    };
+    if character.limb_dr.wheel.active {
+        let mut ph: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.ph_dr).sum();
+        ph += character.limb_dr.wheel.ph_dr;
+        let mut en: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.en_dr).sum();
+        en += character.limb_dr.wheel.en_dr;
+        let mut rd: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.rd_dr).sum();
+        rd += character.limb_dr.wheel.rd_dr;
+        ui.text(format!("{:10} - P:{} E:{} R:{}", "wheel", ph, en, rd))
+    };
 
     /*
     DR BLOCK
