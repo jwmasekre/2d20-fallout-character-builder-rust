@@ -224,7 +224,7 @@ pub struct JunkSave {
 }
 
 impl FullCharacterSave {
-    pub fn into_full(self, rules: &RulesBundle) -> Result<FullCharacter, String> {
+    pub fn into_full(self, _rules: &RulesBundle) -> Result<FullCharacter, String> {
         todo!("reconstruct FullCharacter from IDs")
         /*
         // reconstruct CharacterRow, CharacterSpecialRow, CharacterSkillsRow, CharacterTagsRow
@@ -285,9 +285,9 @@ pub fn save_character_to_file(
 
 pub fn load_character_from_file(
     path: impl AsRef<Path>,
-    rules: &RulesBundle, // your in-memory rules (weapons, apparel, perks, etc.)
+    _rules: &RulesBundle, // your in-memory rules (weapons, apparel, perks, etc.)
 ) -> Result<FullCharacter, Box<dyn std::error::Error>> {
-    let data = fs::read_to_string(path)?;
+    let _data = fs::read_to_string(path)?;
     todo!("read file -> FullCharacterSave -> into_full(rules)")
     /* let save: FullCharacterSave = serde_json::from_str(&data)?;
     let full = save.into_full_character(rules)?;

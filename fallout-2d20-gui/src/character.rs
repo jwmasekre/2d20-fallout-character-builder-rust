@@ -1,7 +1,8 @@
 use uuid::Uuid;
 
-use crate::screens2::special_assignment::SpecialState;
+use crate::screens::special_assignment::SpecialState;
 
+#[derive(Clone, Debug)]
 pub struct Character {
     pub id: Uuid,
     pub name: String,
@@ -15,6 +16,7 @@ pub struct Character {
     pub ghoul: bool,
     pub mutant: MutantType,
     pub robot: RobotType,
+    pub companion: CompanionType,
     pub robot_hat: Option<Apparel>,
     pub special: Special,
     pub luck_points: i32,
@@ -57,6 +59,7 @@ impl Character {
             ghoul: false,
             mutant: MutantType::None,
             robot: RobotType::None,
+            companion: CompanionType::None,
             robot_hat: None,
             special: Special::new(),
             luck_points: 5,
@@ -85,9 +88,7 @@ impl Character {
         }
     }
     pub fn is_gifted(&self) -> bool {
-        self.traits.iter().any(|t| {
-            t.id == 7
-        })
+        self.has_trait(7)
     }
     pub fn is_mutant(&self) -> bool {
         self.mutant != MutantType::None
@@ -96,29 +97,30 @@ impl Character {
         self.robot != RobotType::None
     }
     pub fn total_skill(&self) -> i32 {
-        self.skills.athletics.total +
-            self.skills.barter.total +
-            self.skills.big_guns.total +
-            self.skills.energy_weapons.total +
-            self.skills.explosives.total +
-            self.skills.lockpick.total +
-            self.skills.medicine.total +
-            self.skills.melee_weapons.total +
-            self.skills.pilot.total +
-            self.skills.repair.total +
-            self.skills.science.total +
-            self.skills.small_guns.total +
-            self.skills.sneak.total +
-            self.skills.speech.total +
-            self.skills.survival.total +
-            self.skills.throwing.total +
-            self.skills.unarmed.total
+        self.skills.skill_block().iter().map(|s| s.total).sum()
     }
+    pub fn total_skill_ranks(&self) -> i32 {
+        self.skills.skill_block().iter().map(|s| s.ranks).sum()
+    }
+    pub fn has_trait(&self, id: i32) -> bool {
+        self.traits.iter().any(|t| t.id == id)
+    }
+    pub fn has_any_trait(&self, id: Vec<i32>) -> bool {
+        self.traits.iter().any(|t| id.contains(&t.id))
+    }
+    pub fn has_perk(&self, id: i32) -> bool {
+        self.perks.iter().any(|p| p.id == id)
+    }
+    pub fn perk_ranks(&self, id: i32) -> i32 {
+        self.perks.iter().find(|p| p.id == id).map(|p| p.ranks).unwrap_or(0)
+    }
+
 }
 
+#[derive(Clone, Debug)]
 pub struct Player {
-    id: Uuid,
-    name: String,
+    pub id: Uuid,
+    pub name: String,
 }
 
 impl Player {
@@ -130,11 +132,13 @@ impl Player {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Party {
     pub id: Uuid,
     pub name: String,
     pub ap_players: i32,
     pub ap_gm: i32,
+    pub max_ap: i32,
 }
 
 impl Party {
@@ -144,10 +148,12 @@ impl Party {
             name: String::new(),
             ap_players: 0,
             ap_gm: 0,
+            max_ap: 6,
         }
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Origin {
     pub id: i32,
     pub name: String,
@@ -155,26 +161,28 @@ pub struct Origin {
     pub can_ghoul: bool,
 }
 
+#[derive(Clone, Debug)]
 pub struct Background {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
+#[derive(Clone, Debug)]
 pub struct Trait {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum MutantType {
     None,
     SuperMutant,
     Nightkin,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum RobotType {
     None,
     Handy,
@@ -185,6 +193,16 @@ pub enum RobotType {
     Assaultron,
 }
 
+#[derive(PartialEq, Clone, Debug)]
+pub enum CompanionType {
+    None,
+    Dogmeat,
+    Human,
+    Robot,
+}
+
+/*
+#[derive(Clone, Debug)]
 pub enum SpecialAttr {
     Strength,
     Perception,
@@ -194,7 +212,9 @@ pub enum SpecialAttr {
     Agility,
     Luck,
 }
+*/
 
+#[derive(Clone, Debug)]
 pub struct Special {
     pub strength: SpecialBlock,
     pub perception: SpecialBlock,
@@ -238,8 +258,31 @@ impl Special {
         character.special.strength.max = 12;
         character.special.endurance.max = 12;
     }
+    pub fn mut_special_block(&mut self) -> [&mut SpecialBlock; 7] {
+        [
+            &mut self.strength,
+            &mut self.perception,
+            &mut self.endurance,
+            &mut self.charisma,
+            &mut self.intelligence,
+            &mut self.agility,
+            &mut self.luck,
+        ]
+    }
+    pub fn special_block(&self) -> [SpecialBlock; 7] {
+        [
+            self.strength.clone(),
+            self.perception.clone(),
+            self.endurance.clone(),
+            self.charisma.clone(),
+            self.intelligence.clone(),
+            self.agility.clone(),
+            self.luck.clone(),
+        ]
+    }
 }
 
+#[derive(Clone, Debug)]
 pub struct SpecialBlock {
     pub value: i32,
     pub gifted: bool,
@@ -257,13 +300,14 @@ impl SpecialBlock {
         }
     }
     pub fn can_increase(&self, state: &SpecialState, character: &Character) -> bool {
-        self.value < self.max && state.remaining_points(character) == 0
+        self.value < self.max && state.remaining_points(character) > 0
     }
     pub fn can_decrease(&self, character: &Character) -> bool {
         self.value > 4 + if character.is_mutant() { 2 } else { 0 }
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Skill {
     Athletics,
 	Barter,
@@ -284,6 +328,7 @@ pub enum Skill {
 	Unarmed,
 }
 
+#[derive(Clone, Debug)]
 pub struct Skills {
     pub athletics: SkillBlock,
 	pub barter: SkillBlock,
@@ -326,77 +371,96 @@ impl Skills {
             unarmed: SkillBlock::new(),
         }
     }
-    pub fn standard_tags(&self) -> i32 {
+    pub fn skill_block(&self) -> [SkillBlock; 17] {
         [
-            self.athletics.tagged == TagType::Standard,
-            self.barter.tagged == TagType::Standard,
-            self.big_guns.tagged == TagType::Standard,
-            self.energy_weapons.tagged == TagType::Standard,
-            self.explosives.tagged == TagType::Standard,
-            self.lockpick.tagged == TagType::Standard,
-            self.medicine.tagged == TagType::Standard,
-            self.melee_weapons.tagged == TagType::Standard,
-            self.pilot.tagged == TagType::Standard,
-            self.repair.tagged == TagType::Standard,
-            self.science.tagged == TagType::Standard,
-            self.small_guns.tagged == TagType::Standard,
-            self.sneak.tagged == TagType::Standard,
-            self.speech.tagged == TagType::Standard,
-            self.survival.tagged == TagType::Standard,
-            self.throwing.tagged == TagType::Standard,
-            self.unarmed.tagged == TagType::Standard,
-        ].iter().filter(|&&b| b).count() as i32
+            self.athletics.clone(),
+            self.barter.clone(),
+            self.big_guns.clone(),
+            self.energy_weapons.clone(),
+            self.explosives.clone(),
+            self.lockpick.clone(),
+            self.medicine.clone(),
+            self.melee_weapons.clone(),
+            self.pilot.clone(),
+            self.repair.clone(),
+            self.science.clone(),
+            self.small_guns.clone(),
+            self.sneak.clone(),
+            self.speech.clone(),
+            self.survival.clone(),
+            self.throwing.clone(),
+            self.unarmed.clone(),
+        ]
+    }
+    pub fn mut_skill_block(&mut self) -> [&mut SkillBlock; 17] {
+        [
+            &mut self.athletics,
+            &mut self.barter,
+            &mut self.big_guns,
+            &mut self.energy_weapons,
+            &mut self.explosives,
+            &mut self.lockpick,
+            &mut self.medicine,
+            &mut self.melee_weapons,
+            &mut self.pilot,
+            &mut self.repair,
+            &mut self.science,
+            &mut self.small_guns,
+            &mut self.sneak,
+            &mut self.speech,
+            &mut self.survival,
+            &mut self.throwing,
+            &mut self.unarmed,
+        ]
+    }
+    pub fn standard_tags(&self) -> i32 {
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Standard).count() as i32
     }
     pub fn trait_tags(&self) -> i32 {
-        [
-            self.athletics.tagged == TagType::Trait,
-            self.barter.tagged == TagType::Trait,
-            self.big_guns.tagged == TagType::Trait,
-            self.energy_weapons.tagged == TagType::Trait,
-            self.explosives.tagged == TagType::Trait,
-            self.lockpick.tagged == TagType::Trait,
-            self.medicine.tagged == TagType::Trait,
-            self.melee_weapons.tagged == TagType::Trait,
-            self.pilot.tagged == TagType::Trait,
-            self.repair.tagged == TagType::Trait,
-            self.science.tagged == TagType::Trait,
-            self.small_guns.tagged == TagType::Trait,
-            self.sneak.tagged == TagType::Trait,
-            self.speech.tagged == TagType::Trait,
-            self.survival.tagged == TagType::Trait,
-            self.throwing.tagged == TagType::Trait,
-            self.unarmed.tagged == TagType::Trait,
-        ].iter().filter(|&&b| b).count() as i32
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Trait).count() as i32
     }
     pub fn perk_tags(&self) -> i32 {
-        [
-            self.athletics.tagged == TagType::Perk,
-            self.barter.tagged == TagType::Perk,
-            self.big_guns.tagged == TagType::Perk,
-            self.energy_weapons.tagged == TagType::Perk,
-            self.explosives.tagged == TagType::Perk,
-            self.lockpick.tagged == TagType::Perk,
-            self.medicine.tagged == TagType::Perk,
-            self.melee_weapons.tagged == TagType::Perk,
-            self.pilot.tagged == TagType::Perk,
-            self.repair.tagged == TagType::Perk,
-            self.science.tagged == TagType::Perk,
-            self.small_guns.tagged == TagType::Perk,
-            self.sneak.tagged == TagType::Perk,
-            self.speech.tagged == TagType::Perk,
-            self.survival.tagged == TagType::Perk,
-            self.throwing.tagged == TagType::Perk,
-            self.unarmed.tagged == TagType::Perk,
-        ].iter().filter(|&&b| b).count() as i32
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Perk).count() as i32
     }
     pub fn total_tags(&self) -> i32 {
         self.standard_tags() + self.trait_tags() + self.perk_tags()
     }
+    pub fn zip_skilled(&self) -> Vec<(usize,usize)> {
+        let mut zipped = vec![];
+        let skilled_count = self.athletics.skilled.len();
+        for rank in 0..skilled_count {
+            let mut sk_a: usize = 17;
+            for (i, skill) in self.skill_block().iter().enumerate() {
+                match skill.is_skilled(rank) {
+                    1 => {if sk_a == 17 {sk_a = i} else {zipped.push((sk_a,i)); continue}},
+                    2 => {zipped.push((i,i)); continue},
+                    _ => {},
+                }
+            }
+        }
+        zipped
+    }
+    pub fn available_tags(&self, character: &Character) -> Vec<usize> {
+        let mut available = vec![];
+        for (i,skill) in self.skill_block().iter().enumerate() {
+            if !skill.is_tagged() && !(i == 10 && character.has_trait(27)) { available.push(i) }
+        }
+        available
+    }
+    pub fn perk_tagged(&self) -> Vec<usize> {
+        let mut tagged = vec![];
+        for (i,skill) in self.skill_block().iter().enumerate() {
+            if skill.tagged == TagType::Perk {tagged.push(i)}
+        }
+        tagged
+    }
 }
 
+#[derive(Clone, Debug)]
 pub struct SkillBlock {
     pub ranks: i32,
     pub tagged: TagType,
+    //skilled will create a new entry in every skill, either 0, 1 or 2. this aligns the skill selections with each rank of the perk
     pub skilled: Vec<i32>,
     pub total: i32,
     pub max: i32,
@@ -418,9 +482,12 @@ impl SkillBlock {
     pub fn update(&mut self) {
         self.total = self.ranks + if self.is_tagged() { 2 } else { 0 };
     }
+    pub fn is_skilled(&self, rank: usize) -> i32 {
+        self.skilled[rank]
+    }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum TagType {
     None,
     Trait,
@@ -428,6 +495,7 @@ pub enum TagType {
     Standard,
 }
 
+#[derive(Clone, Debug)]
 pub struct Perk {
     pub id: i32,
     pub name: String,
@@ -435,6 +503,7 @@ pub struct Perk {
     pub ranks: i32,
 }
 
+#[derive(Clone, Debug)]
 pub struct MeleeModifiers {
     pub melee: i32,
     pub unarmed: i32,
@@ -451,6 +520,7 @@ impl MeleeModifiers {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Limbs {
     pub head: Limb,
     pub torso: Limb,
@@ -489,15 +559,88 @@ impl Limbs {
             track_right: Limb::new_inactive(),
         }
     }
+    pub fn update_active(&mut self, robot_type: RobotType) {
+        match robot_type {
+            RobotType::Handy => {
+                self.head = Limb::new_inactive();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_inactive();
+                self.arm_right = Limb::new_inactive();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_active();
+                self.arm_1 = Limb::new_active();
+                self.arm_2 = Limb::new_active();
+                self.arm_3 = Limb::new_active();
+                self.thruster = Limb::new_active();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            },
+            RobotType::Robobrain => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_active();
+                self.track_right = Limb::new_active();
+            },
+            RobotType::Securitron => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_active();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            },
+            _ => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_active();
+                self.body = Limb::new_inactive();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_active();
+                self.leg_right = Limb::new_active();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            }
+        }
+    }
 }
 
+#[derive(Clone, Debug)]
 pub struct Limb {
     pub active: bool,
     pub ph_dr: i32,
     pub en_dr: i32,
     pub rd_dr: i32,
     pub injuries: i32,
-    pub equipped: Option<Apparel>,
+    pub equipped: Vec<Apparel>,
 }
 
 impl Limb {
@@ -508,7 +651,7 @@ impl Limb {
             en_dr: 0,
             rd_dr: 0,
             injuries: 0,
-            equipped: None,
+            equipped: vec![],
         }
     }
     fn new_inactive() -> Self {
@@ -518,11 +661,12 @@ impl Limb {
             en_dr: 0,
             rd_dr: 0,
             injuries: 0,
-            equipped: None,
+            equipped: vec![],
         }
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Weapon {
     pub id: i32,
     pub name: String,
@@ -541,6 +685,7 @@ pub struct Weapon {
     pub mods: Vec<WeaponMods>,
 }
 
+#[derive(Clone, Debug)]
 pub enum DamageType {
     Ph,
     En,
@@ -552,6 +697,7 @@ pub enum DamageType {
     None,
 }
 
+#[derive(Clone, Debug)]
 pub struct WeaponMods {
     pub slot: WeaponSlot,
     pub installed: bool,
@@ -563,19 +709,22 @@ pub struct WeaponMods {
     pub damage_chg: i32,
     pub rate_set: i32,
     pub rate_chg: i32,
-    pub range_set: i32,
     pub range_chg: i32,
-    pub ammo_set: AmmoData,
-    pub effect_add: Vec<String>,
-    pub effect_rem: Vec<String>,
-    pub quality_add: Vec<String>,
-    pub quality_rem: Vec<String>,
-    pub slot_add: WeaponSlot,
-    pub damage_type_set: DamageType,
-    pub weapon_add: Weapon,
+    //pub ammo_set: Option<AmmoData>,
+    pub ammo_set: Option<String>,
+    pub effect_add:  Vec<(String, Option<i32>)>,
+    pub effect_rem:  Vec<(String, Option<i32>)>,
+    pub quality_add: Vec<(String, Option<i32>)>,
+    pub quality_rem: Vec<(String, Option<i32>)>,
+    //pub slot_add: Option<WeaponSlot>,
+    pub slot_add: String,
+    pub damage_type_set: Option<DamageType>,
+    //pub weapon_add: Option<Weapon>,
+    pub weapon_add: String,
     pub special_ability: String,
 }
 
+#[derive(Clone, Debug)]
 pub enum WeaponSlot {
     None,
     Receiver,
@@ -595,22 +744,28 @@ pub enum WeaponSlot {
     Frame,
 }
 
+#[derive(Clone, Debug)]
 pub struct AmmoData {
     pub id: i32,
     pub name: String,
     pub wgt: i32
 }
 
+/*
+#[derive(Clone, Debug)]
 pub struct Ammo {
     pub ammo: AmmoData,
     pub variants: Vec<AmmoData>,
 }
+*/
 
+#[derive(Clone, Debug)]
 pub struct AmmoInv {
     pub ammo: AmmoData,
     pub quantity: i32,
 }
 
+#[derive(Clone, Debug)]
 pub struct Apparel {
     pub id: i32,
     pub name: String,
@@ -625,6 +780,7 @@ pub struct Apparel {
     pub equipped: bool,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum ApparelType {
     Clothing,
     Outfit,
@@ -634,6 +790,7 @@ pub enum ApparelType {
     RobotArmor,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum BodyLocation {
     None,
     Head,
@@ -651,6 +808,7 @@ pub enum BodyLocation {
     Wheel,
 }
 
+#[derive(Clone, Debug)]
 pub struct RobotModule {
     pub id: i32,
     pub name: String,
@@ -659,6 +817,7 @@ pub struct RobotModule {
     pub wgt: i32,
 }
 
+#[derive(Clone, Debug)]
 pub struct Consumable {
     pub id: i32,
     pub name: String,
@@ -672,6 +831,7 @@ pub struct Consumable {
     pub quantity: i32,
 }
 
+#[derive(Clone, Debug)]
 pub enum ConsumableType {
     Chem,
     Food,
@@ -680,6 +840,7 @@ pub enum ConsumableType {
     Publication,
 }
 
+#[derive(Clone, Debug)]
 pub struct Gear {
     pub id: i32,
     pub name: String,
@@ -688,6 +849,7 @@ pub struct Gear {
     pub quantity: i32,
 }
 
+#[derive(Clone, Debug)]
 pub struct Junk {
     pub common: i32,
     pub uncommon: i32,

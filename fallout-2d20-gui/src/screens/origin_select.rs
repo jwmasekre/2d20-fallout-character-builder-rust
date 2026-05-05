@@ -2,8 +2,12 @@ use imgui::Ui;
 use sdl2::video::Window;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
+use crate::screens::skill_assignment::SkillState;
+use crate::screens::background_select::BackgroundState;
 use crate::theme::{render_text_wrapped, render_window};
+//use crate::log_on_change;
 
+#[derive(Debug)]
 pub struct OriginState {
     selected: bool,
     trait_count: i32,
@@ -13,7 +17,7 @@ pub struct OriginState {
     origin_label_to_index: Vec<Option<usize>>,
     origins: Vec<OriginRow>,
     traits: Vec<TraitRow>,
-    ghoul_trait: Option<TraitRow>,
+    _ghoul_trait: Option<TraitRow>,
 }
 impl OriginState {
     pub fn new(db: &Db) -> Self {
@@ -23,18 +27,18 @@ impl OriginState {
             selected: false,
             trait_count: 0,
             origin_trait_count: 0,
-            origin_index: 0,
+            origin_index: usize::MAX,
             origin_labels: labels,
             origin_label_to_index: label_map,
             origins,
             traits: vec![],
-            ghoul_trait: None,
+            _ghoul_trait: None,
         }
     }
     pub fn is_complete(&self) -> bool {//do we need to be checking the character to make sure that's good to go too?
         self.selected && (self.trait_count == self.origin_trait_count)
     }
-    fn update_origin(&mut self, character: &mut Character) {
+    fn update_origin(&mut self, character: &mut Character, background_state: &mut BackgroundState) {
         //if no origins are returned by the db, return None
         if self.origins.is_empty() { character.origin = None; return }
         //mark that the player has selected an origin
@@ -49,7 +53,7 @@ impl OriginState {
             can_ghoul: selected_origin.can_ghoul,
         };
         //grab the old origin; checking if they go from mutant -> non or vice-versa
-        let old_origin = character.origin.as_ref().unwrap().id;
+        let old_origin = if character.origin.is_some() {character.origin.clone().unwrap().id} else {i32::MAX};
         //if they go to mutant from non, add two to str and end
         if [3,16].contains(&selected_origin.id) && ![3,16].contains(&old_origin) {
             character.special.strength.value += 2;
@@ -79,13 +83,20 @@ impl OriginState {
         };
         //update max special
         Special::apply_max(character);
+        //clear out any selected backgrounds
+        background_state.reset_selection();
+        //update limbs
+        character.limb_dr.update_active(character.robot.clone());
+        //clear out the robot hat just in case we switch to a non-robot
+        if character.robot == RobotType::None { character.robot_hat.take(); }
     }
     //retrieve the traits based on the current origin
     fn reload_traits(&mut self, db: &Db, character: &mut Character) {
-        //clear traits if the db doesn't return any origins
+        //clear traits
+        self.traits = vec![];
+        character.traits = vec![];
+        //return if the db doesn't return any origins
         if self.origins.is_empty() {
-            self.traits = vec![];
-            character.traits = vec![];
             return;
         }
         //grab the currently selected origin's id
@@ -98,7 +109,7 @@ impl OriginState {
         if traits[0].is_ghoul_trait {
             character.ghoul = true;
         //if the player selected an origin that can't ghoul, mark them as not a ghoul
-        } else if !self.origins[origin_id as usize].can_ghoul {
+        } else if !self.origins[self.origin_index].can_ghoul {
             character.ghoul = false;
         }
         //if the character is a ghoul, set their trait to the ghoul trait and don't run any other trait logic
@@ -127,62 +138,25 @@ impl OriginState {
         //the character's origin has options, so clear out the character's traits and indicate that they've selected 0 out of a max of 2
         } else {
             character.traits = vec![];
-            self.trait_count = 0;
+            self.trait_count = character.traits.len() as i32;
             self.origin_trait_count = 2;
+            self.traits = traits;
         }
     }
     fn update_trait(&self, character: &mut Character) {
         let skill_max = character.level.clamp(3,6);
-        if character.is_mutant() {
-            character.skills.athletics.max = 4.min(skill_max);
-            character.skills.barter.max = 4.min(skill_max);
-            character.skills.big_guns.max = 4.min(skill_max);
-            character.skills.energy_weapons.max = 4.min(skill_max);
-            character.skills.explosives.max = 4.min(skill_max);
-            character.skills.lockpick.max = 4.min(skill_max);
-            character.skills.medicine.max = 4.min(skill_max);
-            character.skills.melee_weapons.max = 4.min(skill_max);
-            character.skills.pilot.max = 4.min(skill_max);
-            character.skills.repair.max = 4.min(skill_max);
-            character.skills.science.max = 4.min(skill_max);
-            character.skills.small_guns.max = 4.min(skill_max);
-            character.skills.sneak.max = 4.min(skill_max);
-            character.skills.speech.max = 4.min(skill_max);
-            character.skills.survival.max = 4.min(skill_max);
-            character.skills.throwing.max = 4.min(skill_max);
-            character.skills.unarmed.max = 4.min(skill_max);
-        } else {
-            character.skills.athletics.max = skill_max;
-            character.skills.barter.max = skill_max;
-            character.skills.big_guns.max = skill_max;
-            character.skills.energy_weapons.max = skill_max;
-            character.skills.explosives.max = skill_max;
-            character.skills.lockpick.max = skill_max;
-            character.skills.medicine.max = skill_max;
-            character.skills.melee_weapons.max = skill_max;
-            character.skills.pilot.max = skill_max;
-            character.skills.repair.max = skill_max;
-            character.skills.science.max = skill_max;
-            character.skills.small_guns.max = skill_max;
-            character.skills.sneak.max = skill_max;
-            character.skills.speech.max = skill_max;
-            character.skills.survival.max = skill_max;
-            character.skills.throwing.max = skill_max;
-            character.skills.unarmed.max = skill_max;
-        }
-        if character.traits.iter().any(|t| t.id == 13) {
-            character.skills.athletics.max = 4.min(skill_max);
-            character.skills.big_guns.max = 4.min(skill_max);
-            character.skills.energy_weapons.max = 4.min(skill_max);
-            character.skills.explosives.max = 4.min(skill_max);
-            character.skills.lockpick.max = 4.min(skill_max);
-            character.skills.melee_weapons.max = 4.min(skill_max);
-            character.skills.pilot.max = 4.min(skill_max);
-            character.skills.small_guns.max = 4.min(skill_max);
-            character.skills.sneak.max = 4.min(skill_max);
-            character.skills.survival.max = 4.min(skill_max);
-            character.skills.throwing.max = 4.min(skill_max);
-            character.skills.unarmed.max = 4.min(skill_max);
+        let mutant = character.is_mutant();
+        let good = character.has_trait(13);
+        let skills = character.skills.mut_skill_block();
+        for i in 0..17 {
+            if mutant {
+                skills[i].max = 4.min(skill_max);
+            } else {
+                skills[i].max = skill_max;
+            }
+            if good && [0,2,3,4,5,7,8,11,12,14,15,16].contains(&i) {
+                skills[i].max = 4.min(skill_max);
+            }
         }
     }
 }
@@ -199,7 +173,7 @@ pub struct OriginRow {
 #[derive(Debug, Clone)]
 pub struct TraitRow {
     pub id: i32,
-    pub origin_id: i32,
+    pub _origin_id: i32,
     pub name: String,
     pub description: String,
     pub is_ghoul_trait: bool,
@@ -269,7 +243,7 @@ fn load_traits(db: &Db, origin_id: i32, state: &mut OriginState) -> Vec<TraitRow
     match result {
         Ok(rows) => rows.into_iter().map(|r| TraitRow {
             id: r.id as i32,
-            origin_id: r.origin_id.unwrap_or_default() as i32,
+            _origin_id: r.origin_id.unwrap_or_default() as i32,
             name: r.name.unwrap_or_default(),
             description: r.description.unwrap_or_default(),
             is_ghoul_trait: r.is_ghoul_trait.unwrap_or(0) != 0,
@@ -278,7 +252,7 @@ fn load_traits(db: &Db, origin_id: i32, state: &mut OriginState) -> Vec<TraitRow
     }
 }
 
-fn load_ghoul_traits(db: &Db, state: &mut OriginState) -> Vec<TraitRow> {
+fn load_ghoul_traits(db: &Db, _state: &mut OriginState) -> Vec<TraitRow> {
     let result =
         db.block_on(async {
             sqlx::query!(
@@ -293,11 +267,11 @@ fn load_ghoul_traits(db: &Db, state: &mut OriginState) -> Vec<TraitRow> {
             ).fetch_all(&db.pool).await
         });
     
-    state.origin_trait_count = 1;
+    //state.origin_trait_count = 1;
     match result {
         Ok(rows) => rows.into_iter().map(|r| TraitRow {
             id: r.id as i32,
-            origin_id: r.origin_id.unwrap_or_default() as i32,
+            _origin_id: r.origin_id.unwrap_or_default() as i32,
             name: r.name.unwrap_or_default(),
             description: r.description.unwrap_or_default(),
             is_ghoul_trait: r.is_ghoul_trait.unwrap_or(0) != 0,
@@ -312,9 +286,11 @@ pub fn render_origin_select(
     state: &mut OriginState,
     db: &Db,
     character: &mut Character,
+    skill_state: &mut SkillState,
+    background_state: &mut BackgroundState,
 ) -> f32 {
-    let (w, h) = render_window(ui, window, "##origin_select", "Origin Select");
-
+    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select")
+        else { return 0.0 };
     ui.text("ORIGIN");
     ui.separator();
     ui.spacing();
@@ -333,16 +309,23 @@ pub fn render_origin_select(
     ui.text("Character Level");
     ui.same_line_with_pos(label_w);
     if ui.button("-##level_dec") {
-        if character.level > 1 { character.level -= 1; }
+        if character.level > 1 {
+            character.level -= 1;
+            state.update_trait(character);
+        }
     }
     ui.same_line();
     ui.text(format!("{}", character.level));
     ui.same_line();
     if ui.button("+##level_inc") {
         character.level += 1;
+        state.update_trait(character);
     }
     //safety net, won't let character level go below 1
-    if character.level < 1 { character.level = 1; }
+    if character.level < 1 {
+        character.level = 1;
+        state.update_trait(character);
+    }
 
     ui.spacing();
     ui.separator();
@@ -355,12 +338,12 @@ pub fn render_origin_select(
     let current_index = state.origin_label_to_index
         .iter()
         .position(|m| *m == Some(state.origin_index))
-        .unwrap_or(0);
+        .unwrap_or(usize::MAX);
 
     let current_label = state.origin_labels
         .get(current_index)
         .map(|s| s.trim())
-        .unwrap_or("-")
+        .unwrap_or("Select an Origin")
         .to_string();
 
     //origin
@@ -391,8 +374,9 @@ pub fn render_origin_select(
 
     //when the player selects an origin, update the origin and reload the traits
     if origin_changed {
-        state.update_origin(character);
-        state.reload_traits(db, character)
+        state.update_origin(character, background_state);
+        state.reload_traits(db, character);
+        skill_state.reset(character);
     }
 
     ui.spacing();
@@ -427,7 +411,10 @@ pub fn render_origin_select(
         ui.spacing();
         ui.text("Trait");
 
-        if ghoul_changed { state.reload_traits(db, character); }
+        if ghoul_changed {
+            state.reload_traits(db, character);
+            skill_state.reset(character);
+        }
 
         //check if we have any traits
         if state.origin_trait_count == 0 {
@@ -446,13 +433,14 @@ pub fn render_origin_select(
         } else {
             //list all the traits with checkboxes, maximum of two
             let selected_count = character.traits.len();
-            let y = ui.cursor_pos()[1];
-            ui.set_cursor_pos([label_w, y]);
+            //let y = ui.cursor_pos()[1];
+            //ui.set_cursor_pos([label_w, y]);
+            ui.same_line_with_pos(label_w);
             ui.text_disabled("Choose up to 2:");
             ui.spacing();
 
             for (ti, t) in state.traits.iter().enumerate() {
-                let mut checked = character.traits.iter().any(|ct| ct.id == t.id);
+                let mut checked = character.has_trait(t.id);
                 let at_limit = !checked && selected_count >= 2;
                 let y = ui.cursor_pos()[1];
                 ui.set_cursor_pos([label_w, y]);
@@ -461,12 +449,28 @@ pub fn render_origin_select(
                     let _lim_guard = at_limit.then(|| ui.begin_disabled(true));
                     ui.checkbox(&format!("##trait_{}", ti), &mut checked);
                 } else {
+                    let mut checked = character.has_trait(t.id);
                     if ui.checkbox(&format!("##trait_{}", ti), &mut checked) {
                         //this may not work properly, it's behaving really weird with the .iter().any() vs the old way
-                        let test = &mut character.traits.iter().any(|ct| ct.id == t.id);
-                        if *test {
-                            *test = checked;
+                        let test = &mut character.has_trait(t.id);
+                        if checked != *test {
+                            if checked {
+                                let ct = Trait {
+                                    id: t.id,
+                                    name: t.name.clone(),
+                                    desc: t.description.clone(),
+                                };
+                                character.traits.push(ct);
+                            } else {
+                                for i in 0..character.traits.len() {
+                                    if character.traits[i].id == t.id {
+                                        character.traits.remove(i);
+                                        break
+                                    }
+                                };
+                            }
                         }
+                        state.trait_count = character.traits.len() as i32;
                         state.update_trait(character);
                     }
                 }

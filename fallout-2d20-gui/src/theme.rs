@@ -1,5 +1,7 @@
-use imgui::Ui;
+use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
+
+use crate::crt::CrtEffect;
 
 pub struct Theme {
     pub name: &'static str,
@@ -25,7 +27,8 @@ pub struct Theme {
     pub separator: [f32; 4],
 }
 
-pub const BAR_HEIGHT: f32 = 32.0;
+pub const BAR_HEIGHT: f32 = 40.0;
+pub const FOOT_HEIGHT: f32 = 48.0;
 
 pub const THEME_CAPITAL: Theme = Theme {
     name: "Capital",
@@ -149,7 +152,7 @@ pub const THEME_NUCLEAR_SHADOW: Theme = Theme {
 
 pub const THEMES: [&Theme; 5] = [&THEME_CAPITAL, &THEME_MOJAVE, &THEME_COMMONWEALTH, &THEME_NUCLEAR_WINTER, &THEME_NUCLEAR_SHADOW];
 
-pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
+pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme, crt: &mut CrtEffect) {
     let style = imgui.style_mut();
     style.colors[imgui::StyleColor::Text as usize]             = theme.text;
     style.colors[imgui::StyleColor::TextDisabled as usize]     = theme.text_dim;
@@ -173,32 +176,40 @@ pub fn apply_theme(imgui: &mut imgui::Context, theme: &Theme) {
     style.colors[imgui::StyleColor::Separator as usize]        = theme.separator;
     style.colors[imgui::StyleColor::PopupBg as usize]          = theme.window_bg;
     style.colors[imgui::StyleColor::ChildBg as usize]          = theme.window_bg;
+    let dim = theme.text_dim;
+    let max = dim[0].max(dim[1]).max(dim[2]).max(0.001);
+    crt.tint = [dim[0] / max, dim[1] / max, dim[2] / max];
 }
 
-pub fn render_window(ui: &Ui, window: &Window, label: &str, title: &str) -> (f32, f32) {
+pub fn render_window<'ui>(
+    ui: &'ui Ui,
+    window: &Window,
+    label: &str,
+    title: &str,
+) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
     let bar_h = BAR_HEIGHT;
-    let content_h = win_h as f32 - bar_h;
-    let w = (win_w as f32 * 0.85).min(1100.0);
-    let h = content_h * 0.92;
+    let foot_h = FOOT_HEIGHT;
+    let content_h = win_h as f32 - bar_h - foot_h;
+    let w = (win_w as f32 * 0.95).min(1200.0);
+    let h = content_h * 0.95;
 
-    let Some(_window_token) = ui.window(label)
+    let token = ui.window(label)
         .title_bar(false)
         .resizable(false)
         .movable(false)
         .size([w, h], imgui::Condition::Always)
         .position(
-            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + (content_h - h) * 0.5], imgui::Condition::Always,
+            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + 22.0 + (content_h - h) * 0.5],
+            imgui::Condition::Always,
         )
-        .begin()
-    else {
-        return (0.0, 0.0);
-    };
+        .begin()?;
+
     ui.text(title);
     ui.separator();
     ui.spacing();
 
-    return (w, h);
+    Some((w, h, token))
 }
 
 pub fn sanitize(s: &str) -> String {
