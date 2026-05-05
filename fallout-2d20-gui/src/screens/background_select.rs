@@ -1945,7 +1945,7 @@ fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: 
             }
         }
         ConsumableSelSlot::ManyForOne(give_up, get_one) => {
-            let chosen = if let SlotSelection::ManyForOneChosen(i) = sel { *i } else { 0 };
+            let chosen = if let SlotSelection::ManyForOneChosen(i) = sel { *i } else { 2 };
             ui.text(format!("Choose: take all of {} OR just {}",
                 get_one.name,
                 give_up.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(" + "),
