@@ -1,4 +1,4 @@
-use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, theme::render_window};
+use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, screens::character_review::ReviewState, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
@@ -304,7 +304,7 @@ impl EffectNameSets {
     }
 }
 
-
+#[derive(Debug)]
 pub struct BackgroundState {
     pub all_backgrounds: Vec<BackgroundRow>,
     pub selected_index: Option<usize>,
@@ -359,11 +359,12 @@ impl BackgroundState {
         self.robot_module_selections = default_selections(&background.robot_module_slots);
         self.current_background = Some(background);
     }
-    pub fn is_complete(&mut self, equipment: &mut EquipmentState, db: &Db, character: &Character) -> bool {
+    pub fn is_complete(&mut self, equipment: &mut EquipmentState, db: &Db, character: &Character, review: &mut ReviewState) -> bool {
         let complete = self.selected_index.is_some() && selections_complete(&self.weapon_selections) && selections_complete(&self.apparel_selections) && selections_complete(&self.consumable_selections) && selections_complete(&self.robot_module_selections);
         if complete && self.equipment_changed {
             equipment.load(db, self, character);
             self.equipment_changed = false;
+            review.loaded = false;
         }
         complete
     }
@@ -2050,6 +2051,7 @@ pub fn render_background_select(
     equipment: &mut EquipmentState,
     db: &Db,
     character: &mut Character,
+    _review: &mut ReviewState,
 ) -> f32 {
     let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select")
         else { return 0.0 };

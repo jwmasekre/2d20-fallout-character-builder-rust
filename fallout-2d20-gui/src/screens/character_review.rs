@@ -1,7 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{character::{Apparel, ApparelType, BodyLocation, Character, DamageType, Skill},
+use crate::{character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill},
     db::Db,
     screens::{background_select::{BackgroundState, EquipmentState},
     skill_assignment::SKILLS,
@@ -140,6 +140,7 @@ pub fn equip_apparel(
         for loc in apparel[outfit_pos].covers.clone() {
             let limb_pos = armored_limbs.iter().position(|l| *l == loc);
             //can't guarantee there's a limb covered by armor here, handle the unwrap correctly
+            if limb_pos.is_none() { break; }
             if outfit_dr.ph_dr < top_each[limb_pos.unwrap()].1.ph_dr + clothing_dr.ph_dr {
                 outfit = false;
                 break;
@@ -203,6 +204,10 @@ pub fn equip_apparel(
                     _ => {},
                 }
             }
+        }
+        if !character.is_robot() && !headgear.is_empty() {
+            //just put on the first hat idgaf rn
+            character.limb_dr.head.equipped.push(equipment.apparel[headgear[0].0].clone());
         }
         for (i,loc) in armored_limbs.iter().enumerate() {
             let item = equipment.apparel[top_each[i].0].clone();
@@ -319,7 +324,7 @@ pub fn render_character_review(
         }
     }
     let spacer = "             ";
-    ui.text_disabled(format!("{}{}{}{}{}Luck Points:",spacer,spacer,spacer,spacer,spacer,));
+    ui.text_disabled(format!("{}{}{}{}{}   Luck Points:",spacer,spacer,spacer,spacer,spacer,));
     ui.same_line();
     ui.text(format!("{:2}/{:2}",character.luck_points,character.luck_points_max));
 
@@ -357,7 +362,8 @@ pub fn render_character_review(
         en += character.limb_dr.head.en_dr;
         let mut rd: i32 = character.limb_dr.head.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.head.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "Head", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.head.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "Head", ph, en, rd, worn.join(", ")));
     };
     if character.limb_dr.arm_left.active {
         let mut ph: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.ph_dr).sum();
@@ -366,7 +372,8 @@ pub fn render_character_review(
         en += character.limb_dr.arm_left.en_dr;
         let mut rd: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.arm_left.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_left", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.arm_left.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_left", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.arm_right.active {
         let mut ph: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.ph_dr).sum();
@@ -375,7 +382,8 @@ pub fn render_character_review(
         en += character.limb_dr.arm_right.en_dr;
         let mut rd: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.arm_right.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_right", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.arm_right.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_right", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.torso.active {
         let mut ph: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.ph_dr).sum();
@@ -384,7 +392,8 @@ pub fn render_character_review(
         en += character.limb_dr.torso.en_dr;
         let mut rd: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.torso.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "torso", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.torso.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "torso", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.leg_left.active {
         let mut ph: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.ph_dr).sum();
@@ -393,7 +402,8 @@ pub fn render_character_review(
         en += character.limb_dr.leg_left.en_dr;
         let mut rd: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.leg_left.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "leg_left", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.leg_left.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "leg_left", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.leg_right.active {
         let mut ph: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.ph_dr).sum();
@@ -402,7 +412,8 @@ pub fn render_character_review(
         en += character.limb_dr.leg_right.en_dr;
         let mut rd: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.leg_right.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "leg_right", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.leg_right.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "leg_right", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.optics.active {
         let mut ph: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.ph_dr).sum();
@@ -411,7 +422,8 @@ pub fn render_character_review(
         en += character.limb_dr.optics.en_dr;
         let mut rd: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.optics.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "optics", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.optics.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "optics", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.arm_1.active {
         let mut ph: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.ph_dr).sum();
@@ -420,7 +432,8 @@ pub fn render_character_review(
         en += character.limb_dr.arm_1.en_dr;
         let mut rd: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.arm_1.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_1", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.arm_1.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_1", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.arm_2.active {
         let mut ph: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.ph_dr).sum();
@@ -429,7 +442,8 @@ pub fn render_character_review(
         en += character.limb_dr.arm_2.en_dr;
         let mut rd: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.arm_2.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_2", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.arm_2.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_2", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.arm_3.active {
         let mut ph: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.ph_dr).sum();
@@ -438,7 +452,8 @@ pub fn render_character_review(
         en += character.limb_dr.arm_3.en_dr;
         let mut rd: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.arm_3.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "arm_3", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.arm_3.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_3", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.body.active {
         let mut ph: i32 = character.limb_dr.body.equipped.iter().map(|a| a.ph_dr).sum();
@@ -447,7 +462,8 @@ pub fn render_character_review(
         en += character.limb_dr.body.en_dr;
         let mut rd: i32 = character.limb_dr.body.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.body.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "body", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.body.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "body", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.thruster.active {
         let mut ph: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.ph_dr).sum();
@@ -456,7 +472,8 @@ pub fn render_character_review(
         en += character.limb_dr.thruster.en_dr;
         let mut rd: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.thruster.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "thruster", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.thruster.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "thruster", ph, en, rd, worn.join(", ")))
     };
     if character.limb_dr.wheel.active {
         let mut ph: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.ph_dr).sum();
@@ -465,7 +482,8 @@ pub fn render_character_review(
         en += character.limb_dr.wheel.en_dr;
         let mut rd: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.rd_dr).sum();
         rd += character.limb_dr.wheel.rd_dr;
-        ui.text(format!("{:10} - P:{} E:{} R:{}", "wheel", ph, en, rd))
+        let worn: Vec<String> = character.limb_dr.wheel.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "wheel", ph, en, rd, worn.join(", ")))
     };
 
     /*
@@ -603,12 +621,14 @@ pub fn render_character_review(
 
     let name_w = 150.0_f32;
     let wgt_w = 55.0_f32;
-    let quan_w = 70.0_f32;
-    let eq_w = 70.0_f32;
+    let quan_w = 75.0_f32;
+    let eq_w = 75.0_f32;
 
     let mut eq_wgt = 0;
 
-    if !equipment.ammo.is_empty() {
+    let ammo_actual: Vec<&AmmoInv> = equipment.ammo.iter().filter(|a| a.quantity > 0).collect();
+
+    if !ammo_actual.is_empty() {
         ui.columns(3,"##eq_ammo",false);
         ui.set_column_width(0, name_w);
         ui.text_disabled("Ammo");
@@ -620,7 +640,7 @@ pub fn render_character_review(
         ui.text_disabled("Quantity");
         ui.next_column();
         ui.separator();
-        for item in equipment.ammo.clone() {
+        for item in ammo_actual.clone() {
             ui.text(format!("{}", item.ammo.name));
             ui.next_column();
             ui.text(format!("{}", item.ammo.wgt));
@@ -731,10 +751,11 @@ pub fn render_character_review(
         ui.spacing();
             eq_wgt += equipment.junk.common * 2;
     }
-    if !equipment.misc.is_empty() {
+    let misc_actual: Vec<&String> = equipment.misc.iter().filter(|s| *s != "").collect();
+    if !misc_actual.is_empty() {
         ui.columns(1,"#eq_misc", false);
         ui.text_disabled("Misc");
-        for item in equipment.misc.clone() {
+        for item in misc_actual.clone() {
             ui.text(format!("  {}", item));
         }
         ui.spacing();
@@ -747,13 +768,25 @@ pub fn render_character_review(
     ui.next_column();
     ui.set_column_width(1, wgt_w);
     ui.text(format!("{}", eq_wgt));
+    character.carry_wgt = eq_wgt;
     ui.next_column();
     ui.text_disabled("Max Weight");
     ui.next_column();
-    ui.text(format!("{}", character.carry_wgt));
+    ui.text(format!("{}", character.carry_wgt_max));
     ui.next_column();
 
     ui.columns(1,"##end_eq", false);
+
+    ui.separator();
+    ui.separator();
+    ui.text("DEBUG");
+    ui.separator();
+    ui.separator();
+    ui.text_wrapped(format!("{:?}", character));
+    ui.separator();
+    ui.text_wrapped(format!("{:?}", equipment));
+    ui.separator();
+    ui.text_wrapped(format!("{:?}", background));
 
     drop(_scroll);
     h

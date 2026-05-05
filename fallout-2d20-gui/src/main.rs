@@ -58,8 +58,8 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
     (AppScreen::CharacterReview, "Review"),
 ];
 
-const VERSION: &str = "0.1.9-alpha.1e (EXPERIMENTAL)";
-const DATE: &str = "20260429";
+const VERSION: &str = "0.1.9-alpha.2";
+const DATE: &str = "20260504";
 
 pub fn screen_unlocked(
     screen: &AppScreen,
@@ -69,6 +69,7 @@ pub fn screen_unlocked(
     perk: &PerkState,
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
+    review: &mut ReviewState,
     db: &Db,
     character: &Character,
 ) -> bool {
@@ -79,7 +80,7 @@ pub fn screen_unlocked(
         AppScreen::PerkSelect => skill.is_complete(character),
         AppScreen::StatCalculation => perk.is_complete(),
         AppScreen::BackgroundSelect => special.is_complete(character) && skill.is_complete(character) && perk.is_complete(),
-        AppScreen::CharacterReview => background.is_complete(equipment, db, character),
+        AppScreen::CharacterReview => background.is_complete(equipment, db, character, review),
         _ => false,
     }
 }
@@ -227,6 +228,7 @@ fn main() -> Result<()> {
             perk: &PerkState,
             background: &mut BackgroundState,
             equipment: &mut EquipmentState,
+            review: &mut ReviewState,
             db: &Db,
             character: &Character,
         ) {
@@ -237,7 +239,7 @@ fn main() -> Result<()> {
             let current = screen.clone();
             for (target, label) in BUILD_SCREENS {
                 let is_current  = target == &current;
-                let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, equipment, &db, &character);
+                let is_unlocked = screen_unlocked(target, origin, special, skill, perk, background, equipment, review, &db, &character);
 
                 //highlight the current tab
                 if is_current {
@@ -289,6 +291,7 @@ fn main() -> Result<()> {
             perk: &PerkState,
             background: &mut BackgroundState,
             equipment: &mut EquipmentState,
+            review: &mut ReviewState,
             db: &Db,
             character: &Character,
         ) {
@@ -313,7 +316,7 @@ fn main() -> Result<()> {
             }
 
             if let Some(next_screen) = next {
-                let unlocked = screen_unlocked(next_screen, origin, special, skill, perk, background, equipment, db, &character);
+                let unlocked = screen_unlocked(next_screen, origin, special, skill, perk, background, equipment, review, db, &character);
                 //disable the next button if it's not unlocked
                 if !unlocked {
                     let c = ui.push_style_color(imgui::StyleColor::Text, ui.style_color(imgui::StyleColor::TextDisabled));
@@ -450,7 +453,7 @@ fn main() -> Result<()> {
                 .size([win_w as f32, tab_bar_h], imgui::Condition::Always)
                 .position([0.0, BAR_HEIGHT], imgui::Condition::Always)
                 .build(|| {
-                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &db, &character);
+                    render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &character);
                 });
         }
 
@@ -519,7 +522,7 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character)
+                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review)
             }
 /*--------*/AppScreen::CharacterReview => {
                 let state = &mut review;
@@ -555,7 +558,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &db, &character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &character);
                 });
         }
 
