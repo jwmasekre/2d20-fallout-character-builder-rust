@@ -2,9 +2,48 @@ use uuid::Uuid;
 
 use crate::screens::special_assignment::SpecialState;
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum PreRelease {
+    None,
+    Alpha,
+    Beta,
+    ReleaseCandidate,
+}
+
+impl PreRelease {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PreRelease::Alpha => "-alpha",
+            PreRelease::Beta => "-beta",
+            PreRelease::ReleaseCandidate => "-rc",
+            PreRelease::None => "",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Version {
+    pub major: i32,
+    pub minor: i32,
+    pub patch: i32,
+    pub prerelease: PreRelease,
+    pub prerelease_ver: i32,
+}
+
+impl Version {
+    pub fn as_string(&self) -> String {
+        let is_prerelease = self.prerelease != PreRelease::None;
+        if is_prerelease {
+            return format!("{}.{}.{}{}.{}",self.major, self.minor, self.patch, self.prerelease.as_str(), self.prerelease_ver)
+        }
+        return format!("{}.{}.{}",self.major, self.minor, self.patch)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Character {
     pub id: Uuid,
+    pub version: Version,
     pub name: String,
     pub player: Player,
     pub party: Option<Party>,
@@ -46,9 +85,10 @@ pub struct Character {
 }
 
 impl Character {
-    pub fn new(player: Player, party: Option<Party>) -> Self {
+    pub fn new(player: Player, party: Option<Party>, version: Version) -> Self {
         Self {
             id: (Uuid::now_v7()),
+            version,
             name: String::new(),
             player: player,
             party: party,

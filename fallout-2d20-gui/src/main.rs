@@ -16,22 +16,9 @@ use imgui::Ui;
 use anyhow::Result;
 
 use crate::{
-    character::{Character, Party, Player},
-    config::{AppConfig, db_path, load_config, save_config},
-    db::Db,
-    theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped},
-    crt::CrtEffect,
-    screens::{
-        main_menu::render_main_menu,
-        origin_select::{render_origin_select, OriginState},
-        special_assignment::{render_special_assignment, SpecialState},
-        skill_assignment::{render_skill_assignment, SkillState},
-        perk_select::{render_perk_select, PerkState, render_perk_resolution, PerkResolutionPopup},
-        stat_calculation::render_stat_calculation,
-        background_select::{render_background_select, BackgroundState, EquipmentState},
-        character_review::{render_character_review, ReviewState},
-        settings::render_settings,
-    }
+    character::{Character, Party, Player, PreRelease, Version}, config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db, screens::{
+        background_select::{BackgroundState, EquipmentState, render_background_select}, character_review::{ReviewState, render_character_review}, main_menu::render_main_menu, origin_select::{OriginState, render_origin_select}, perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select}, settings::render_settings, skill_assignment::{SkillState, render_skill_assignment}, special_assignment::{SpecialState, render_special_assignment}, stat_calculation::render_stat_calculation
+    }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,7 +47,14 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
     (AppScreen::CharacterReview, "Review"),
 ];
 
-const VERSION: &str = "0.1.9-alpha.2";
+const VERSION: Version = Version {
+    major: 0,
+    minor: 1,
+    patch: 9,
+    prerelease: PreRelease::Alpha,
+    prerelease_ver: 2,
+};
+
 const DATE: &str = "20260504";
 
 pub fn screen_unlocked(
@@ -122,7 +116,7 @@ fn main() -> Result<()> {
     video_subsystem.gl_attr().set_context_version(3,2);
 
     let window = video_subsystem
-        .window(&format!("Fallout 2d20 Character Manager v{}",VERSION), 1280, 960)
+        .window(&format!("Fallout 2d20 Character Manager v{}",VERSION.as_string()), 1280, 960)
         .position_centered()
         .opengl()
         .resizable()
@@ -215,7 +209,7 @@ fn main() -> Result<()> {
     //let mut player = Player::new();
     let player = Player::new();
     //let mut party = Party::new();
-    let mut character = Character::new(player, None);
+    let mut character = Character::new(player, None, VERSION);
     //let mut party: Option<Party> = None;
     let _party: Option<Party> = None;
     let mut origin = OriginState::new(&db);
@@ -453,7 +447,7 @@ fn main() -> Result<()> {
 
                     ui.text("fallout 2d20 character manager");
                     ui.spacing();
-                    render_text_wrapped(true, false, ui, &format!("v{}, {}", VERSION, DATE), 16.0, aw - 32.0);
+                    render_text_wrapped(true, false, ui, &format!("v{}, {}", VERSION.as_string(), DATE), 16.0, aw - 32.0);
                     ui.spacing();
                     ui.text_wrapped("a character creation and management tool for the 2d20 ttrpg system.");
                     ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
