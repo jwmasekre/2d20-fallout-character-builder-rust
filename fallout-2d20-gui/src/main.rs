@@ -30,12 +30,14 @@ use crate::{
         stat_calculation::render_stat_calculation,
         background_select::{render_background_select, BackgroundState, EquipmentState},
         character_review::{render_character_review, ReviewState},
+        settings::render_settings,
     }
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
     MainMenu,
+    Settings,
     LoadCharacter,
     ImportCharacter,
     OriginSelect,
@@ -136,7 +138,7 @@ fn main() -> Result<()> {
     };
 
     //load the user config
-    let cfg = load_config();
+    let mut cfg = load_config();
     //load the theme from the user config
     let mut current_theme = cfg.theme_index.min(THEMES.len() - 1);
 
@@ -145,15 +147,24 @@ fn main() -> Result<()> {
     //create the crt effect
     let (init_w, init_h) = window.size();
     let mut crt = CrtEffect::new(&gl, init_w as i32, init_h as i32);
+    crt.distortion = cfg.crt_distortion;
+    crt.scanline_strength = cfg.crt_scanline_strength;
+    crt.vignette_multiplier = cfg.crt_vignette_multiplier;
+    crt.vignette_exponent = cfg.crt_vignette_exponent;
+    crt.roll_speed = cfg.crt_roll_speed;
+    crt.tint_strength = cfg.crt_tint_strength;
+    crt.chromatic_aberration = cfg.crt_chromatic_aberration;
     //applies the theme from the user config
     apply_theme(&mut imgui, THEMES[current_theme], &mut crt);
     //load custom font (might move to theme.rs)
     imgui.fonts().clear();
-    let font_path = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fonts/Monofonto.ttf");
+    let font_path = if cfg.font_path.is_none() {
+        std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("fonts/Monofonto.ttf")
+    } else { cfg.font_path.clone().unwrap() };
     imgui.fonts().add_font(&[imgui::FontSource::TtfData {
         data: &std::fs::read(&font_path).expect("Failed to load Monofonto.ttf"),
         size_pixels: 20.0,
@@ -166,7 +177,7 @@ fn main() -> Result<()> {
     }]);
     imgui.fonts().tex_id;
     //sets the path for the db
-    let db_path = &db_path(cfg.db_path);
+    let db_path = &db_path(cfg.db_path.clone());
     //sets the file path for imgui ini file
     let ini_path = std::env::current_exe()
         .unwrap()
@@ -187,7 +198,7 @@ fn main() -> Result<()> {
     //create the main menu
     let mut screen = AppScreen::MainMenu;
     let mut selected_menu_item: i32 = 0;
-    let menu_items = ["New Character", "Load Character", "Import Character", "Quit"];
+    let menu_items = ["New Character", "Load Character", "Import Character", "Settings", "Quit"];
 
     //since we just set our theme, pending theme can be set to the same thing
     //we'll check this in the loop every frame to determine if the theme needs
@@ -371,7 +382,20 @@ fn main() -> Result<()> {
                         //sets the theme, then writes it to the config
                         current_theme = i;
                         pending_theme = Some(i);
-                        save_config(&AppConfig { theme_index: i, db_path: db_path.to_path_buf() });
+                        
+                        save_config(&AppConfig {
+                            theme_index: i,
+                            db_path: db_path.to_path_buf(),
+                            font_path: Some(font_path.clone()),
+                            font_size: cfg.font_size,
+                            crt_distortion: cfg.crt_distortion,
+                            crt_scanline_strength: cfg.crt_scanline_strength,
+                            crt_vignette_multiplier: cfg.crt_vignette_multiplier,
+                            crt_vignette_exponent: cfg.crt_vignette_exponent,
+                            crt_roll_speed: cfg.crt_roll_speed,
+                            crt_tint_strength: cfg.crt_tint_strength,
+                            crt_chromatic_aberration: cfg.crt_chromatic_aberration,
+                        });
                     }
                     if i < THEMES.len() - 1 {
                         //doesn't move to the next line unless we're at the end of the themes
@@ -533,6 +557,10 @@ fn main() -> Result<()> {
                 //let state = &mut special;
                 //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
                 //render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, special, skill, perk, background, &character);
+                0.0
+            }
+/*--------*/AppScreen::Settings => {
+                render_settings(&ui, &window, &mut screen, &mut cfg, &mut crt, &mut current_theme);
                 0.0
             }
 /*--------*/AppScreen::LoadCharacter => {
