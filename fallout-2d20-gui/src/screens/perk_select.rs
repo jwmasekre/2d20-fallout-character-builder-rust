@@ -203,15 +203,6 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
     }
 }
 
-//perks that need to be resolved
-/*
-const PERK_INTENSE_TRAINING: i32 = 45;
-const PERK_SKILLED: i32 = 83;
-const PERK_TAG: i32 = 92;
-const PERK_BW_LK: i32 = 12;
-const PERK_MM_CF: i32 = 110;
-*/
-
 #[derive(PartialEq, Clone)]
 pub enum BwLk {
     BlackWidow,
@@ -329,8 +320,8 @@ pub fn render_perk_select(
 
     let col_name = 0.0_f32;
     let col_reqs = 240.0_f32;
-    let col_ranks = 460.0_f32;
-    let col_btns = 540.0_f32;
+    let col_ranks = 540.0_f32;
+    let col_btns = 620.0_f32;
 
     //filtering perks
     let filtered: Vec<usize> = (0..state.perks.len())
