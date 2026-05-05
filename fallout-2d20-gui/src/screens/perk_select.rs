@@ -16,6 +16,8 @@ pub struct PerkState {
     pub taken_count: i32,
     pub perk_lim: i32,
     pub show_eligible_only: bool,
+    pub show_taken: bool,
+    pub show_taken_only: bool,
     pub filters: [bool; 8],
     pub pending_resolution: Option<(i32, bool, String)>,
 }
@@ -29,6 +31,8 @@ impl PerkState {
             taken_count,
             perk_lim,
             show_eligible_only: false,
+            show_taken: true,
+            show_taken_only: false,
             filters: [true; 8],
             pending_resolution: None,
         }
@@ -295,6 +299,11 @@ pub fn render_perk_select(
     }
 
     //filters
+    ui.checkbox("Show taken##tp", &mut state.show_taken);
+    ui.same_line();
+    ui.checkbox("Show taken only##to", &mut state.show_taken_only);
+    if state.show_taken_only { state.show_taken = true }
+    ui.same_line();
     ui.checkbox("Show eligible only##eo", &mut state.show_eligible_only);
     ui.same_line();
     ui.text_disabled("|");
@@ -327,7 +336,7 @@ pub fn render_perk_select(
     let filtered: Vec<usize> = (0..state.perks.len())
         .filter(|&i| {
             let perk = &state.perks[i];
-            state.perk_passes_filter(perk) && (!state.show_eligible_only || state.is_eligible(perk, &character))
+            state.perk_passes_filter(perk) && (!state.show_eligible_only || state.is_eligible(perk, &character) || (state.show_taken && state.is_taken(perk, character))) && (!state.show_taken_only || (state.show_taken_only && state.is_taken(perk, character)))
         }).collect();
     //track which sourcebook is currently being printed
     let mut current_label = String::new();
