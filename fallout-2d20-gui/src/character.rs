@@ -654,10 +654,27 @@ impl Limbs {
                 self.track_left = Limb::new_inactive();
                 self.track_right = Limb::new_inactive();
             },
-            _ => {
+            RobotType::None => {
                 self.head = Limb::new_active();
                 self.torso = Limb::new_active();
                 self.body = Limb::new_inactive();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_active();
+                self.leg_right = Limb::new_active();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            }
+            _ => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
                 self.arm_left = Limb::new_active();
                 self.arm_right = Limb::new_active();
                 self.leg_left = Limb::new_active();
