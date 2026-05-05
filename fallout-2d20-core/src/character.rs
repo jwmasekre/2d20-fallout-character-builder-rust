@@ -608,7 +608,7 @@ pub struct CharWeapon {
 pub fn build_char_weapons(
     char_weapon_rows: Vec<CharacterWeaponRow>,
     char_weapon_mod_rows: Vec<CharacterWeaponModRow>,
-    char_weapon_legendary_rows: Vec<CharacterWeaponLegendaryRow>,
+    _char_weapon_legendary_rows: Vec<CharacterWeaponLegendaryRow>,
     weapon_rows: Vec<Weapon>,
     weapon_effect_rows: Vec<WeaponEffectRow>,
     damage_effect_rows: Vec<DamageEffect>,
@@ -680,7 +680,7 @@ pub fn build_char_weapons(
     }
 
     // legendary by character_weapon_id
-    let mut legendary_by_char_weapon: HashMap<i16, WeaponLegendary> =
+    let /*mut*/ legendary_by_char_weapon: HashMap<i16, WeaponLegendary> =
         HashMap::new();
     // assume you already indexed legendary by id
     // let legendary_map: HashMap<i16, WeaponLegendary> = ...;

@@ -21,5 +21,5 @@ REVIEW
 */
 
 pub fn build_rules_bundle(/* TODO: db rows or json */) -> RulesBundle { todo!("Load from embedded JSON or SQLite") }
-pub fn save_character_to_json(character: &FullCharacter) -> Result<String, Box<dyn Error>> { todo!("FullCharacterSave::from(character) + serde_json::to_string_pretty") }
-pub fn load_character_from_json(json: &str, rules: &RulesBundle) -> Result<FullCharacter, Box<dyn Error>> { todo!("serde_json::from_str + into_full_character") }
+pub fn save_character_to_json(_character: &FullCharacter) -> Result<String, Box<dyn Error>> { todo!("FullCharacterSave::from(character) + serde_json::to_string_pretty") }
+pub fn load_character_from_json(_json: &str, _rules: &RulesBundle) -> Result<FullCharacter, Box<dyn Error>> { todo!("serde_json::from_str + into_full_character") }

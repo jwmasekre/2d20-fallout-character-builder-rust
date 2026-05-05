@@ -302,9 +302,10 @@ pub fn render_new_character(
     db: &Db,
 ) {
     let (win_w, win_h) = window.size();
-    let content_h = win_h as f32 - BAR_HEIGHT;
-    let w = (win_w as f32 * 0.65).min(960.0);
-    let h = win_h as f32 * 0.85;
+    let bar_h = BAR_HEIGHT;
+    let content_h = win_h as f32 - bar_h;
+    let w = (win_w as f32 * 0.85).min(1100.0);
+    let h = content_h * 0.92;
 
     ui.window("##new_character")
         .title_bar(false)
@@ -398,25 +399,6 @@ pub fn render_new_character(
 
             ui.spacing();
 
-            /*
-            let can_be_ghoul = state.origins
-                .get(state.selected_origin_idx)
-                .map(|o| o.can_ghoul)
-                .unwrap_or(false);
-
-
-            let origin_description = state.origins
-                .get(state.selected_origin_idx)
-                .map(|o| o.description.clone())
-                .unwrap_or_default();
-
-
-            let origin_name = state.origins
-                .get(state.selected_origin_idx)
-                .map(|o| o.description.clone())
-                .unwrap_or_default();
-             */
-
             // ── Origin Description ────────────────────────────────────────────
             if let Some(origin) = state.origins.get(state.selected_origin_idx) {
                 ui.text("Description");
@@ -449,141 +431,6 @@ pub fn render_new_character(
                 ui.separator();
                 ui.spacing();
                 ui.text("Trait");
-
-
-
-                /*
-                if ghoul_changed {
-                    //eprintln!("is_ghoul changed check");
-                    state.refresh_traits(db);
-                    if state.is_ghoul  {
-                        // Show ghoul traits
-                        /*
-                        let ghoul_traits: Vec<&TraitRow> = state.traits.iter()
-                            .filter(|t| t.is_ghoul_trait)
-                            .collect();
-                        eprintln!("ghoul_traits: {}", ghoul_traits.len());
-                        if ghoul_traits.is_empty() {
-                            ui.same_line_with_pos(label_w);
-                            ui.text_disabled("(no ghoul traits defined)");
-                        } else {
-
-                        */
-                        //for t in &ghoul_traits {
-                        eprintln!("state is_ghoul");
-
-                        let t = &state.traits[0];
-                        ui.same_line_with_pos(label_w);
-                        /*ui.push_text_wrap_pos_with_pos(label_w + field_w);
-                        ui.text_colored([0.55, 0.85, 0.55, 1.0], &t.name);
-                        {
-                            ui.push_text_wrap_pos_with_pos(label_w + field_w);
-                            ui.text_wrapped(&t.description);
-                        }
-
-                        ui.spacing();
-                        */
-                        ui.text(&t.name);
-                        ui.new_line();
-                        let y = ui.cursor_pos()[1];
-                        ui.set_cursor_pos([label_w, y]);
-                        {
-                            //ui.begin_disabled(true);
-                            //let _wrap = ui.push_text_wrap_pos_with_pos(label_w + field_w);
-                            //ui.text_wrapped(&t.description);   
-                            render_text_wrapped(false, true, ui, &t.description, label_w, label_w + field_w);
-                        }
-                        ui.spacing();
-
-                            //}
-                        //}
-                    }
-                } else {
-                    /*
-                    let normal_traits: Vec<(usize, &TraitRow)> = state.traits.iter()
-                        .filter(|t| !t.is_ghoul_trait)
-                        .enumerate()
-                        .collect();
-                    */
-
-                    let normal_traits: Vec<(usize, &TraitRow)> = state.traits.iter()
-                        .enumerate()
-                        .collect();
-
-                    if normal_traits.is_empty() {
-                        ui.same_line_with_pos(label_w);
-                        ui.text_disabled("(no traits defined)");
-                    } else if normal_traits.len() == 1 {
-                        // Single trait — just show it
-                        let (_, t) = normal_traits[0];
-                        ui.same_line_with_pos(label_w);
-                        //ui.push_text_wrap_pos_with_pos(label_w + field_w);
-                        ui.text(&t.name);
-                        ui.new_line();
-                        let y = ui.cursor_pos()[1];
-                        ui.set_cursor_pos([label_w, y]);
-                        {
-                            //ui.begin_disabled(true);
-                            //ui.push_text_wrap_pos_with_pos(label_w + field_w);
-                            //ui.text_wrapped(&t.description);
-                            render_text_wrapped(false, true, ui, &t.description, label_w, label_w + field_w);
-                        }
-                    } else {
-                        // Multiple traits — show checkboxes
-                        let selected_count = state.selected_traits.iter().filter(|&&v| v).count();
-                        //ui.new_line();
-                        let y = ui.cursor_pos()[1];
-                        ui.set_cursor_pos([label_w, y]);
-                        ui.text_disabled("Choose up to 2:");
-                        ui.spacing();
-                        for (ti, t) in &normal_traits {
-                            let currently_checked = state.selected_traits.get(*ti).copied().unwrap_or(false);
-                            let at_limit = !currently_checked && selected_count >= 2;
-                            let mut checked = currently_checked;
-
-                            let y = ui.cursor_pos()[1];
-                            ui.set_cursor_pos([label_w, y]);
-
-                            let cb_label = format!("##trait_{}", ti);
-                            if at_limit {
-                                //ui.begin_disabled(true);
-                                //ui.checkbox(&format!("{}##trait_{}", t.name, ti), &mut checked);
-                                ui.checkbox(&cb_label, &mut checked);
-                                //ui.end_disabled();
-                            } else {
-                                if ui.checkbox(&cb_label, &mut checked) {
-                                    if let Some(v) = state.selected_traits.get_mut(*ti) {
-                                        *v = checked;
-                                    }
-                                }
-                            }
-                            ui.same_line_with_pos(label_w + 24.0);
-                            if at_limit {
-                                render_text_wrapped(true, false, ui, &t.name, label_w + 24.0, label_w + field_w + 24.0);
-                            } else {
-                                render_text_wrapped(false, true, ui, &t.name, label_w + 24.0, label_w + field_w + 24.0);
-                            }
-                            
-                            //ui.push_text_wrap_pos_with_pos(label_w + field_w);
-                            let y = ui.cursor_pos()[1];
-                            {
-                                //ui.begin_disabled(true);
-                                ui.set_cursor_pos([label_w + 24.0, y]);
-                                //ui.text_wrapped(&t.description);
-                                if at_limit {
-                                    render_text_wrapped(true, false, ui, &t.description, label_w, label_w + field_w);
-                                } else {
-                                    render_text_wrapped(false, true, ui, &t.description, label_w, label_w + field_w);
-                                }
-                            }
-                            
-                            ui.spacing();
-                        }
-                    }
-                }
-            }
-
-            */
 
                 // Refresh traits if ghoul state just changed
                 if ghoul_changed {

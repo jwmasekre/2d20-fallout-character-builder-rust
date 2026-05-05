@@ -1432,10 +1432,10 @@ pub fn render_equipment(
     screen: &mut AppScreen,
 ) {
     let (win_w, win_h) = window.size();
-    let w = (win_w as f32 * 0.65).min(960.0);
-    let h = win_h as f32 * 0.85;
-    let bar_h = crate::BAR_HEIGHT;
+    let bar_h = BAR_HEIGHT;
     let content_h = win_h as f32 - bar_h;
+    let w = (win_w as f32 * 0.85).min(1100.0);
+    let h = content_h * 0.92;
 
     let Some(_tok) = ui.window("##equipment")
         .title_bar(false).resizable(false).movable(false)
