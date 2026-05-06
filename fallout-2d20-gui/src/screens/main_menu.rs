@@ -95,7 +95,8 @@ fn handle_selection(selected: i32, screen: &mut AppScreen) {
         0 => *screen = AppScreen::OriginSelect,
         1 => *screen = AppScreen::LoadCharacter,
         2 => *screen = AppScreen::ImportCharacter,
-        3 => std::process::exit(0),
+        3 => *screen = AppScreen::Settings,
+        4 => std::process::exit(0),
         _ => {}
     }
 }

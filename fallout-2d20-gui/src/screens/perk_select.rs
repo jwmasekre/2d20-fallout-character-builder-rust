@@ -16,6 +16,9 @@ pub struct PerkState {
     pub taken_count: i32,
     pub perk_lim: i32,
     pub show_eligible_only: bool,
+    pub show_taken: bool,
+    pub show_taken_only: bool,
+    pub show_flagged_only: bool,
     pub filters: [bool; 8],
     pub pending_resolution: Option<(i32, bool, String)>,
 }
@@ -29,6 +32,9 @@ impl PerkState {
             taken_count,
             perk_lim,
             show_eligible_only: false,
+            show_taken: true,
+            show_taken_only: false,
+            show_flagged_only: false,
             filters: [true; 8],
             pending_resolution: None,
         }
@@ -71,6 +77,9 @@ impl PerkState {
     }
     fn is_taken(&self, perk: &PerkRow, character: &Character,) -> bool {
         character.has_perk(perk.id)
+    }
+    fn is_flagged(&self, id: i32, character: &Character,) -> bool {
+        character.flagged_perks.contains(&id)
     }
     fn is_eligible(&self, perk: &PerkRow, character: &Character,) -> bool {
         let taken = self.is_taken(perk, character);
@@ -203,15 +212,6 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
     }
 }
 
-//perks that need to be resolved
-/*
-const PERK_INTENSE_TRAINING: i32 = 45;
-const PERK_SKILLED: i32 = 83;
-const PERK_TAG: i32 = 92;
-const PERK_BW_LK: i32 = 12;
-const PERK_MM_CF: i32 = 110;
-*/
-
 #[derive(PartialEq, Clone)]
 pub enum BwLk {
     BlackWidow,
@@ -275,12 +275,12 @@ pub fn render_perk_select(
     ui: &Ui,
     window: &Window,
     state: &mut PerkState,
-    _screen: &mut AppScreen,
+    screen: &mut AppScreen,
     _db: &Db,
     character: &mut Character,
     resolving: bool,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select")
+    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select", screen)
         else { return 0.0 };
 
     ui.text("PERKS");
@@ -304,7 +304,16 @@ pub fn render_perk_select(
     }
 
     //filters
-    ui.checkbox("Show eligible only##eo", &mut state.show_eligible_only);
+    ui.text("Show: ");
+    ui.same_line();
+    ui.checkbox("taken##tp", &mut state.show_taken);
+    ui.same_line();
+    ui.checkbox("taken only##to", &mut state.show_taken_only);
+    if state.show_taken_only { state.show_taken = true }
+    ui.same_line();
+    ui.checkbox("eligible only##eo", &mut state.show_eligible_only);
+    ui.same_line();
+    ui.checkbox("flagged only##fo", &mut state.show_flagged_only);
     ui.same_line();
     ui.text_disabled("|");
     ui.same_line();
@@ -321,7 +330,7 @@ pub fn render_perk_select(
     ui.spacing();
 
     //perk list
-    let list_h = h - 140.0;
+    let list_h = h - 156.0;
     let Some(_child) = ui.child_window("##perk_scroll")
         .size([w - 16.0, list_h])
         .begin()
@@ -329,14 +338,14 @@ pub fn render_perk_select(
 
     let col_name = 0.0_f32;
     let col_reqs = 240.0_f32;
-    let col_ranks = 460.0_f32;
-    let col_btns = 540.0_f32;
+    let col_ranks = 540.0_f32;
+    let col_btns = 620.0_f32;
 
     //filtering perks
     let filtered: Vec<usize> = (0..state.perks.len())
         .filter(|&i| {
             let perk = &state.perks[i];
-            state.perk_passes_filter(perk) && (!state.show_eligible_only || state.is_eligible(perk, &character))
+            state.perk_passes_filter(perk) && (!state.show_eligible_only || state.is_eligible(perk, &character) || (state.show_taken && state.is_taken(perk, character))) && (!state.show_taken_only || (state.show_taken_only && state.is_taken(perk, character))) && (!state.show_flagged_only || (state.show_flagged_only && state.is_flagged(perk.id, character)))
         }).collect();
     //track which sourcebook is currently being printed
     let mut current_label = String::new();
@@ -484,6 +493,19 @@ pub fn render_perk_select(
                         state.update(character);
                     }
                 }
+            }
+        }
+        ui.same_line();
+        if state.is_flagged(id, character) {
+            if ui.button(format!("Unflag##unflag_{}", id)) {
+                let pos = character.flagged_perks.iter().position(|p| *p == id);
+                if pos.is_some() {
+                    character.flagged_perks.remove(pos.unwrap());
+                }
+            }
+        } else {
+            if ui.button(format!("Flag##flag_{}", id)) {
+                character.flagged_perks.push(id);
             }
         }
         //description

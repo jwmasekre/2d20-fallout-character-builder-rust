@@ -1,5 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
+use crate::AppScreen;
 use crate::db::Db;
 use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
 use crate::screens::skill_assignment::SkillState;
@@ -288,8 +289,9 @@ pub fn render_origin_select(
     character: &mut Character,
     skill_state: &mut SkillState,
     background_state: &mut BackgroundState,
+    screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select")
+    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select", screen)
         else { return 0.0 };
     ui.text("ORIGIN");
     ui.separator();

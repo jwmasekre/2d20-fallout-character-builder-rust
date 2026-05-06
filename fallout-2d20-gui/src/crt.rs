@@ -1,8 +1,17 @@
 use glow::{Context, HasContext, NativeFramebuffer, NativeTexture, NativeProgram};
 
+use crate::config::AppConfig;
+
 pub struct CrtEffect {
     pub enabled: bool,
     pub tint: [f32; 3],
+    pub distortion: f32,
+    pub scanline_strength: f32,
+    pub vignette_multiplier: f32,
+    pub vignette_exponent: f32,
+    pub roll_speed: f32,
+    pub tint_strength: f32,
+    pub chromatic_aberration: f32,
     start_time: std::time::Instant,
     fbo: NativeFramebuffer,
     fbo_texture: NativeTexture,
@@ -14,7 +23,11 @@ pub struct CrtEffect {
 }
 
 impl CrtEffect {
-    pub fn new(gl: &Context, width: i32, height: i32) -> Self {
+    pub fn new(
+        gl: &Context,
+        width: i32,
+        height: i32,
+    ) -> Self {
         unsafe {
             // --- FBO + texture ---
             let fbo = gl.create_framebuffer().unwrap();
@@ -66,7 +79,26 @@ impl CrtEffect {
             // --- Shader ---
             let program = compile_crt_shader(gl);
 
-            Self { enabled: true, tint: [1.0, 1.0, 1.0], start_time: std::time::Instant::now(), fbo, fbo_texture, program, quad_vao, _quad_vbo, width, height }
+            let default_config = AppConfig::default();
+
+            Self {
+                enabled: true,
+                tint: [1.0, 1.0, 1.0],
+                distortion: default_config.crt_distortion,
+                scanline_strength: default_config.crt_scanline_strength,
+                vignette_multiplier: default_config.crt_vignette_multiplier,
+                vignette_exponent: default_config.crt_vignette_exponent,
+                roll_speed: default_config.crt_roll_speed,
+                tint_strength: default_config.crt_tint_strength,
+                chromatic_aberration: default_config.crt_chromatic_aberration,
+                start_time: std::time::Instant::now(),
+                fbo,
+                fbo_texture,
+                program,
+                quad_vao,
+                _quad_vbo,
+                width,
+                height }
         }
     }
 
@@ -91,9 +123,21 @@ impl CrtEffect {
             gl.use_program(Some(self.program));
             gl.bind_texture(glow::TEXTURE_2D, Some(self.fbo_texture));
 
-            let time = self.start_time.elapsed().as_secs_f32();
-            if let Some(loc) = gl.get_uniform_location(self.program, "uTime") {
-                gl.uniform_1_f32(Some(&loc), time);
+            let _time = self.start_time.elapsed().as_secs_f32();
+
+            for (name, val) in [
+                ("uDistortion",        self.distortion),
+                ("uScanlineStrength",  self.scanline_strength),
+                ("uVignetteMult",      self.vignette_multiplier),
+                ("uVignetteExp",       self.vignette_exponent),
+                ("uRollSpeed",         self.roll_speed),
+                ("uTintStrength",      self.tint_strength),
+                ("uChromaticAberration", self.chromatic_aberration),
+                ("uTime",              self.start_time.elapsed().as_secs_f32()),
+            ]  {
+                if let Some(loc) = gl.get_uniform_location(self.program, name) {
+                    gl.uniform_1_f32(Some(&loc), val);
+                }
             }
             if let Some(loc) = gl.get_uniform_location(self.program, "uTint") {
                 gl.uniform_3_f32(Some(&loc), self.tint[0], self.tint[1], self.tint[2]);
@@ -141,11 +185,18 @@ unsafe fn compile_crt_shader(gl: &Context) -> NativeProgram {
         uniform sampler2D uScreen;
         uniform float uTime;
         uniform vec3 uTint;
+        uniform float uDistortion;
+        uniform float uScanlineStrength;
+        uniform float uVignetteMult;
+        uniform float uVignetteExp;
+        uniform float uRollSpeed;
+        uniform float uTintStrength;
+        uniform float uChromaticAberration;
 
         // barrel distortion
         vec2 distort(vec2 uv) {
             vec2 cc = uv - 0.5;
-            float dist = dot(cc, cc) * 0.04;
+            float dist = dot(cc, cc) * uDistortion;
             return uv + cc * dist;
         }
 
@@ -161,23 +212,19 @@ unsafe fn compile_crt_shader(gl: &Context) -> NativeProgram {
             vec4 col = texture(uScreen, uv);
 
             // subtle rgb shift (chromatic aberration)
-            float shift = 0.001;
+            float shift = uChromaticAberration;
             col.r = texture(uScreen, vec2(uv.x + shift, uv.y)).r;
             col.b = texture(uScreen, vec2(uv.x - shift, uv.y)).b;
 
-            // slight green phosphor tint
-            //col.rgb *= vec3(0.92, 1.04, 0.90);
-            // no tint
-            //col.rgb *= vec3(1.0, 1.0, 1.0);
             // theme tint
-            col.rgb *= mix(vec3(1.0), uTint, 0.05);
+            col.rgb *= mix(vec3(1.0), uTint, uTintStrength);
 
             // scanlines
-            float scanline = sin(uv.y * 800.0) * 0.04;
+            float scanline = sin(uv.y * 800.0) * uScanlineStrength;
             col.rgb -= scanline;
 
             // slow vertical roll line
-            float roll = fract(uTime * 0.08);
+            float roll = fract(uTime * uRollSpeed);
             float line = smoothstep(0.995, 1.0, fract(uv.y + roll));
             col.rgb += line * 0.04;
             // bigger line for testing
@@ -187,37 +234,38 @@ unsafe fn compile_crt_shader(gl: &Context) -> NativeProgram {
 
             // vignette
             vec2 vig = uv * (1.0 - uv.yx);
-            float vignette = pow(vig.x * vig.y * 16.0, 0.15);
+            float vignette = pow(vig.x * vig.y * uVignetteMult, uVignetteExp);
             col.rgb *= vignette;
 
             fragColor = col;
         }
     "#;
+    unsafe {
+        let vert = gl.create_shader(glow::VERTEX_SHADER).unwrap();
+        gl.shader_source(vert, vert_src);
+        gl.compile_shader(vert);
+        if !gl.get_shader_compile_status(vert) {
+            panic!("CRT vert shader error: {}", gl.get_shader_info_log(vert));
+        }
 
-    let vert = gl.create_shader(glow::VERTEX_SHADER).unwrap();
-    gl.shader_source(vert, vert_src);
-    gl.compile_shader(vert);
-    if !gl.get_shader_compile_status(vert) {
-        panic!("CRT vert shader error: {}", gl.get_shader_info_log(vert));
-    }
+        let frag = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
+        gl.shader_source(frag, frag_src);
+        gl.compile_shader(frag);
+        if !gl.get_shader_compile_status(frag) {
+            panic!("CRT frag shader error: {}", gl.get_shader_info_log(frag));
+        }
 
-    let frag = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
-    gl.shader_source(frag, frag_src);
-    gl.compile_shader(frag);
-    if !gl.get_shader_compile_status(frag) {
-        panic!("CRT frag shader error: {}", gl.get_shader_info_log(frag));
+        let program = gl.create_program().unwrap();
+        gl.attach_shader(program, vert);
+        gl.attach_shader(program, frag);
+        gl.bind_attrib_location(program, 0, "aPos");
+        gl.bind_attrib_location(program, 1, "aUv");
+        gl.link_program(program);
+        if !gl.get_program_link_status(program) {
+            panic!("CRT shader link error: {}", gl.get_program_info_log(program));
+        }
+        gl.delete_shader(vert);
+        gl.delete_shader(frag);
+        program
     }
-
-    let program = gl.create_program().unwrap();
-    gl.attach_shader(program, vert);
-    gl.attach_shader(program, frag);
-    gl.bind_attrib_location(program, 0, "aPos");
-    gl.bind_attrib_location(program, 1, "aUv");
-    gl.link_program(program);
-    if !gl.get_program_link_status(program) {
-        panic!("CRT shader link error: {}", gl.get_program_info_log(program));
-    }
-    gl.delete_shader(vert);
-    gl.delete_shader(frag);
-    program
 }

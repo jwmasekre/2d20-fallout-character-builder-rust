@@ -1,5 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
+use crate::AppScreen;
 use crate::db::Db;
 use crate::character::{Character, TagType};
 use crate::theme::{render_text_wrapped, render_window};
@@ -126,8 +127,9 @@ pub fn render_skill_assignment(
     state: &mut SkillState,
     _db: &Db, //leaving this here so i can pull in the skill descriptions eventually
     character: &mut Character,
+    screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment")
+    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen)
         else { return 0.0 };
 
     ui.text("SKILLS");
@@ -146,6 +148,8 @@ pub fn render_skill_assignment(
     } else {
         ui.text(format!("Skill Points: {}/{} ({} remaining)", total, state.max_assignable, remaining));
     }
+    ui.same_line();
+    ui.text(format!("   Tag Skills: {}/3 ({} remaining)", character.skills.standard_tags(), 3-character.skills.standard_tags()));
 
     ui.spacing();
     ui.separator();
