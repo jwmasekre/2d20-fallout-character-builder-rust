@@ -275,12 +275,12 @@ pub fn render_perk_select(
     ui: &Ui,
     window: &Window,
     state: &mut PerkState,
-    _screen: &mut AppScreen,
+    screen: &mut AppScreen,
     _db: &Db,
     character: &mut Character,
     resolving: bool,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select")
+    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select", screen)
         else { return 0.0 };
 
     ui.text("PERKS");
@@ -330,7 +330,7 @@ pub fn render_perk_select(
     ui.spacing();
 
     //perk list
-    let list_h = h - 140.0;
+    let list_h = h - 156.0;
     let Some(_child) = ui.child_window("##perk_scroll")
         .size([w - 16.0, list_h])
         .begin()

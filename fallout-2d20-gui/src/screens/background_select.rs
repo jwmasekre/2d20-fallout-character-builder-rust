@@ -1,4 +1,4 @@
-use crate::{character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, screens::character_review::ReviewState, theme::render_window};
+use crate::{AppScreen, character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, screens::character_review::ReviewState, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
@@ -2052,8 +2052,9 @@ pub fn render_background_select(
     db: &Db,
     character: &mut Character,
     _review: &mut ReviewState,
+    screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select")
+    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select", screen)
         else { return 0.0 };
 
     ui.text("BACKGROUND");
@@ -2099,7 +2100,7 @@ pub fn render_background_select(
     //avoids borrowing issues
     let bg = bg.clone();
     //creates a scrolling child window for the selection (not sure if we ever need this much space but who knows)
-    let list_h = h - 100.0;
+    let list_h = h - 140.0;
     let Some(_child) = ui.child_window("##equip_scroll")
         .size([w - 16.0, list_h])
         .begin()

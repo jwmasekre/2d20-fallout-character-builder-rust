@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use imgui::Ui;
 use sdl2::video::Window;
+use crate::AppScreen;
 use crate::db::Db;
 use crate::character::Character;
 use crate::theme::{render_text_wrapped, render_window};
@@ -112,8 +113,9 @@ pub fn render_special_assignment(
     state: &mut SpecialState,
     _db: &Db,
     character: &mut Character,
+    screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment")
+    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment", screen)
         else { return 0.0 };
 
     ui.text("SPECIAL");

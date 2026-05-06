@@ -1,6 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{character::{Character, CompanionType, MeleeModifiers}, screens::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
+use crate::{AppScreen, character::{Character, CompanionType, MeleeModifiers}, screens::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
 
 pub fn get_staggered_bonus(val: i32) -> i32 {
     match val {
@@ -123,8 +123,9 @@ pub fn render_stat_calculation(
     special: &SpecialState,
     skill: &SkillState,
     character: &mut Character,
+    screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats")
+    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen)
         else { return 0.0 };
 
     let (base_dr, nocturnal) = compute_stats(character);

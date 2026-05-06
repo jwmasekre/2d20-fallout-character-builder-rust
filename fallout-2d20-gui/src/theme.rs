@@ -1,7 +1,7 @@
 use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
 
-use crate::crt::CrtEffect;
+use crate::{AppScreen, crt::CrtEffect};
 
 pub struct Theme {
     pub name: &'static str,
@@ -186,6 +186,7 @@ pub fn render_window<'ui>(
     window: &Window,
     label: &str,
     title: &str,
+    screen: &mut AppScreen,
 ) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
     let bar_h = BAR_HEIGHT;
@@ -205,7 +206,12 @@ pub fn render_window<'ui>(
         )
         .begin()?;
 
+    let close_x = w - 28.0;
     ui.text(title);
+    ui.same_line_with_pos(close_x);
+    if ui.button(format!("X##{}_close", title)) {
+        *screen = AppScreen::MainMenu;
+    }
     ui.separator();
     ui.spacing();
 

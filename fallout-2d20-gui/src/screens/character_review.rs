@@ -1,13 +1,10 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill},
-    db::Db,
-    screens::{background_select::{BackgroundState, EquipmentState},
+use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill}, db::Db, screens::{background_select::{BackgroundState, EquipmentState},
     skill_assignment::SKILLS,
     special_assignment::SPECIAL_LABELS,
-    stat_calculation::{BaseDR, get_melee_str}},
-    theme::render_window
+    stat_calculation::{BaseDR, get_melee_str}}, theme::render_window
 };
 
 //for this i think we want to build the state to be something we can apply directly to the character struct upon acceptance; applying to the character directly here would likely lead to weird issues with clearing stuff when changing backgrounds/origins
@@ -240,8 +237,9 @@ pub fn render_character_review(
     equipment: &mut EquipmentState,
     _db: &Db,
     character: &mut Character,
+    screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##character_review", "Character Review")
+    let Some((w, h, _token)) = render_window(ui, window, "##character_review", "Character Review", screen)
         else { return 0.0 };
 
     ui.text("REVIEW");
@@ -253,7 +251,7 @@ pub fn render_character_review(
         state.loaded = true;
     }
     let Some(_scroll) = ui.child_window("##review_scroll")
-        .size([w - 16.0, h - 32.0 - 44.0])
+        .size([w - 16.0, h - 32.0 - 48.0])
         .begin()
     else { return h };
 

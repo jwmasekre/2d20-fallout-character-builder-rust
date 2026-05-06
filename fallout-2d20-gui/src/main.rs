@@ -52,10 +52,10 @@ const VERSION: Version = Version {
     minor: 1,
     patch: 9,
     prerelease: PreRelease::Alpha,
-    prerelease_ver: 2,
+    prerelease_ver: 3,
 };
 
-const DATE: &str = "20260504";
+const DATE: &str = "20260505";
 
 pub fn screen_unlocked(
     screen: &AppScreen,
@@ -482,17 +482,17 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::OriginSelect => {
                 let state = &mut origin;
-                render_origin_select(&ui, &window, state, &db, &mut character, &mut skill, &mut background)
+                render_origin_select(&ui, &window, state, &db, &mut character, &mut skill, &mut background, &mut screen)
             }
 /*--------*/AppScreen::SpecialAssignment => {
                 //let state = &mut special.update(&character);
                 let state = &mut special;
-                render_special_assignment(&ui, &window, state, &db, &mut character)
+                render_special_assignment(&ui, &window, state, &db, &mut character, &mut screen)
             }
 /*--------*/AppScreen::SkillAssignment => {
                 skill.update(&character);
                 let state = &mut skill;
-                render_skill_assignment(&ui, &window, state, &db, &mut character)
+                render_skill_assignment(&ui, &window, state, &db, &mut character, &mut screen)
             }
 /*--------*/AppScreen::PerkSelect => {
                 let state = &mut perk;
@@ -536,15 +536,15 @@ fn main() -> Result<()> {
                 h
             }
 /*--------*/AppScreen::StatCalculation => {
-                render_stat_calculation(&ui, &window, &special, &skill, &mut character)
+                render_stat_calculation(&ui, &window, &special, &skill, &mut character, &mut screen)
             }
 /*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review)
+                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review, &mut screen)
             }
 /*--------*/AppScreen::CharacterReview => {
                 let state = &mut review;
-                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character)
+                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen)
             }
 /*--------*/AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);
