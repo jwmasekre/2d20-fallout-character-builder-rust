@@ -102,7 +102,7 @@ pub fn compute_stats(character: &mut Character) -> (BaseDR, bool) {
         sneak: if character.has_perk(61) { 2 } else { 0 },
     };
     //max luck points
-    character.luck_points_max = if character.is_gifted() { lck } else { lck - 1 };
+    character.luck_points_max = if character.is_gifted() { lck - 1 } else { lck };
     //companion
     character.companion = if character.has_perk(28) {
         CompanionType::Dogmeat

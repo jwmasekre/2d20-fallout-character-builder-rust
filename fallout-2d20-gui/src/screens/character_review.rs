@@ -1,7 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill}, db::Db, screens::{background_select::{BackgroundState, EquipmentState},
+use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill}, db::Db, log_on_change, screens::{background_select::{BackgroundState, EquipmentState},
     skill_assignment::SKILLS,
     special_assignment::SPECIAL_LABELS,
     stat_calculation::{BaseDR, get_melee_str}}, theme::render_window
@@ -793,6 +793,8 @@ pub fn render_character_review(
     ui.text_wrapped(format!("{:?}", equipment));
     ui.separator();
     ui.text_wrapped(format!("{:?}", background));
+
+    log_on_change!(format!("char: {:?}", character));
 
     drop(_scroll);
     h
