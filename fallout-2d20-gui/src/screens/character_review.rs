@@ -181,7 +181,7 @@ pub fn equip_apparel(
     } else {
         if clothing_pos != usize::MAX {
             equipment.apparel[clothing_pos].equipped = true;
-            for loc in equipment.apparel[outfit_pos].covers.clone() {
+            for loc in equipment.apparel[clothing_pos].covers.clone() {
                 match loc {
                     BodyLocation::Head => {
                         character.limb_dr.head.equipped = vec![equipment.apparel[clothing_pos].clone()];
@@ -355,13 +355,21 @@ pub fn render_character_review(
     ui.spacing();
     ui.text_disabled("temporary display:");
 
+    let rad_dr = if character.is_mutant() || character.is_robot() {
+        99
+    } else {
+        let atom = if character.origin.clone().unwrap().id == 13 { 1 } else { 0 };
+        let rad_res = character.perk_ranks(73);
+        atom + rad_res
+    };
+
     if character.limb_dr.head.active {
         let mut ph: i32 = character.limb_dr.head.equipped.iter().map(|a| a.ph_dr).sum();
         ph += character.limb_dr.head.ph_dr;
         let mut en: i32 = character.limb_dr.head.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.head.en_dr;
         let mut rd: i32 = character.limb_dr.head.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.head.rd_dr;
+        rd += character.limb_dr.head.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.head.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "Head", ph, en, rd, worn.join(", ")));
     };
@@ -371,7 +379,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.arm_left.en_dr;
         let mut rd: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_left.rd_dr;
+        rd += character.limb_dr.arm_left.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.arm_left.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_left", ph, en, rd, worn.join(", ")))
     };
@@ -381,7 +389,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.arm_right.en_dr;
         let mut rd: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_right.rd_dr;
+        rd += character.limb_dr.arm_right.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.arm_right.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_right", ph, en, rd, worn.join(", ")))
     };
@@ -391,7 +399,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.torso.en_dr;
         let mut rd: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.torso.rd_dr;
+        rd += character.limb_dr.torso.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.torso.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "torso", ph, en, rd, worn.join(", ")))
     };
@@ -401,7 +409,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.leg_left.en_dr;
         let mut rd: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.leg_left.rd_dr;
+        rd += character.limb_dr.leg_left.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.leg_left.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "leg_left", ph, en, rd, worn.join(", ")))
     };
@@ -411,7 +419,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.leg_right.en_dr;
         let mut rd: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.leg_right.rd_dr;
+        rd += character.limb_dr.leg_right.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.leg_right.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "leg_right", ph, en, rd, worn.join(", ")))
     };
@@ -421,7 +429,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.optics.en_dr;
         let mut rd: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.optics.rd_dr;
+        rd += character.limb_dr.optics.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.optics.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "optics", ph, en, rd, worn.join(", ")))
     };
@@ -431,7 +439,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.arm_1.en_dr;
         let mut rd: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_1.rd_dr;
+        rd += character.limb_dr.arm_1.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.arm_1.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_1", ph, en, rd, worn.join(", ")))
     };
@@ -441,7 +449,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.arm_2.en_dr;
         let mut rd: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_2.rd_dr;
+        rd += character.limb_dr.arm_2.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.arm_2.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_2", ph, en, rd, worn.join(", ")))
     };
@@ -451,7 +459,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.arm_3.en_dr;
         let mut rd: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_3.rd_dr;
+        rd += character.limb_dr.arm_3.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.arm_3.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_3", ph, en, rd, worn.join(", ")))
     };
@@ -461,7 +469,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.body.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.body.en_dr;
         let mut rd: i32 = character.limb_dr.body.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.body.rd_dr;
+        rd += character.limb_dr.body.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.body.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "body", ph, en, rd, worn.join(", ")))
     };
@@ -471,7 +479,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.thruster.en_dr;
         let mut rd: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.thruster.rd_dr;
+        rd += character.limb_dr.thruster.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.thruster.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "thruster", ph, en, rd, worn.join(", ")))
     };
@@ -481,7 +489,7 @@ pub fn render_character_review(
         let mut en: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.en_dr).sum();
         en += character.limb_dr.wheel.en_dr;
         let mut rd: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.wheel.rd_dr;
+        rd += character.limb_dr.wheel.rd_dr + rad_dr;
         let worn: Vec<String> = character.limb_dr.wheel.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "wheel", ph, en, rd, worn.join(", ")))
     };
