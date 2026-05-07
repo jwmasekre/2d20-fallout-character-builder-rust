@@ -415,23 +415,23 @@ FOREIGN KEY (character_id) REFERENCES characters (id)
 CREATE TABLE IF NOT EXISTS character_skills_skilled (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "character_id" TEXT, -- uuid
-  "athletics" INTEGER, -- smallint
-  "barter" INTEGER, -- smallint
-  "bigGuns" INTEGER, -- smallint
-  "energyWeapons" INTEGER, -- smallint
-  "explosives" INTEGER, -- smallint
-  "lockpick" INTEGER, -- smallint
-  "medicine" INTEGER, -- smallint
-  "meleeWeapons" INTEGER, -- smallint
-  "pilot" INTEGER, -- smallint
-  "repair" INTEGER, -- smallint
-  "science" INTEGER, -- smallint
-  "smallGuns" INTEGER, -- smallint
-  "sneak" INTEGER, -- smallint
-  "speech" INTEGER, -- smallint
-  "survival" INTEGER, -- smallint
-  "throwing" INTEGER, -- smallint
-  "unarmed" INTEGER, -- smallint
+  "athletics" TEXT, -- json
+  "barter" TEXT, -- json
+  "bigGuns" TEXT, -- json
+  "energyWeapons" TEXT, -- json
+  "explosives" TEXT, -- json
+  "lockpick" TEXT, -- json
+  "medicine" TEXT, -- json
+  "meleeWeapons" TEXT, -- json
+  "pilot" TEXT, -- json
+  "repair" TEXT, -- json
+  "science" TEXT, -- json
+  "smallGuns" TEXT, -- json
+  "sneak" TEXT, -- json
+  "speech" TEXT, -- json
+  "survival" TEXT, -- json
+  "throwing" TEXT, -- json
+  "unarmed" TEXT, -- json
 FOREIGN KEY (character_id) REFERENCES characters (id)
 );
 CREATE TABLE IF NOT EXISTS character_weapon_legendary (
@@ -577,18 +577,21 @@ CREATE TABLE IF NOT EXISTS characters (
   "luck_points" INTEGER, -- smallint
   "current_health" INTEGER, -- smallint
   "rad_points" INTEGER, -- smallint
-  "head_hp" INTEGER, -- smallint
   "head_inj" INTEGER, -- smallint
-  "la_hp" INTEGER, -- smallint
   "la_inj" INTEGER, -- smallint
-  "ra_hp" INTEGER, -- smallint
   "ra_inj" INTEGER, -- smallint
-  "torso_hp" INTEGER, -- smallint
   "torso_inj" INTEGER, -- smallint
-  "ll_hp" INTEGER, -- smallint
   "ll_inj" INTEGER, -- smallint
-  "rl_hp" INTEGER, -- smallint
   "rl_inj" INTEGER, -- smallint
+  "optic_inj" INTEGER, -- smallint
+  "body_inj" INTEGER, -- smallint
+  "a1_inj" INTEGER, -- smallint
+  "a2_inj" INTEGER, -- smallint
+  "a3_inj" INTEGER, -- smallint
+  "thrust_inj" INTEGER, -- smallint
+  "lt_inj" INTEGER, -- smallint
+  "rt_inj" INTEGER, -- smallint
+  "wheel_inj" INTEGER, -- smallint
   "caps" INTEGER, -- smallint
   "hunger" INTEGER, -- smallint
   "thirst" INTEGER, -- smallint
@@ -597,10 +600,29 @@ CREATE TABLE IF NOT EXISTS characters (
   "party_id" TEXT, -- uuid
   "misc" TEXT, -- json
   "notes" TEXT,
+  "version_maj" INTEGER,
+  "version_min" INTEGER,
+  "version_pat" INTEGER,
+  "prerelease" TEXT,
+  "prerelease_ver" INTEGER
 FOREIGN KEY (player_id) REFERENCES players (id),
 FOREIGN KEY (origin) REFERENCES origins (id),
 FOREIGN KEY (party_id) REFERENCES parties (id),
 FOREIGN KEY (background) REFERENCES backgrounds (id)
+);
+CREATE TABLE IF NOT EXISTS flagged_perks (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, --uuid
+  "perk_id" INTEGER,
+FOREIGN KEY (character_id) REFERENCES characters (id),
+FOREIGN KEY (perk_id) REFERENCES perks (id)
+);
+CREATE TABLE IF NOT EXISTS perk_options (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "character_id" TEXT, --uuid
+  "bwlk_selection" TEXT,
+  "mmcf_selection" TEXT,
+FOREIGN KEY (character_id) REFERENCES characters (id),
 );
 CREATE TABLE IF NOT EXISTS skills (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
