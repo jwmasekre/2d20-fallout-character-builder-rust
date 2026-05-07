@@ -16,8 +16,19 @@ use imgui::Ui;
 use anyhow::Result;
 
 use crate::{
-    character::{Character, Party, Player, PreRelease, Version}, config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db, screens::{
-        background_select::{BackgroundState, EquipmentState, render_background_select}, character_review::{ReviewState, render_character_review}, main_menu::render_main_menu, origin_select::{OriginState, render_origin_select}, perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select}, settings::render_settings, skill_assignment::{SkillState, render_skill_assignment}, special_assignment::{SpecialState, render_special_assignment}, stat_calculation::render_stat_calculation
+    character::{Character, Party, Player, PreRelease, Version},
+    config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db,
+    screens::{
+        background_select::{BackgroundState, EquipmentState, render_background_select},
+        character_review::{ReviewState, render_character_review},
+        main_menu::render_main_menu,
+        origin_select::{OriginState, render_origin_select},
+        perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select},
+        settings::render_settings,
+        skill_assignment::{SkillState, render_skill_assignment},
+        special_assignment::{SpecialState, render_special_assignment},
+        stat_calculation::render_stat_calculation,
+        character_sheet::render_character_sheet,
     }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
@@ -298,7 +309,7 @@ fn main() -> Result<()> {
             equipment: &mut EquipmentState,
             review: &mut ReviewState,
             db: &Db,
-            character: &Character,
+            character: &mut Character,
         ) {
             let current = screen.clone();
             //figure out which tab/screen we're on
@@ -330,6 +341,18 @@ fn main() -> Result<()> {
                     drop(c); drop(c2);
                 } else if ui.button("Next >") {
                     *screen = next_screen.clone();
+                }
+            } else if current == AppScreen::CharacterReview {
+                if ui.button("Finalize Character >") {
+                    character.weapons = equipment.weapons.clone();
+                    character.ammo = equipment.ammo.clone();
+                    character.apparel = equipment.apparel.clone();
+                    character.robot_modules = equipment.robot_modules.clone();
+                    character.consumables = equipment.consumables.clone();
+                    character.gear = equipment.gear.clone();
+                    character.junk = equipment.junk.clone();
+                    character.misc = equipment.misc.clone();
+                    *screen = AppScreen::CharacterSheet;
                 }
             }
         }
@@ -548,9 +571,7 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::CharacterSheet => {
                 render_placeholder(&ui, &window, "sheet", &mut screen);
-                //let state = &mut special;
-                //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
-                //render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, special, skill, perk, background, &character);
+                render_character_sheet(&ui, &window, &db, &mut character, &mut screen);
                 0.0
             }
 /*--------*/AppScreen::Settings => {
@@ -580,7 +601,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character);
                 });
         }
 
