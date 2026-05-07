@@ -1,6 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::AppScreen;
+use crate::NewCharacterSetupState;
 
 pub fn render_main_menu(
     ui: &Ui,
@@ -8,6 +9,7 @@ pub fn render_main_menu(
     screen: &mut AppScreen,
     selected: &mut i32,
     items: &[&str],
+    nc_setup: &mut NewCharacterSetupState,
 ) {
     //get window dimmensions
     let (win_w, win_h) = window.size();
@@ -45,7 +47,7 @@ pub fn render_main_menu(
                     *selected = (*selected - 1).max(0);
                 }
                 if ui.is_key_pressed_no_repeat(imgui::Key::Enter) || ui.is_key_pressed_no_repeat(imgui::Key::Space) {
-                    handle_selection(*selected, screen);
+                    handle_selection(*selected, screen, nc_setup);
                 }
             }
 
@@ -69,7 +71,7 @@ pub fn render_main_menu(
                     .size([item_w, 36.0])
                     .build() {
                     *selected = i as i32;
-                    handle_selection(i as i32, screen);
+                    handle_selection(i as i32, screen, nc_setup);
                 }
 
                 //also select the button on hover (so that space/enter/click navigates)
@@ -90,9 +92,12 @@ pub fn render_main_menu(
         });
 }
 
-fn handle_selection(selected: i32, screen: &mut AppScreen) {
+fn handle_selection(selected: i32, screen: &mut AppScreen, nc_setup: &mut NewCharacterSetupState) {
     match selected {
-        0 => *screen = AppScreen::OriginSelect,
+        0 => {
+            nc_setup.reset();
+            *screen = AppScreen::NewCharSetup
+        },
         1 => *screen = AppScreen::LoadCharacter,
         2 => *screen = AppScreen::ImportCharacter,
         3 => *screen = AppScreen::Settings,

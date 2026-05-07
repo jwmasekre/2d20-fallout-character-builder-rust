@@ -46,7 +46,7 @@ pub struct Character {
     pub version: Version,
     pub name: String,
     pub player: Player,
-    pub party: Option<Party>,
+    pub party: Party,
     pub level: i32,
     pub xp: i32,
     pub origin: Option<Origin>,
@@ -85,7 +85,7 @@ pub struct Character {
 }
 
 impl Character {
-    pub fn new(player: Player, party: Option<Party>, version: Version) -> Self {
+    pub fn new(player: Player, party: Party, version: Version) -> Self {
         Self {
             id: (Uuid::now_v7()),
             version,

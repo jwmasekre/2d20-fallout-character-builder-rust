@@ -29,12 +29,14 @@ use crate::{
         special_assignment::{SpecialState, render_special_assignment},
         stat_calculation::render_stat_calculation,
         character_sheet::render_character_sheet,
+        new_char_setup::{NewCharacterSetupState, render_new_character_setup}
     }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
     MainMenu,
+    NewCharSetup,
     Settings,
     LoadCharacter,
     ImportCharacter,
@@ -220,7 +222,8 @@ fn main() -> Result<()> {
     //let mut player = Player::new();
     let player = Player::new();
     //let mut party = Party::new();
-    let mut character = Character::new(player, None, VERSION);
+    let party = Party::new();
+    let mut character = Character::new(player, party, VERSION);
     //let mut party: Option<Party> = None;
     let _party: Option<Party> = None;
     let mut origin = OriginState::new(&db);
@@ -231,6 +234,9 @@ fn main() -> Result<()> {
     let mut background = BackgroundState::new(&db);
     let mut equipment = EquipmentState::new();
     let mut review = ReviewState::new();
+    let mut nc_setup = NewCharacterSetupState::new();
+    let mut pending_player_name: Option<String> = None;
+    let mut pending_party_name: Option<String> = None;
 
     //start the render loop
     'main: loop {
@@ -500,7 +506,12 @@ fn main() -> Result<()> {
 
         let _content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
-                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
+                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup);
+                0.0
+            }
+            AppScreen::NewCharSetup => {
+                render_new_character_setup(&ui, &window,&mut nc_setup, &mut screen, &db, &mut pending_player_name, &mut pending_party_name, &mut character,
+                );
                 0.0
             }
 /*--------*/AppScreen::OriginSelect => {
