@@ -10,3 +10,4 @@ pub mod character_sheet;
 pub mod settings;
 pub mod new_char_setup;
 pub mod load_character;
+pub mod import_character;

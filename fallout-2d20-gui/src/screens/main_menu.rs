@@ -3,6 +3,7 @@ use sdl2::video::Window;
 use crate::AppScreen;
 use crate::NewCharacterSetupState;
 use crate::screens::load_character::LoadCharacterState;
+use crate::screens::import_character::ImportState;
 
 pub fn render_main_menu(
     ui: &Ui,
@@ -12,6 +13,7 @@ pub fn render_main_menu(
     items: &[&str],
     nc_setup: &mut NewCharacterSetupState,
     load_state: &mut LoadCharacterState,
+    import_state: &mut ImportState,
 ) {
     //get window dimmensions
     let (win_w, win_h) = window.size();
@@ -49,7 +51,7 @@ pub fn render_main_menu(
                     *selected = (*selected - 1).max(0);
                 }
                 if ui.is_key_pressed_no_repeat(imgui::Key::Enter) || ui.is_key_pressed_no_repeat(imgui::Key::Space) {
-                    handle_selection(*selected, screen, nc_setup, load_state);
+                    handle_selection(*selected, screen, nc_setup, load_state, import_state);
                 }
             }
 
@@ -73,7 +75,7 @@ pub fn render_main_menu(
                     .size([item_w, 36.0])
                     .build() {
                     *selected = i as i32;
-                    handle_selection(i as i32, screen, nc_setup, load_state);
+                    handle_selection(i as i32, screen, nc_setup, load_state, import_state);
                 }
 
                 //also select the button on hover (so that space/enter/click navigates)
@@ -94,7 +96,7 @@ pub fn render_main_menu(
         });
 }
 
-fn handle_selection(selected: i32, screen: &mut AppScreen, nc_setup: &mut NewCharacterSetupState, load_state: &mut LoadCharacterState) {
+fn handle_selection(selected: i32, screen: &mut AppScreen, nc_setup: &mut NewCharacterSetupState, load_state: &mut LoadCharacterState, import_state: &mut ImportState) {
     match selected {
         0 => {
             nc_setup.reset();
@@ -104,7 +106,10 @@ fn handle_selection(selected: i32, screen: &mut AppScreen, nc_setup: &mut NewCha
             load_state.reset();
             *screen = AppScreen::LoadCharacter
         },
-        2 => *screen = AppScreen::ImportCharacter,
+        2 => {
+            import_state.reset();
+            *screen = AppScreen::ImportCharacter
+        },
         3 => *screen = AppScreen::Settings,
         4 => std::process::exit(0),
         _ => {}

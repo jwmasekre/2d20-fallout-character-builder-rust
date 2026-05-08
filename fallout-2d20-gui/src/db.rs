@@ -7,6 +7,7 @@ use std::str::FromStr;
 use crate::character::{AmmoInv, Character, Perk, Player, SkillBlock, SpecialBlock, TagType, WeaponMods, Party, Origin, Background, Special, Skills, Trait, Apparel, Weapon, AmmoData, Gear, Consumable, RobotModule, Version, resolve_prerelease, Skill, Limbs, MutantType, CompanionType, RobotType, MeleeModifiers, Junk, BaseDR};
 use crate::screens::perk_select::perk_description;
 use crate::screens::background_select::{resolve_apparel_type, resolve_consumable_type, resolve_apparel_covers, resolve_mod_effect, WeaponQuality, WeaponEffect, parse_damage_type, resolve_weapon_slot};
+use crate::screens::character_review::equip_apparel;
 
 pub struct Db {
     pub pool: SqlitePool,
@@ -1088,7 +1089,8 @@ impl Db {
             character.limb_dr.track_left.injuries = row.lt_inj.unwrap_or(0) as i32;
             character.limb_dr.track_right.injuries = row.rt_inj.unwrap_or(0) as i32;
             character.limb_dr.wheel.injuries = row.wheel_inj.unwrap_or(0) as i32;
-            //need to equip apparel
+            equip_apparel(&mut character);
+            character.limb_dr.update_dr(character.base_dr.clone());
             Ok(character)
         }).map_err(anyhow::Error::from)
     }

@@ -31,6 +31,7 @@ use crate::{
         character_sheet::render_character_sheet,
         new_char_setup::{NewCharacterSetupState, render_new_character_setup},
         load_character::{render_load_character, LoadCharacterState},
+        import_character::{render_import_character, ImportState},
     }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
@@ -96,7 +97,7 @@ pub fn screen_unlocked(
 }
 
 //build a placeholder window
-fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
+fn _render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
     let (win_w, win_h) = window.size();
     let w = 500.0_f32;
     let h = 200.0_f32;
@@ -239,6 +240,7 @@ fn main() -> Result<()> {
     let mut pending_player_name: Option<String> = None;
     let mut pending_party_name: Option<String> = None;
     let mut load_character_state = LoadCharacterState::new();
+    let mut import_state = ImportState::new();
 
     //start the render loop
     'main: loop {
@@ -511,7 +513,7 @@ fn main() -> Result<()> {
 
         let _content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
-                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup, &mut load_character_state);
+                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup, &mut load_character_state, &mut import_state);
                 0.0
             }
             AppScreen::NewCharSetup => {
@@ -598,7 +600,7 @@ fn main() -> Result<()> {
                 0.0
             }
 /*--------*/AppScreen::ImportCharacter => {
-                render_placeholder(&ui, &window, "import", &mut screen);
+                render_import_character(&ui, &window, &mut import_state, &mut screen, &db);
                 0.0
             }
         };
