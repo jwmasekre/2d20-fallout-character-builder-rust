@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS consumables (
   "cost" INTEGER, -- smallint
   "rarity" INTEGER, -- smallint
   "duration" TEXT, -- single char
-  "addiction" TEXT,
+  "addiction" INTEGER,
   "sourcebook_id" INTEGER, -- smallint
 FOREIGN KEY (sourcebook_id) REFERENCES sourcebooks (id),
 FOREIGN KEY (type) REFERENCES consumable_types (id)
@@ -599,6 +599,9 @@ CREATE TABLE IF NOT EXISTS characters (
   "exposure" INTEGER, -- smallint
   "party_id" TEXT, -- uuid
   "misc" TEXT, -- json
+  "junk_c" INTEGER,
+  "junk_u" INTEGER,
+  "junk_r" INTEGER,
   "notes" TEXT,
   "version_maj" INTEGER,
   "version_min" INTEGER,

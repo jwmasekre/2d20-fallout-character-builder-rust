@@ -1,6 +1,7 @@
 use uuid::Uuid;
 
 use crate::screens::special_assignment::SpecialState;
+use crate::screens::stat_calculation::{get_staggered_bonus};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreRelease {
@@ -40,6 +41,15 @@ impl Version {
     }
 }
 
+pub fn resolve_prerelease(string: &str) -> PreRelease {
+    match string {
+        "-alpha" => PreRelease::Alpha,
+        "-beta" => PreRelease::Beta,
+        "-rc" => PreRelease::ReleaseCandidate,
+        _ => PreRelease::None,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Character {
     pub id: Uuid,
@@ -49,6 +59,7 @@ pub struct Character {
     pub party: Party,
     pub level: i32,
     pub xp: i32,
+    pub xp_next: i32,
     pub origin: Option<Origin>,
     pub background: Option<Background>,
     pub traits: Vec<Trait>,
@@ -69,6 +80,7 @@ pub struct Character {
     pub initiative: i32,
     pub hp: i32,
     pub hp_max: i32,
+    pub base_dr: BaseDR,
     pub poison_dr: i32,
     pub limb_dr: Limbs,
     pub weapons: Vec<Weapon>,
@@ -94,6 +106,7 @@ impl Character {
             party: party,
             level: 1,
             xp: 0,
+            xp_next: 100,
             origin: None,
             background: None,
             traits: vec![],
@@ -114,6 +127,7 @@ impl Character {
             initiative: 10,
             hp: 10,
             hp_max: 10,
+            base_dr: BaseDR::new(),
             poison_dr: 0,
             limb_dr: Limbs::new(),
             weapons: vec![],
@@ -156,7 +170,142 @@ impl Character {
     pub fn perk_ranks(&self, id: i32) -> i32 {
         self.perks.iter().find(|p| p.id == id).map(|p| p.ranks).unwrap_or(0)
     }
+    pub fn update_type(&mut self) {
+        if self.origin.is_some() {
+            //set mutant status
+            self.mutant = match self.origin.clone().unwrap().id {
+                3 => MutantType::SuperMutant,
+                16 => MutantType::Nightkin,
+                _ => MutantType::None,
+            };
+            //set robot status
+            self.robot = match self.origin.clone().unwrap().id {
+                4 => RobotType::Handy,
+                9 => RobotType::Protectron,
+                10 => RobotType::Robobrain,
+                11 => RobotType::Securitron,
+                12 => RobotType::Synth,
+                14 => RobotType::Assaultron,
+                _ => RobotType::None,
+            };
+        }
+    }
+    pub fn calculate_xp(&mut self) {
+        self.xp = self.level * (self.level - 1) * 50;
+    }
+    pub fn calculate_level(&mut self) {
+        self.level = ((1.0 + (1.0 + self.xp as f32 / 50.0).sqrt()) / 2.0).floor() as i32;
+        //xp for next level
+        self.xp_next = (self.level + 1) * self.level * 50 - self.xp;
+    }
+    pub fn calculate_carry_weight(&mut self) {
+        let strong_back = (self.perk_ranks(91)) * 25;
+        self.carry_wgt_max = if self.has_any_trait(vec![4,19,20,23]) {
+            150
+        } else if self.has_trait(18) {
+            225
+        } else if self.has_trait(9) {
+            150 + (5 * self.special.strength.value) + strong_back
+        } else {
+            150 + (10 * self.special.strength.value) + strong_back
+        };
+        let mut total_weight = 0;
+        for w in self.weapons.clone() {
+            total_weight += w.wgt;
+        }
+        for a in self.ammo.clone() {
+            total_weight += a.ammo.wgt * a.quantity;
+        }
+        for a in self.apparel.clone() {
+            total_weight += a.wgt;
+        }
+        for c in self.consumables.clone() {
+            total_weight += c.wgt * c.quantity;
+        }
+        for m in self.robot_modules.clone() {
+            total_weight += m.wgt;
+        }
+        for g in self.gear.clone() {
+            total_weight += g.wgt * g.quantity;
+        }
+        total_weight += (self.junk.common + self.junk.uncommon + self.junk.rare) * 2;
+        self.carry_wgt = total_weight;
+    }
+    pub fn calculate_poison_dr(&mut self) {
+        self.poison_dr = if self.is_mutant() || self.is_robot() {
+            99
+        } else if self.has_perk(87) {
+            2
+        } else {
+            0
+        };
+    }
+    pub fn calculate_base_dr(&mut self) {
+        let rd_dr = if self.is_mutant() || self.is_robot() {
+            99
+        } else {
+            let atom = if self.origin.clone().unwrap().id == 13 { 1 } else { 0 };
+            let rad_res = self.perk_ranks(73);
+            atom + rad_res
+        };
+        let barbarian = if self.has_perk(8) {
+            get_staggered_bonus(self.special.strength.value)
+        } else { 0 };
+        let toughness = self.perk_ranks(94);
+        let evasive = if self.has_perk(167) {
+            get_staggered_bonus(self.special.agility.value)
+        } else { 0 };
+        let ph_dr = barbarian + toughness + evasive;
+        //energy dr
+        let refractor = self.perk_ranks(74);
+        let en_dr = evasive + refractor;
 
+        self.base_dr = BaseDR {
+            ph_dr,
+            en_dr,
+            rd_dr,
+        };
+    }
+    pub fn calculate_combat_stats(&mut self) {
+        let agi = self.special.agility.value;
+        let per = self.special.perception.value;
+        let end = self.special.endurance.value;
+        let lck = self.special.luck.value;
+        //defense
+        self.defense = if agi >= 9 { 2 } else { 1 };
+        //initiative
+        self.initiative = per + agi;
+        //max hp
+        self.hp_max = end + lck + self.perk_ranks(51) * end;
+    }
+    pub fn calculate_lp(&mut self) {
+        self.luck_points_max = if self.is_gifted() { self.special.luck.value - 1 } else { self.special.luck.value };
+    }
+    pub fn set_companion(&mut self) {
+        self.companion = if self.has_perk(28) {
+            CompanionType::Dogmeat
+        } else if self.has_perk(105) {
+            CompanionType::Human
+        } else if self.has_perk(118) {
+            CompanionType::Robot
+        } else {
+            CompanionType::None
+        };
+    }
+    pub fn full_update(&mut self) {
+        self.calculate_level();
+        self.update_type();
+        self.limb_dr.update_active(self.robot.clone());
+        self.special.apply_max(&self.clone());
+        self.skills.apply_max(&self.clone());
+        self.calculate_carry_weight();
+        self.calculate_base_dr();
+        self.calculate_poison_dr();
+        self.calculate_combat_stats();
+        self.melee_mod.calculate(self.clone());
+        self.calculate_lp();
+        self.set_companion();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -279,26 +428,26 @@ impl Special {
             luck: SpecialBlock::new(),
         }
     }
-    pub fn apply_max(character: &mut Character) {
+    pub fn apply_max(&mut self, character: &Character) {
         match character.mutant {
             MutantType::None => {
-                character.special.intelligence.max = 10;
-                character.special.charisma.max = 10;
-                character.special.strength.max = 10;
-                character.special.endurance.max = 10;
+                self.intelligence.max = 10;
+                self.charisma.max = 10;
+                self.strength.max = 10;
+                self.endurance.max = 10;
                 return
             },
             MutantType::SuperMutant => {
-                character.special.intelligence.max = 6;
-                character.special.charisma.max = 6;
+                self.intelligence.max = 6;
+                self.charisma.max = 6;
             },
             MutantType::Nightkin => {
-                character.special.intelligence.max = 8;
-                character.special.charisma.max = 8;
+                self.intelligence.max = 8;
+                self.charisma.max = 8;
             }
         }
-        character.special.strength.max = 12;
-        character.special.endurance.max = 12;
+        self.strength.max = 12;
+        self.endurance.max = 12;
     }
     pub fn mut_special_block(&mut self) -> [&mut SpecialBlock; 7] {
         [
@@ -496,6 +645,22 @@ impl Skills {
         }
         tagged
     }
+    pub fn apply_max(&mut self, character: &Character) {
+        let skill_max = character.level.clamp(3,6);
+        let mutant = character.is_mutant();
+        let good = character.has_trait(13);
+        let skills = self.mut_skill_block();
+        for i in 0..17 {
+            if mutant {
+                skills[i].max = 4.min(skill_max);
+            } else {
+                skills[i].max = skill_max;
+            }
+            if good && [0,2,3,4,5,7,8,11,12,14,15,16].contains(&i) {
+                skills[i].max = 4.min(skill_max);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -553,11 +718,35 @@ pub struct MeleeModifiers {
 }
 
 impl MeleeModifiers {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             melee: 0,
             unarmed: 0,
             sneak: 0,
+        }
+    }
+    pub fn calculate(&mut self, character: Character) {
+        let brutal = if character.has_trait(8) { 1 } else { 0 };
+        let built = if character.has_trait(23) { 1 } else { 0 };
+        self.melee = get_staggered_bonus(character.special.strength.value) + brutal + built;
+        self.unarmed = if character.has_perk(46) { 1 } else { 0 };
+        self.sneak = if character.has_perk(61) { 2 } else { 0 };
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BaseDR {
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
+}
+
+impl BaseDR {
+    pub fn new() -> Self {
+        Self {
+            ph_dr: 0,
+            en_dr: 0,
+            rd_dr: 0,
         }
     }
 }
@@ -582,7 +771,7 @@ pub struct Limbs {
 }
 
 impl Limbs {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             head: Limb::new_active(),
             torso: Limb::new_active(),

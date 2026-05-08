@@ -1,6 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, character::{Character, CompanionType, MeleeModifiers}, screens::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
+use crate::{AppScreen, character::{Character}, screens::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
 
 pub fn get_staggered_bonus(val: i32) -> i32 {
     match val {
@@ -9,12 +9,6 @@ pub fn get_staggered_bonus(val: i32) -> i32 {
         11.. => 3,
         _ => 0,
     }
-}
-
-pub struct BaseDR {
-    pub ph_dr: i32,
-    pub en_dr: i32,
-    pub rd_dr: i32,
 }
 
 pub fn get_melee_str(character: &Character) -> String {
@@ -31,90 +25,23 @@ pub fn get_melee_str(character: &Character) -> String {
     melee_string_vec.join(", ")
 }
 
-pub fn compute_stats(character: &mut Character) -> (BaseDR, bool) {
-    //quick reference for stats
-    let str = character.special.strength.value;
-    let per = character.special.perception.value;
-    let end = character.special.endurance.value;
-    let _cha = character.special.charisma.value;
-    let _int = character.special.intelligence.value;
-    let agi = character.special.agility.value;
-    let lck = character.special.luck.value;
-
+pub fn compute_stats(character: &mut Character) -> bool {
     //carry weight
-    let strong_back = (character.perk_ranks(91)) * 25;
-    character.carry_wgt_max = if character.has_any_trait(vec![4,19,20,23]) {
-        150
-    } else if character.has_trait(18) {
-        225
-    } else if character.has_trait(9) {
-        150 + (5 * str) + strong_back
-    } else {
-        150 + (10 * str) + strong_back
-    };
+    character.calculate_carry_weight();
     //poison dr
-    character.poison_dr = if character.is_mutant() || character.is_robot() {
-        99
-    } else if character.has_perk(87) {
-        2
-    } else {
-        0
-    };
-    //rad dr
-    let rd_dr = if character.is_mutant() || character.is_robot() {
-        99
-    } else {
-        let atom = if character.origin.clone().unwrap().id == 13 { 1 } else { 0 };
-        let rad_res = character.perk_ranks(73);
-        atom + rad_res
-    };
-    //physical dr
-    let barbarian = if character.has_perk(8) {
-        get_staggered_bonus(str)
-    } else { 0 };
-    let toughness = character.perk_ranks(94);
-    let evasive = if character.has_perk(167) {
-        get_staggered_bonus(agi)
-    } else { 0 };
-    let ph_dr = barbarian + toughness + evasive;
-    //energy dr
-    let refractor = character.perk_ranks(74);
-    let en_dr = evasive + refractor;
-
-    let base_dr = BaseDR {
-        ph_dr,
-        en_dr,
-        rd_dr,
-    };
-    //defense
-    character.defense = if agi >= 9 { 2 } else { 1 };
-    //initiative
-    character.initiative = per + agi;
-    //max hp
-    character.hp_max = end + lck + character.perk_ranks(51) * end;
+    character.calculate_poison_dr();
+    //base dr
+    character.calculate_base_dr();
+    //combat stats
+    character.calculate_combat_stats();
     let is_nocturnal = character.has_perk(111);
     //melee damage
-    let brutal = if character.has_trait(8) { 1 } else { 0 };
-    let built = if character.has_trait(23) { 1 } else { 0 };
-    character.melee_mod = MeleeModifiers {
-        melee: get_staggered_bonus(str) + brutal + built,
-        unarmed: if character.has_perk(46) { 1 } else { 0 },
-        sneak: if character.has_perk(61) { 2 } else { 0 },
-    };
+    character.melee_mod.calculate(character.clone());
     //max luck points
-    character.luck_points_max = if character.is_gifted() { lck - 1 } else { lck };
+    character.calculate_lp();
     //companion
-    character.companion = if character.has_perk(28) {
-        CompanionType::Dogmeat
-    } else if character.has_perk(105) {
-        CompanionType::Human
-    } else if character.has_perk(118) {
-        CompanionType::Robot
-    } else {
-        CompanionType::None
-    };
-    //the character struct doesn't have a base dr, so we need to return this
-    (base_dr, is_nocturnal)
+    character.set_companion();
+    is_nocturnal
 }
 
 pub fn render_stat_calculation(
@@ -128,7 +55,7 @@ pub fn render_stat_calculation(
     let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen)
         else { return 0.0 };
 
-    let (base_dr, nocturnal) = compute_stats(character);
+    let nocturnal = compute_stats(character);
     let char_spec = character.special.special_block();
     let char_skills = character.skills.skill_block();
 
@@ -163,6 +90,7 @@ pub fn render_stat_calculation(
     ui.set_column_width(0, d_col_w);
     ui.set_column_width(1, d_col_w);
 
+    let base_dr = character.base_dr.clone();
     ui.text(format!("Max Carry Weight: {}", character.carry_wgt_max));
     ui.text("Base Damage Resistance:");
     ui.text(format!(

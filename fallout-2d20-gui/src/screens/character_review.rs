@@ -1,10 +1,10 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill}, db::Db, log_on_change, screens::{background_select::{BackgroundState, EquipmentState},
+use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill, BaseDR}, db::Db, screens::{background_select::{BackgroundState, EquipmentState},
     skill_assignment::SKILLS,
     special_assignment::SPECIAL_LABELS,
-    stat_calculation::{BaseDR, get_melee_str}}, theme::render_window
+    stat_calculation::{get_melee_str}}, theme::render_window
 };
 
 //for this i think we want to build the state to be something we can apply directly to the character struct upon acceptance; applying to the character directly here would likely lead to weird issues with clearing stuff when changing backgrounds/origins
@@ -28,17 +28,9 @@ pub fn equip_apparel(
 
     let apparel = equipment.apparel.clone();
     let mut _armor: Vec<(usize,&Apparel)> = vec![];
-    let mut outfit_dr = BaseDR {
-        ph_dr: 0,
-        en_dr: 0,
-        rd_dr: 0,
-    };
+    let mut outfit_dr = BaseDR::new();
     let mut outfit_pos = usize::MAX;
-    let mut clothing_dr = BaseDR {
-        ph_dr: 0,
-        en_dr: 0,
-        rd_dr: 0,
-    };
+    let mut clothing_dr = BaseDR::new();
     let mut clothing_pos = usize::MAX;
     let headgear: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Headgear).collect();
     let mut armored_limbs: Vec<BodyLocation> = vec![];
@@ -783,6 +775,7 @@ pub fn render_character_review(
 
     ui.columns(1,"##end_eq", false);
 
+    /*
     ui.separator();
     ui.separator();
     ui.text("DEBUG");
@@ -793,9 +786,7 @@ pub fn render_character_review(
     ui.text_wrapped(format!("{:?}", equipment));
     ui.separator();
     ui.text_wrapped(format!("{:?}", background));
-
-    log_on_change!(format!("char: {:?}", character));
-
+    */
     drop(_scroll);
     h
 }

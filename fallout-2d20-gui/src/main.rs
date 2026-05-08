@@ -29,7 +29,8 @@ use crate::{
         special_assignment::{SpecialState, render_special_assignment},
         stat_calculation::render_stat_calculation,
         character_sheet::render_character_sheet,
-        new_char_setup::{NewCharacterSetupState, render_new_character_setup}
+        new_char_setup::{NewCharacterSetupState, render_new_character_setup},
+        load_character::{render_load_character, LoadCharacterState},
     }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
@@ -237,6 +238,7 @@ fn main() -> Result<()> {
     let mut nc_setup = NewCharacterSetupState::new();
     let mut pending_player_name: Option<String> = None;
     let mut pending_party_name: Option<String> = None;
+    let mut load_character_state = LoadCharacterState::new();
 
     //start the render loop
     'main: loop {
@@ -358,7 +360,10 @@ fn main() -> Result<()> {
                     character.gear = equipment.gear.clone();
                     character.junk = equipment.junk.clone();
                     character.misc = equipment.misc.clone();
-                    *screen = AppScreen::CharacterSheet;
+                    match db.save_character(character) {
+                        Ok(_) => *screen = AppScreen::CharacterSheet,
+                        Err(e) => eprintln!("Failed to save character: {e}"),
+                    }
                 }
             }
         }
@@ -506,7 +511,7 @@ fn main() -> Result<()> {
 
         let _content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
-                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup);
+                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup, &mut load_character_state);
                 0.0
             }
             AppScreen::NewCharSetup => {
@@ -581,7 +586,6 @@ fn main() -> Result<()> {
                 render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen)
             }
 /*--------*/AppScreen::CharacterSheet => {
-                render_placeholder(&ui, &window, "sheet", &mut screen);
                 render_character_sheet(&ui, &window, &db, &mut character, &mut screen);
                 0.0
             }
@@ -590,7 +594,7 @@ fn main() -> Result<()> {
                 0.0
             }
 /*--------*/AppScreen::LoadCharacter => {
-                render_placeholder(&ui, &window, "load", &mut screen);
+                render_load_character(&ui, &window,&mut load_character_state, &mut screen, &db, &mut character);
                 0.0
             }
 /*--------*/AppScreen::ImportCharacter => {
