@@ -64,13 +64,13 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 
 const VERSION: Version = Version {
     major: 0,
-    minor: 1,
-    patch: 9,
+    minor: 2,
+    patch: 5,
     prerelease: PreRelease::Alpha,
-    prerelease_ver: 3,
+    prerelease_ver: 1,
 };
 
-const DATE: &str = "20260505";
+const DATE: &str = "20260508";
 
 pub fn screen_unlocked(
     screen: &AppScreen,

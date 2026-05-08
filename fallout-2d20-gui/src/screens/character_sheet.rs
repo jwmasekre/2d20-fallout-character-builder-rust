@@ -63,7 +63,12 @@ pub fn render_character_sheet(
     ui.separator();
     ui.spacing();
 
+    let Some(_scroll) = ui.child_window("##sheet_scroll")
+        .size([w - 16.0, h - 32.0 - 48.0])
+        .begin()
+    else { return h };
 
+    
 
     h
 }

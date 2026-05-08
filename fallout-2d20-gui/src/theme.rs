@@ -206,7 +206,7 @@ pub fn render_window<'ui>(
         )
         .begin()?;
 
-    let close_x = w - 28.0;
+    let close_x = w - 40.0;
     ui.text(title);
     ui.same_line_with_pos(close_x);
     if ui.button(format!("X##{}_close", title)) {
