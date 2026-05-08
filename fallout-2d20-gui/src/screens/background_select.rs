@@ -423,7 +423,7 @@ pub struct WeaponQuality {
     pub value: Option<i32>,
 }
 
-fn parse_damage_type(s: &str) -> DamageType {
+pub fn parse_damage_type(s: &str) -> DamageType {
     match s {
         "Ph"    => DamageType::Ph,
         "En"    => DamageType::En,
@@ -455,24 +455,24 @@ pub enum ModEffect {
     Unknown(String),             // fallback
 }
 
-struct ModEffectList {
-    dam_set: i32,
-    dam_add: i32,
-    dam_sub: i32,
-    rat_set: i32,
-    rat_add: i32,
-    rat_sub: i32,
-    rng_add: i32,
-    rng_sub: i32,
-    e_gain: Vec<(String, Option<i32>)>,
-    q_gain: Vec<(String, Option<i32>)>,
-    e_lose: Vec<(String, Option<i32>)>,
-    q_lose: Vec<(String, Option<i32>)>,
-    mods: String,
-    weap: String,
-    dam_type: DamageType,
-    ammo: Option<String>,
-    unk: String,
+pub struct ModEffectList {
+    pub dam_set: i32,
+    pub dam_add: i32,
+    pub dam_sub: i32,
+    pub rat_set: i32,
+    pub rat_add: i32,
+    pub rat_sub: i32,
+    pub rng_add: i32,
+    pub rng_sub: i32,
+    pub e_gain: Vec<(String, Option<i32>)>,
+    pub q_gain: Vec<(String, Option<i32>)>,
+    pub e_lose: Vec<(String, Option<i32>)>,
+    pub q_lose: Vec<(String, Option<i32>)>,
+    pub mods: String,
+    pub weap: String,
+    pub dam_type: DamageType,
+    pub ammo: Option<String>,
+    pub unk: String,
 }
 
 impl ModEffectList {
@@ -674,8 +674,6 @@ fn resolve_weapons(
     selections: &[SlotSelection],
     character: &Character
 ) -> (Vec<Weapon>,Vec<AmmoInv>) {
-    let names = EffectNameSets::load(db);
-    let ranges = ["R","C","M","L","X"];
     //grab all the weapon ids that were selected
     let selected_weapon_ids: Vec<i32> = background.weapon_slots.iter()
         .zip(selections.iter())
@@ -711,7 +709,8 @@ fn resolve_weapons(
                 wm.name      AS mod_name,
                 wm.prefix    AS mod_prefix,
                 wm.effects   AS mod_effects,
-                wm.wgt       AS mod_wgt
+                wm.wgt       AS mod_wgt,
+                wm.slot      AS mod_slot
             FROM background_weapons bw
             JOIN weapons w   ON w.id  = bw.weapon_id
             JOIN skills  s   ON s.id  = w.type
@@ -793,87 +792,11 @@ fn resolve_weapons(
         let tag = tags[skill_index];
         let target = skill_total + spec_value;
 
-        let mut weapon_mod_eff = ModEffectList::new();
-
-        //handle any changes from mods
-        //need to review this
-        if let Some(mod_fx_json) = &row.mod_effects {
-            if let Ok(fx_strings) = serde_json::from_str::<Vec<String>>(mod_fx_json) {
-                for fx_str in &fx_strings {
-                    match parse_mod_effect(fx_str) {
-                        ModEffect::SetDamage(d) => {
-                            damage = d;
-                            weapon_mod_eff.dam_set = d;
-                        }
-                        ModEffect::AddDamage(n) => {
-                            // Extract leading number from e.g. "3CD", add n, reformat
-                            damage += n;
-                            weapon_mod_eff.dam_add = n;
-                        }
-                        ModEffect::SubDamage(n) => {
-                            damage -= n;
-                            if damage < 1 { damage = 1 }
-                            weapon_mod_eff.dam_sub = n;
-                        }
-                        ModEffect::SetRate(r) => {
-                            rate = r;
-                            weapon_mod_eff.rat_set = r;
-                        }
-                        ModEffect::AddRate(r) => {
-                            rate += r;
-                            weapon_mod_eff.rat_add = r;
-                        }
-                        ModEffect::SubRate(r) => {
-                            rate = (rate - r).max(0);
-                            weapon_mod_eff.rat_sub = r;
-                        }
-                        ModEffect::AddRange() => {
-                            let range_num = ranges.iter().position(|&r| r == &range).unwrap();
-                            if range_num > 0 || range_num < 4 {
-                                range = ranges[range_num + 1].to_string();
-                            }
-                            weapon_mod_eff.rng_add = 1;
-                        }
-                        ModEffect::SubRange() => {
-                            let range_num = ranges.iter().position(|&r| r == &range).unwrap();
-                            if range_num > 1 || range_num < 5 {
-                                range = ranges[range_num - 1].to_string();
-                            }
-                            weapon_mod_eff.rng_sub = 1;
-                        }
-                        ModEffect::Gain(name, val) => {
-                            apply_gain(&mut effects, &mut qualities, &name, val, &names, &mut weapon_mod_eff);
-                        }
-                        ModEffect::Lose(name, val) => {
-                            apply_lose(&mut effects, &mut qualities, &name, val, &names, &mut weapon_mod_eff);
-                        }
-                        ModEffect::SetDamageType(dt) => {
-                            dam_type = dt.clone();
-                            weapon_mod_eff.dam_type = dt;
-                        }
-                        ModEffect::SetAmmo(name) => {
-                            // Ammo swap handled at character sheet save time
-                            weapon_mod_eff.ammo = Some(name);
-                        }
-                        ModEffect::AllowsMods(name) => {
-                            // Structural changes — handled at save time
-                            weapon_mod_eff.mods = name;
-                        }
-                        ModEffect::AddWeapon(name) => {
-                            weapon_mod_eff.weap = name;
-                        }
-                        ModEffect::Unknown(s) => {
-                            eprintln!("Unknown mod effect: {s}");
-                            weapon_mod_eff.unk = s;
-                        }
-                    }
-                }
-            }
-        }
+        let weapon_mod_eff = resolve_mod_effect(db,row.mod_effects.clone(), &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
 
         let mut weapon_mods: Vec<WeaponMods> = vec![];
         weapon_mods.push(WeaponMods {
-            slot: WeaponSlot::None,
+            slot: resolve_weapon_slot(row.mod_slot.unwrap_or(0)),
             installed: true,
             id: row.mod_id.unwrap_or(0) as i32,
             name: row.mod_name.clone().unwrap_or("".to_string()),
@@ -927,6 +850,107 @@ fn resolve_weapons(
     (w_result,a_result)
 }
 
+pub fn resolve_weapon_slot(slot: i64) -> WeaponSlot {
+    match slot {
+        1 => WeaponSlot::Receiver,
+        2 => WeaponSlot::Barrel,
+        3 => WeaponSlot::Stock,
+        4 => WeaponSlot::Grip,
+        5 => WeaponSlot::Magazine,
+        6 => WeaponSlot::Sights,
+        7 => WeaponSlot::Muzzle,
+        8 => WeaponSlot::Capacitors,
+        9 => WeaponSlot::Dish,
+        10 => WeaponSlot::Fuel,
+        11 => WeaponSlot::Tank,
+        12 => WeaponSlot::Nozzle,
+        13 => WeaponSlot::Blade,
+        14 => WeaponSlot::Blunt,
+        15 => WeaponSlot::Frame,
+        _ => WeaponSlot::None,
+    }
+}
+
+pub fn resolve_mod_effect(db: &Db, eff: Option<String>, damage: &mut i32, rate: &mut i32, range: &mut String, effects: &mut Vec<WeaponEffect>, qualities: &mut Vec<WeaponQuality>, dam_type: &mut DamageType) -> ModEffectList {
+    let ranges = ["R","C","M","L","X"];
+    let names = EffectNameSets::load(db);
+    let mut weapon_mod_eff = ModEffectList::new();
+    if let Some(mod_fx_json) = &eff {
+        if let Ok(fx_strings) = serde_json::from_str::<Vec<String>>(mod_fx_json) {
+            for fx_str in &fx_strings {
+                match parse_mod_effect(fx_str) {
+                    ModEffect::SetDamage(d) => {
+                        *damage = d;
+                        weapon_mod_eff.dam_set = d;
+                    }
+                    ModEffect::AddDamage(n) => {
+                        // Extract leading number from e.g. "3CD", add n, reformat
+                        *damage += n;
+                        weapon_mod_eff.dam_add = n;
+                    }
+                    ModEffect::SubDamage(n) => {
+                        *damage -= n;
+                        if *damage < 1 { *damage = 1 }
+                        weapon_mod_eff.dam_sub = n;
+                    }
+                    ModEffect::SetRate(r) => {
+                        *rate = r;
+                        weapon_mod_eff.rat_set = r;
+                    }
+                    ModEffect::AddRate(r) => {
+                        *rate += r;
+                        weapon_mod_eff.rat_add = r;
+                    }
+                    ModEffect::SubRate(r) => {
+                        *rate = (*rate - r).max(0);
+                        weapon_mod_eff.rat_sub = r;
+                    }
+                    ModEffect::AddRange() => {
+                        let range_num = ranges.iter().position(|&r| r == range.as_str()).unwrap();
+                        if range_num > 0 || range_num < 4 {
+                            *range = ranges[range_num + 1].to_string();
+                        }
+                        weapon_mod_eff.rng_add = 1;
+                    }
+                    ModEffect::SubRange() => {
+                        let range_num = ranges.iter().position(|&r| r == range.as_str()).unwrap();
+                        if range_num > 1 || range_num < 5 {
+                            *range = ranges[range_num - 1].to_string();
+                        }
+                        weapon_mod_eff.rng_sub = 1;
+                    }
+                    ModEffect::Gain(name, val) => {
+                        apply_gain(effects, qualities, &name, val, &names, &mut weapon_mod_eff);
+                    }
+                    ModEffect::Lose(name, val) => {
+                        apply_lose(effects, qualities, &name, val, &names, &mut weapon_mod_eff);
+                    }
+                    ModEffect::SetDamageType(dt) => {
+                        *dam_type = dt.clone();
+                        weapon_mod_eff.dam_type = dt;
+                    }
+                    ModEffect::SetAmmo(name) => {
+                        // Ammo swap handled at character sheet save time
+                        weapon_mod_eff.ammo = Some(name);
+                    }
+                    ModEffect::AllowsMods(name) => {
+                        // Structural changes — handled at save time
+                        weapon_mod_eff.mods = name;
+                    }
+                    ModEffect::AddWeapon(name) => {
+                        weapon_mod_eff.weap = name;
+                    }
+                    ModEffect::Unknown(s) => {
+                        eprintln!("Unknown mod effect: {s}");
+                        weapon_mod_eff.unk = s;
+                    }
+                }
+            }
+        }
+    }
+    weapon_mod_eff
+}
+
 fn resolve_apparel(
     db: &Db,
     background: &ResolvedBackground,
@@ -965,10 +989,9 @@ fn resolve_apparel(
                 a.rads_dr    AS rd_dr,
                 a.wgt        AS wgt,
                 a.eff        AS effs,
-                at.name      AS a_type
+                a.type       AS a_type
             FROM background_apparel ba
             JOIN apparel a   ON a.id  = ba.apparel_id
-            JOIN apparel_types at ON at.id = a.type
             WHERE ba.id IN (
                 SELECT value FROM json_each(?1)
             )"#,
@@ -979,54 +1002,24 @@ fn resolve_apparel(
 
     for row in rows {
         let apparel_id = row.id.unwrap() as i32;
-        let cover_list = db.block_on(async {
+        let cover_list: Vec<i64> = db.block_on(async {
             sqlx::query!(
                 r#"SELECT
-                    bl.name  AS location
-                FROM body_locations bl
-                JOIN apparel_covers ac ON ac.location_id = bl.id
+                    ac.id AS cid
+                FROM apparel_covers ac
                 WHERE ac.apparel_id = ?
                 "#,
                 apparel_id
             ).fetch_all(&db.pool).await
-        }).unwrap_or_default();
-        let mut covers: Vec<BodyLocation> = vec![];
-        for item in cover_list {
-            let location: &str = &item.location.unwrap_or("".to_string());
-            covers.push(match location {
-                "Head" => BodyLocation::Head,
-                "Left Arm" => BodyLocation::ArmLeft,
-                "Right Arm" => BodyLocation::ArmRight,
-                "Torso" => BodyLocation::Torso,
-                "Left Leg" => BodyLocation::LegLeft,
-                "Right Leg" => BodyLocation::LegRight,
-                "Optics" => BodyLocation::Optics,
-                "Arm 1" => BodyLocation::Arm1,
-                "Arm 2" => BodyLocation::Arm2,
-                "Arm 3" => BodyLocation::Arm3,
-                "Body" => BodyLocation::Body,
-                "Thruster" => BodyLocation::Thruster,
-                "Wheel" => BodyLocation::Wheel,
-                _ => BodyLocation::None,
-            })
-        }
+        }).unwrap_or_default().iter().map(|c| c.cid).collect();
+        let covers = resolve_apparel_covers(cover_list);
         let effects = vec![row.effs.unwrap_or("".to_string())];
-        let type_string: &str = &row.a_type.unwrap_or("".to_string());
-        let apparel_type = match type_string {
-            "Clothing" => ApparelType::Clothing,
-            "Outfit" => ApparelType::Outfit,
-            "Headgear" => ApparelType::Headgear,
-            "Armor" => ApparelType::Armor,
-            "Power Armor" => ApparelType::PowerArmor,
-            "Robot Armor" => ApparelType::RobotArmor,
-            _ => ApparelType::Clothing
-        };
 
         result.push(Apparel {
             id: apparel_id,
             name: row.name.clone().unwrap_or("".to_string()),
             prefix: "".to_string(),
-            apparel_type,
+            apparel_type: resolve_apparel_type(row.a_type.unwrap_or(0)),
             ph_dr: row.ph_dr.unwrap_or(0) as i32,
             en_dr: row.en_dr.unwrap_or(0) as i32,
             rd_dr: row.rd_dr.unwrap_or(0) as i32,
@@ -1037,6 +1030,41 @@ fn resolve_apparel(
         })
     }
     result
+}
+
+pub fn resolve_apparel_type(atype: i64) -> ApparelType {
+    match atype {
+        1 => ApparelType::Clothing,
+        2 => ApparelType::Outfit,
+        3 => ApparelType::Headgear,
+        4 => ApparelType::Armor,
+        5 => ApparelType::PowerArmor,
+        6 => ApparelType::RobotArmor,
+        _ => ApparelType::Clothing
+    }
+}
+
+pub fn resolve_apparel_covers(results: Vec<i64>) -> Vec<BodyLocation> {
+    let mut covers: Vec<BodyLocation> = vec![];
+    for item in results {
+        covers.push(match item {
+            1 => BodyLocation::Head,
+            2 => BodyLocation::ArmLeft,
+            3 => BodyLocation::ArmRight,
+            4 => BodyLocation::Torso,
+            5 => BodyLocation::LegLeft,
+            6 => BodyLocation::LegRight,
+            7 => BodyLocation::Optics,
+            8 => BodyLocation::Arm1,
+            9 => BodyLocation::Arm2,
+            10 => BodyLocation::Arm3,
+            11 => BodyLocation::Body,
+            12 => BodyLocation::Thruster,
+            13 => BodyLocation::Wheel,
+            _ => BodyLocation::None,
+        })
+    }
+    covers
 }
 
 fn resolve_consumables(
@@ -1067,7 +1095,7 @@ fn resolve_consumables(
                 bc.id        AS bg_consumable_id,
                 c.id         AS id,
                 c.name       AS name,
-                ct.name      AS c_type, 
+                c.type       AS c_type, 
                 c.heals      AS health,
                 c.eff        AS effs,
                 c.rads       AS rads,
@@ -1090,20 +1118,11 @@ fn resolve_consumables(
             let c_loc = result.iter().position(|c| c.id == row.bg_consumable_id.unwrap_or(0) as i32);
             result[c_loc.unwrap()].quantity += 1;
         } else {
-            let ct: &str = &row.c_type.clone().unwrap_or("".to_string());
-            let consumable_type: ConsumableType = match ct {
-                "Chem" => ConsumableType::Chem,
-                "Food" => ConsumableType::Food,
-                "Beverage" => ConsumableType::Beverage,
-                "Other" => ConsumableType::Other,
-                "Publication" => ConsumableType::Publication,
-                _ => ConsumableType::Other,
-            };
-            let addiction: i32 = row.addiction.unwrap_or("0".to_string()).parse().expect("NaN");
+            let addiction: i32 = row.addiction.unwrap_or(0) as i32;
             result.push(Consumable {
                 id: row.id.unwrap_or(0) as i32,
                 name: row.name.unwrap_or("".to_string()),
-                consumable_type,
+                consumable_type: resolve_consumable_type(row.c_type.unwrap_or(0)),
                 health: row.health.unwrap_or(0) as i32,
                 effects: vec![row.effs.unwrap_or("".to_string())],
                 rads: row.rads.unwrap_or(0) as i32,
@@ -1115,6 +1134,17 @@ fn resolve_consumables(
         }
     }
     result
+}
+
+pub fn resolve_consumable_type(ctype: i64) -> ConsumableType {
+    match ctype {
+        1 => ConsumableType::Chem,
+        2 => ConsumableType::Food,
+        3 => ConsumableType::Beverage,
+        4 => ConsumableType::Other,
+        5 => ConsumableType::Publication,
+        _ => ConsumableType::Other,
+    }
 }
 
 fn resolve_robot_modules(

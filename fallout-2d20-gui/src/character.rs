@@ -1,8 +1,9 @@
 use uuid::Uuid;
-
+use serde::{Deserialize, Serialize};
 use crate::screens::special_assignment::SpecialState;
+use crate::screens::stat_calculation::{get_staggered_bonus};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum PreRelease {
     None,
     Alpha,
@@ -21,7 +22,7 @@ impl PreRelease {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Version {
     pub major: i32,
     pub minor: i32,
@@ -40,15 +41,25 @@ impl Version {
     }
 }
 
-#[derive(Clone, Debug)]
+pub fn resolve_prerelease(string: &str) -> PreRelease {
+    match string {
+        "-alpha" => PreRelease::Alpha,
+        "-beta" => PreRelease::Beta,
+        "-rc" => PreRelease::ReleaseCandidate,
+        _ => PreRelease::None,
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Character {
     pub id: Uuid,
     pub version: Version,
     pub name: String,
     pub player: Player,
-    pub party: Option<Party>,
+    pub party: Party,
     pub level: i32,
     pub xp: i32,
+    pub xp_next: i32,
     pub origin: Option<Origin>,
     pub background: Option<Background>,
     pub traits: Vec<Trait>,
@@ -69,6 +80,7 @@ pub struct Character {
     pub initiative: i32,
     pub hp: i32,
     pub hp_max: i32,
+    pub base_dr: BaseDR,
     pub poison_dr: i32,
     pub limb_dr: Limbs,
     pub weapons: Vec<Weapon>,
@@ -85,7 +97,7 @@ pub struct Character {
 }
 
 impl Character {
-    pub fn new(player: Player, party: Option<Party>, version: Version) -> Self {
+    pub fn new(player: Player, party: Party, version: Version) -> Self {
         Self {
             id: (Uuid::now_v7()),
             version,
@@ -94,6 +106,7 @@ impl Character {
             party: party,
             level: 1,
             xp: 0,
+            xp_next: 100,
             origin: None,
             background: None,
             traits: vec![],
@@ -114,6 +127,7 @@ impl Character {
             initiative: 10,
             hp: 10,
             hp_max: 10,
+            base_dr: BaseDR::new(),
             poison_dr: 0,
             limb_dr: Limbs::new(),
             weapons: vec![],
@@ -156,10 +170,145 @@ impl Character {
     pub fn perk_ranks(&self, id: i32) -> i32 {
         self.perks.iter().find(|p| p.id == id).map(|p| p.ranks).unwrap_or(0)
     }
+    pub fn update_type(&mut self) {
+        if self.origin.is_some() {
+            //set mutant status
+            self.mutant = match self.origin.clone().unwrap().id {
+                3 => MutantType::SuperMutant,
+                16 => MutantType::Nightkin,
+                _ => MutantType::None,
+            };
+            //set robot status
+            self.robot = match self.origin.clone().unwrap().id {
+                4 => RobotType::Handy,
+                9 => RobotType::Protectron,
+                10 => RobotType::Robobrain,
+                11 => RobotType::Securitron,
+                12 => RobotType::Synth,
+                14 => RobotType::Assaultron,
+                _ => RobotType::None,
+            };
+        }
+    }
+    pub fn calculate_xp(&mut self) {
+        self.xp = self.level * (self.level - 1) * 50;
+    }
+    pub fn calculate_level(&mut self) {
+        self.level = ((1.0 + (1.0 + self.xp as f32 / 50.0).sqrt()) / 2.0).floor() as i32;
+        //xp for next level
+        self.xp_next = (self.level + 1) * self.level * 50 - self.xp;
+    }
+    pub fn calculate_carry_weight(&mut self) {
+        let strong_back = (self.perk_ranks(91)) * 25;
+        self.carry_wgt_max = if self.has_any_trait(vec![4,19,20,23]) {
+            150
+        } else if self.has_trait(18) {
+            225
+        } else if self.has_trait(9) {
+            150 + (5 * self.special.strength.value) + strong_back
+        } else {
+            150 + (10 * self.special.strength.value) + strong_back
+        };
+        let mut total_weight = 0;
+        for w in self.weapons.clone() {
+            total_weight += w.wgt;
+        }
+        for a in self.ammo.clone() {
+            total_weight += a.ammo.wgt * a.quantity;
+        }
+        for a in self.apparel.clone() {
+            total_weight += a.wgt;
+        }
+        for c in self.consumables.clone() {
+            total_weight += c.wgt * c.quantity;
+        }
+        for m in self.robot_modules.clone() {
+            total_weight += m.wgt;
+        }
+        for g in self.gear.clone() {
+            total_weight += g.wgt * g.quantity;
+        }
+        total_weight += (self.junk.common + self.junk.uncommon + self.junk.rare) * 2;
+        self.carry_wgt = total_weight;
+    }
+    pub fn calculate_poison_dr(&mut self) {
+        self.poison_dr = if self.is_mutant() || self.is_robot() {
+            99
+        } else if self.has_perk(87) {
+            2
+        } else {
+            0
+        };
+    }
+    pub fn calculate_base_dr(&mut self) {
+        let rd_dr = if self.is_mutant() || self.is_robot() {
+            99
+        } else {
+            let atom = if self.origin.clone().unwrap().id == 13 { 1 } else { 0 };
+            let rad_res = self.perk_ranks(73);
+            atom + rad_res
+        };
+        let barbarian = if self.has_perk(8) {
+            get_staggered_bonus(self.special.strength.value)
+        } else { 0 };
+        let toughness = self.perk_ranks(94);
+        let evasive = if self.has_perk(167) {
+            get_staggered_bonus(self.special.agility.value)
+        } else { 0 };
+        let ph_dr = barbarian + toughness + evasive;
+        //energy dr
+        let refractor = self.perk_ranks(74);
+        let en_dr = evasive + refractor;
 
+        self.base_dr = BaseDR {
+            ph_dr,
+            en_dr,
+            rd_dr,
+        };
+    }
+    pub fn calculate_combat_stats(&mut self) {
+        let agi = self.special.agility.value;
+        let per = self.special.perception.value;
+        let end = self.special.endurance.value;
+        let lck = self.special.luck.value;
+        //defense
+        self.defense = if agi >= 9 { 2 } else { 1 };
+        //initiative
+        self.initiative = per + agi;
+        //max hp
+        self.hp_max = end + lck + self.perk_ranks(51) * end;
+    }
+    pub fn calculate_lp(&mut self) {
+        self.luck_points_max = if self.is_gifted() { self.special.luck.value - 1 } else { self.special.luck.value };
+    }
+    pub fn set_companion(&mut self) {
+        self.companion = if self.has_perk(28) {
+            CompanionType::Dogmeat
+        } else if self.has_perk(105) {
+            CompanionType::Human
+        } else if self.has_perk(118) {
+            CompanionType::Robot
+        } else {
+            CompanionType::None
+        };
+    }
+    pub fn full_update(&mut self) {
+        self.calculate_level();
+        self.update_type();
+        self.limb_dr.update_active(self.robot.clone());
+        self.special.apply_max(&self.clone());
+        self.skills.apply_max(&self.clone());
+        self.calculate_carry_weight();
+        self.calculate_base_dr();
+        self.calculate_poison_dr();
+        self.calculate_combat_stats();
+        self.melee_mod.calculate(self.clone());
+        self.calculate_lp();
+        self.set_companion();
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Player {
     pub id: Uuid,
     pub name: String,
@@ -174,7 +323,7 @@ impl Player {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Party {
     pub id: Uuid,
     pub name: String,
@@ -195,7 +344,7 @@ impl Party {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Origin {
     pub id: i32,
     pub name: String,
@@ -203,28 +352,28 @@ pub struct Origin {
     pub can_ghoul: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Background {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Trait {
     pub id: i32,
     pub name: String,
     pub desc: String,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum MutantType {
     None,
     SuperMutant,
     Nightkin,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum RobotType {
     None,
     Handy,
@@ -235,7 +384,7 @@ pub enum RobotType {
     Assaultron,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum CompanionType {
     None,
     Dogmeat,
@@ -244,7 +393,7 @@ pub enum CompanionType {
 }
 
 /*
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum SpecialAttr {
     Strength,
     Perception,
@@ -256,7 +405,7 @@ pub enum SpecialAttr {
 }
 */
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Special {
     pub strength: SpecialBlock,
     pub perception: SpecialBlock,
@@ -279,26 +428,26 @@ impl Special {
             luck: SpecialBlock::new(),
         }
     }
-    pub fn apply_max(character: &mut Character) {
+    pub fn apply_max(&mut self, character: &Character) {
         match character.mutant {
             MutantType::None => {
-                character.special.intelligence.max = 10;
-                character.special.charisma.max = 10;
-                character.special.strength.max = 10;
-                character.special.endurance.max = 10;
+                self.intelligence.max = 10;
+                self.charisma.max = 10;
+                self.strength.max = 10;
+                self.endurance.max = 10;
                 return
             },
             MutantType::SuperMutant => {
-                character.special.intelligence.max = 6;
-                character.special.charisma.max = 6;
+                self.intelligence.max = 6;
+                self.charisma.max = 6;
             },
             MutantType::Nightkin => {
-                character.special.intelligence.max = 8;
-                character.special.charisma.max = 8;
+                self.intelligence.max = 8;
+                self.charisma.max = 8;
             }
         }
-        character.special.strength.max = 12;
-        character.special.endurance.max = 12;
+        self.strength.max = 12;
+        self.endurance.max = 12;
     }
     pub fn mut_special_block(&mut self) -> [&mut SpecialBlock; 7] {
         [
@@ -324,7 +473,7 @@ impl Special {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SpecialBlock {
     pub value: i32,
     pub gifted: bool,
@@ -349,7 +498,7 @@ impl SpecialBlock {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Skill {
     Athletics,
 	Barter,
@@ -370,7 +519,7 @@ pub enum Skill {
 	Unarmed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Skills {
     pub athletics: SkillBlock,
 	pub barter: SkillBlock,
@@ -496,9 +645,25 @@ impl Skills {
         }
         tagged
     }
+    pub fn apply_max(&mut self, character: &Character) {
+        let skill_max = character.level.clamp(3,6);
+        let mutant = character.is_mutant();
+        let good = character.has_trait(13);
+        let skills = self.mut_skill_block();
+        for i in 0..17 {
+            if mutant {
+                skills[i].max = 4.min(skill_max);
+            } else {
+                skills[i].max = skill_max;
+            }
+            if good && [0,2,3,4,5,7,8,11,12,14,15,16].contains(&i) {
+                skills[i].max = 4.min(skill_max);
+            }
+        }
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SkillBlock {
     pub ranks: i32,
     pub tagged: TagType,
@@ -529,7 +694,7 @@ impl SkillBlock {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum TagType {
     None,
     Trait,
@@ -537,7 +702,7 @@ pub enum TagType {
     Standard,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Perk {
     pub id: i32,
     pub name: String,
@@ -545,7 +710,7 @@ pub struct Perk {
     pub ranks: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MeleeModifiers {
     pub melee: i32,
     pub unarmed: i32,
@@ -553,16 +718,40 @@ pub struct MeleeModifiers {
 }
 
 impl MeleeModifiers {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             melee: 0,
             unarmed: 0,
             sneak: 0,
         }
     }
+    pub fn calculate(&mut self, character: Character) {
+        let brutal = if character.has_trait(8) { 1 } else { 0 };
+        let built = if character.has_trait(23) { 1 } else { 0 };
+        self.melee = get_staggered_bonus(character.special.strength.value) + brutal + built;
+        self.unarmed = if character.has_perk(46) { 1 } else { 0 };
+        self.sneak = if character.has_perk(61) { 2 } else { 0 };
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct BaseDR {
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
+}
+
+impl BaseDR {
+    pub fn new() -> Self {
+        Self {
+            ph_dr: 0,
+            en_dr: 0,
+            rd_dr: 0,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Limbs {
     pub head: Limb,
     pub torso: Limb,
@@ -582,7 +771,7 @@ pub struct Limbs {
 }
 
 impl Limbs {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             head: Limb::new_active(),
             torso: Limb::new_active(),
@@ -690,9 +879,45 @@ impl Limbs {
             }
         }
     }
+    pub fn mut_active_limbs(&mut self) -> Vec<(&mut Limb,String)> {
+        let mut active: Vec<(&mut Limb, String)> = vec![];
+        if self.head.active { active.push((&mut self.head, "head".to_string())) };
+        if self.torso.active { active.push((&mut self.torso, "torso".to_string())) };
+        if self.body.active { active.push((&mut self.body, "body".to_string())) };
+        if self.arm_left.active { active.push((&mut self.arm_left, "arm_left".to_string())) };
+        if self.arm_right.active { active.push((&mut self.arm_right, "arm_right".to_string())) };
+        if self.leg_left.active { active.push((&mut self.leg_left, "leg_left".to_string())) };
+        if self.leg_right.active { active.push((&mut self.leg_right, "leg_right".to_string())) };
+        if self.optics.active { active.push((&mut self.optics, "optics".to_string())) };
+        if self.arm_1.active { active.push((&mut self.arm_1, "arm_1".to_string())) };
+        if self.arm_2.active { active.push((&mut self.arm_2, "arm_2".to_string())) };
+        if self.arm_3.active { active.push((&mut self.arm_3, "arm_3".to_string())) };
+        if self.thruster.active { active.push((&mut self.thruster, "thruster".to_string())) };
+        if self.wheel.active { active.push((&mut self.wheel, "wheel".to_string())) };
+        if self.track_left.active { active.push((&mut self.track_left, "track_left".to_string())) };
+        if self.track_right.active { active.push((&mut self.track_right, "track_right".to_string())) };
+        active
+    }
+    pub fn update_dr(&mut self, base_dr: BaseDR) {
+        for (loc,_) in self.mut_active_limbs() {
+            let mut equip_dr = BaseDR::new();
+            for item in loc.equipped.clone() {
+                equip_dr.ph_dr += item.ph_dr;
+                equip_dr.en_dr += item.en_dr;
+                equip_dr.rd_dr += item.rd_dr;
+            }
+            loc.ph_dr = base_dr.ph_dr + equip_dr.ph_dr;
+            loc.en_dr = base_dr.en_dr + equip_dr.en_dr;
+            if base_dr.rd_dr < 99 {
+                loc.rd_dr = base_dr.rd_dr + equip_dr.rd_dr;
+            } else {
+                loc.rd_dr = 99;
+            }
+        }
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Limb {
     pub active: bool,
     pub ph_dr: i32,
@@ -725,7 +950,7 @@ impl Limb {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Weapon {
     pub id: i32,
     pub name: String,
@@ -744,7 +969,7 @@ pub struct Weapon {
     pub mods: Vec<WeaponMods>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum DamageType {
     Ph,
     En,
@@ -756,7 +981,7 @@ pub enum DamageType {
     None,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct WeaponMods {
     pub slot: WeaponSlot,
     pub installed: bool,
@@ -783,7 +1008,7 @@ pub struct WeaponMods {
     pub special_ability: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum WeaponSlot {
     None,
     Receiver,
@@ -803,7 +1028,7 @@ pub enum WeaponSlot {
     Frame,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AmmoData {
     pub id: i32,
     pub name: String,
@@ -811,20 +1036,20 @@ pub struct AmmoData {
 }
 
 /*
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Ammo {
     pub ammo: AmmoData,
     pub variants: Vec<AmmoData>,
 }
 */
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AmmoInv {
     pub ammo: AmmoData,
     pub quantity: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Apparel {
     pub id: i32,
     pub name: String,
@@ -839,7 +1064,7 @@ pub struct Apparel {
     pub equipped: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ApparelType {
     Clothing,
     Outfit,
@@ -849,7 +1074,7 @@ pub enum ApparelType {
     RobotArmor,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum BodyLocation {
     None,
     Head,
@@ -867,7 +1092,7 @@ pub enum BodyLocation {
     Wheel,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RobotModule {
     pub id: i32,
     pub name: String,
@@ -876,7 +1101,7 @@ pub struct RobotModule {
     pub wgt: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Consumable {
     pub id: i32,
     pub name: String,
@@ -890,7 +1115,7 @@ pub struct Consumable {
     pub quantity: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ConsumableType {
     Chem,
     Food,
@@ -899,7 +1124,7 @@ pub enum ConsumableType {
     Publication,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Gear {
     pub id: i32,
     pub name: String,
@@ -908,7 +1133,7 @@ pub struct Gear {
     pub quantity: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Junk {
     pub common: i32,
     pub uncommon: i32,

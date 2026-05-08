@@ -1,10 +1,10 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill}, db::Db, screens::{background_select::{BackgroundState, EquipmentState},
+use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BodyLocation, Character, DamageType, Skill, BaseDR}, db::Db, screens::{background_select::{BackgroundState, EquipmentState},
     skill_assignment::SKILLS,
     special_assignment::SPECIAL_LABELS,
-    stat_calculation::{BaseDR, get_melee_str}}, theme::render_window
+    stat_calculation::{get_melee_str}}, theme::render_window
 };
 
 //for this i think we want to build the state to be something we can apply directly to the character struct upon acceptance; applying to the character directly here would likely lead to weird issues with clearing stuff when changing backgrounds/origins
@@ -19,7 +19,7 @@ impl ReviewState {
     }
 }
 
-pub fn equip_apparel(
+pub fn equip_bg_apparel(
     character: &mut Character,
     equipment: &mut EquipmentState,
     background: &mut BackgroundState,
@@ -28,30 +28,24 @@ pub fn equip_apparel(
 
     let apparel = equipment.apparel.clone();
     let mut _armor: Vec<(usize,&Apparel)> = vec![];
-    let mut outfit_dr = BaseDR {
-        ph_dr: 0,
-        en_dr: 0,
-        rd_dr: 0,
-    };
+    let mut outfit_dr = BaseDR::new();
     let mut outfit_pos = usize::MAX;
-    let mut clothing_dr = BaseDR {
-        ph_dr: 0,
-        en_dr: 0,
-        rd_dr: 0,
-    };
+    let mut clothing_dr = BaseDR::new();
     let mut clothing_pos = usize::MAX;
     let headgear: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Headgear).collect();
     let mut armored_limbs: Vec<BodyLocation> = vec![];
 
     if character.is_robot() {
         _armor = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::RobotArmor).collect();
-        let _modules = equipment.robot_modules.clone();
 
         if !headgear.is_empty() {
             let (_, hat) = headgear[0];
             character.robot_hat = Some(hat.clone());
         }
-        //handle robot modules at some point
+        //just equip the first three modules, if they even have that many
+        for i in 0..character.robot_modules.len().min(3) {
+            character.robot_modules[i].installed = true;
+        }
     } else {
         let outfits: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Outfit).collect();
         let clothing: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Clothing).collect();
@@ -229,6 +223,32 @@ pub fn equip_apparel(
     //background.equipment_changed = false;
 }
 
+pub fn equip_apparel(character: &mut Character) {
+    let equipped_apparel: Vec<&Apparel> = character.apparel.iter().filter(|a| a.equipped).collect();
+    for item in equipped_apparel {
+        let covered = item.covers.clone();
+        for loc in covered {
+            match loc {
+                BodyLocation::None => {},
+                BodyLocation::Head => character.limb_dr.head.equipped.push(item.clone()),
+                BodyLocation::ArmLeft => character.limb_dr.arm_left.equipped.push(item.clone()),
+                BodyLocation::ArmRight => character.limb_dr.arm_right.equipped.push(item.clone()),
+                BodyLocation::Torso => character.limb_dr.torso.equipped.push(item.clone()),
+                BodyLocation::LegLeft => character.limb_dr.leg_left.equipped.push(item.clone()),
+                BodyLocation::LegRight => character.limb_dr.leg_right.equipped.push(item.clone()),
+                BodyLocation::Optics => character.limb_dr.optics.equipped.push(item.clone()),
+                BodyLocation::Arm1 => character.limb_dr.arm_1.equipped.push(item.clone()),
+                BodyLocation::Arm2 => character.limb_dr.arm_2.equipped.push(item.clone()),
+                BodyLocation::Arm3 => character.limb_dr.arm_3.equipped.push(item.clone()),
+                BodyLocation::Body => character.limb_dr.body.equipped.push(item.clone()),
+                BodyLocation::Thruster => character.limb_dr.thruster.equipped.push(item.clone()),
+                BodyLocation::Wheel => character.limb_dr.wheel.equipped.push(item.clone()),
+            }
+        }
+    }
+    character.limb_dr.update_dr(character.base_dr.clone());
+}
+
 pub fn render_character_review(
     ui: &Ui,
     window: &Window,
@@ -247,7 +267,7 @@ pub fn render_character_review(
     ui.spacing();
 
     if !state.loaded {
-        equip_apparel(character, equipment, background);
+        equip_bg_apparel(character, equipment, background);
         state.loaded = true;
     }
     let Some(_scroll) = ui.child_window("##review_scroll")
@@ -322,7 +342,7 @@ pub fn render_character_review(
         }
     }
     let spacer = "             ";
-    ui.text_disabled(format!("{}{}{}{}{}   Luck Points:",spacer,spacer,spacer,spacer,spacer,));
+    ui.text_disabled(format!("{}{}{}{}{}    Luck Points:",spacer,spacer,spacer,spacer,spacer,));
     ui.same_line();
     ui.text(format!("{:2}/{:2}",character.luck_points,character.luck_points_max));
 
@@ -353,144 +373,12 @@ pub fn render_character_review(
     ui.spacing();
     ui.text_disabled("temporary display:");
 
-    let rad_dr = if character.is_mutant() || character.is_robot() {
-        99
-    } else {
-        let atom = if character.origin.clone().unwrap().id == 13 { 1 } else { 0 };
-        let rad_res = character.perk_ranks(73);
-        atom + rad_res
-    };
-
-    if character.limb_dr.head.active {
-        let mut ph: i32 = character.limb_dr.head.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.head.ph_dr;
-        let mut en: i32 = character.limb_dr.head.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.head.en_dr;
-        let mut rd: i32 = character.limb_dr.head.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.head.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.head.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "Head", ph, en, rd, worn.join(", ")));
-    };
-    if character.limb_dr.arm_left.active {
-        let mut ph: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.arm_left.ph_dr;
-        let mut en: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.arm_left.en_dr;
-        let mut rd: i32 = character.limb_dr.arm_left.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_left.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.arm_left.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_left", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.arm_right.active {
-        let mut ph: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.arm_right.ph_dr;
-        let mut en: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.arm_right.en_dr;
-        let mut rd: i32 = character.limb_dr.arm_right.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_right.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.arm_right.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_right", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.torso.active {
-        let mut ph: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.torso.ph_dr;
-        let mut en: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.torso.en_dr;
-        let mut rd: i32 = character.limb_dr.torso.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.torso.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.torso.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "torso", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.leg_left.active {
-        let mut ph: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.leg_left.ph_dr;
-        let mut en: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.leg_left.en_dr;
-        let mut rd: i32 = character.limb_dr.leg_left.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.leg_left.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.leg_left.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "leg_left", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.leg_right.active {
-        let mut ph: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.leg_right.ph_dr;
-        let mut en: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.leg_right.en_dr;
-        let mut rd: i32 = character.limb_dr.leg_right.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.leg_right.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.leg_right.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "leg_right", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.optics.active {
-        let mut ph: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.optics.ph_dr;
-        let mut en: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.optics.en_dr;
-        let mut rd: i32 = character.limb_dr.optics.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.optics.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.optics.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "optics", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.arm_1.active {
-        let mut ph: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.arm_1.ph_dr;
-        let mut en: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.arm_1.en_dr;
-        let mut rd: i32 = character.limb_dr.arm_1.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_1.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.arm_1.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_1", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.arm_2.active {
-        let mut ph: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.arm_2.ph_dr;
-        let mut en: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.arm_2.en_dr;
-        let mut rd: i32 = character.limb_dr.arm_2.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_2.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.arm_2.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_2", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.arm_3.active {
-        let mut ph: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.arm_3.ph_dr;
-        let mut en: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.arm_3.en_dr;
-        let mut rd: i32 = character.limb_dr.arm_3.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.arm_3.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.arm_3.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "arm_3", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.body.active {
-        let mut ph: i32 = character.limb_dr.body.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.body.ph_dr;
-        let mut en: i32 = character.limb_dr.body.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.body.en_dr;
-        let mut rd: i32 = character.limb_dr.body.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.body.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.body.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "body", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.thruster.active {
-        let mut ph: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.thruster.ph_dr;
-        let mut en: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.thruster.en_dr;
-        let mut rd: i32 = character.limb_dr.thruster.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.thruster.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.thruster.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "thruster", ph, en, rd, worn.join(", ")))
-    };
-    if character.limb_dr.wheel.active {
-        let mut ph: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.ph_dr).sum();
-        ph += character.limb_dr.wheel.ph_dr;
-        let mut en: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.en_dr).sum();
-        en += character.limb_dr.wheel.en_dr;
-        let mut rd: i32 = character.limb_dr.wheel.equipped.iter().map(|a| a.rd_dr).sum();
-        rd += character.limb_dr.wheel.rd_dr + rad_dr;
-        let worn: Vec<String> = character.limb_dr.wheel.equipped.iter().map(|a| a.name.clone()).collect();
-        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", "wheel", ph, en, rd, worn.join(", ")))
-    };
+    character.limb_dr.update_dr(character.base_dr.clone());
+    let active_limbs = character.limb_dr.mut_active_limbs();
+    for (limb, name) in active_limbs {
+        let worn: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
+        ui.text(format!("{:10} - P:{} E:{} R:{} - {}", name, limb.ph_dr, limb.en_dr, if limb.rd_dr < 99 {limb.rd_dr.to_string()} else {"Immune".to_string()}, worn.join(", ")));
+    }
 
     /*
     DR BLOCK
@@ -783,6 +671,7 @@ pub fn render_character_review(
 
     ui.columns(1,"##end_eq", false);
 
+    /*
     ui.separator();
     ui.separator();
     ui.text("DEBUG");
@@ -793,7 +682,7 @@ pub fn render_character_review(
     ui.text_wrapped(format!("{:?}", equipment));
     ui.separator();
     ui.text_wrapped(format!("{:?}", background));
-
+    */
     drop(_scroll);
     h
 }

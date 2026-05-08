@@ -16,14 +16,29 @@ use imgui::Ui;
 use anyhow::Result;
 
 use crate::{
-    character::{Character, Party, Player, PreRelease, Version}, config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db, screens::{
-        background_select::{BackgroundState, EquipmentState, render_background_select}, character_review::{ReviewState, render_character_review}, main_menu::render_main_menu, origin_select::{OriginState, render_origin_select}, perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select}, settings::render_settings, skill_assignment::{SkillState, render_skill_assignment}, special_assignment::{SpecialState, render_special_assignment}, stat_calculation::render_stat_calculation
+    character::{Character, Party, Player, PreRelease, Version},
+    config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db,
+    screens::{
+        background_select::{BackgroundState, EquipmentState, render_background_select},
+        character_review::{ReviewState, render_character_review},
+        main_menu::render_main_menu,
+        origin_select::{OriginState, render_origin_select},
+        perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select},
+        settings::render_settings,
+        skill_assignment::{SkillState, render_skill_assignment},
+        special_assignment::{SpecialState, render_special_assignment},
+        stat_calculation::render_stat_calculation,
+        character_sheet::render_character_sheet,
+        new_char_setup::{NewCharacterSetupState, render_new_character_setup},
+        load_character::{render_load_character, LoadCharacterState},
+        import_character::{render_import_character, ImportState},
     }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
     MainMenu,
+    NewCharSetup,
     Settings,
     LoadCharacter,
     ImportCharacter,
@@ -49,13 +64,13 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 
 const VERSION: Version = Version {
     major: 0,
-    minor: 1,
-    patch: 9,
+    minor: 2,
+    patch: 5,
     prerelease: PreRelease::Alpha,
-    prerelease_ver: 3,
+    prerelease_ver: 1,
 };
 
-const DATE: &str = "20260505";
+const DATE: &str = "20260508";
 
 pub fn screen_unlocked(
     screen: &AppScreen,
@@ -82,7 +97,7 @@ pub fn screen_unlocked(
 }
 
 //build a placeholder window
-fn render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
+fn _render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
     let (win_w, win_h) = window.size();
     let w = 500.0_f32;
     let h = 200.0_f32;
@@ -209,7 +224,8 @@ fn main() -> Result<()> {
     //let mut player = Player::new();
     let player = Player::new();
     //let mut party = Party::new();
-    let mut character = Character::new(player, None, VERSION);
+    let party = Party::new();
+    let mut character = Character::new(player, party, VERSION);
     //let mut party: Option<Party> = None;
     let _party: Option<Party> = None;
     let mut origin = OriginState::new(&db);
@@ -220,6 +236,11 @@ fn main() -> Result<()> {
     let mut background = BackgroundState::new(&db);
     let mut equipment = EquipmentState::new();
     let mut review = ReviewState::new();
+    let mut nc_setup = NewCharacterSetupState::new();
+    let mut pending_player_name: Option<String> = None;
+    let mut pending_party_name: Option<String> = None;
+    let mut load_character_state = LoadCharacterState::new();
+    let mut import_state = ImportState::new();
 
     //start the render loop
     'main: loop {
@@ -298,7 +319,7 @@ fn main() -> Result<()> {
             equipment: &mut EquipmentState,
             review: &mut ReviewState,
             db: &Db,
-            character: &Character,
+            character: &mut Character,
         ) {
             let current = screen.clone();
             //figure out which tab/screen we're on
@@ -330,6 +351,21 @@ fn main() -> Result<()> {
                     drop(c); drop(c2);
                 } else if ui.button("Next >") {
                     *screen = next_screen.clone();
+                }
+            } else if current == AppScreen::CharacterReview {
+                if ui.button("Finalize Character >") {
+                    character.weapons = equipment.weapons.clone();
+                    character.ammo = equipment.ammo.clone();
+                    character.apparel = equipment.apparel.clone();
+                    character.robot_modules = equipment.robot_modules.clone();
+                    character.consumables = equipment.consumables.clone();
+                    character.gear = equipment.gear.clone();
+                    character.junk = equipment.junk.clone();
+                    character.misc = equipment.misc.clone();
+                    match db.save_character(character) {
+                        Ok(_) => *screen = AppScreen::CharacterSheet,
+                        Err(e) => eprintln!("Failed to save character: {e}"),
+                    }
                 }
             }
         }
@@ -477,7 +513,12 @@ fn main() -> Result<()> {
 
         let _content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
-                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items);
+                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup, &mut load_character_state, &mut import_state);
+                0.0
+            }
+            AppScreen::NewCharSetup => {
+                render_new_character_setup(&ui, &window,&mut nc_setup, &mut screen, &db, &mut pending_player_name, &mut pending_party_name, &mut character,
+                );
                 0.0
             }
 /*--------*/AppScreen::OriginSelect => {
@@ -547,10 +588,7 @@ fn main() -> Result<()> {
                 render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen)
             }
 /*--------*/AppScreen::CharacterSheet => {
-                render_placeholder(&ui, &window, "sheet", &mut screen);
-                //let state = &mut special;
-                //let h = render_special_assignment(&ui, &window, state, &mut screen, &db, &mut character);
-                //render_nav_footer(ui, h, screen.clone(), &mut screen, &origin, special, skill, perk, background, &character);
+                render_character_sheet(&ui, &window, &db, &mut character, &mut screen);
                 0.0
             }
 /*--------*/AppScreen::Settings => {
@@ -558,11 +596,11 @@ fn main() -> Result<()> {
                 0.0
             }
 /*--------*/AppScreen::LoadCharacter => {
-                render_placeholder(&ui, &window, "load", &mut screen);
+                render_load_character(&ui, &window,&mut load_character_state, &mut screen, &db, &mut character);
                 0.0
             }
 /*--------*/AppScreen::ImportCharacter => {
-                render_placeholder(&ui, &window, "import", &mut screen);
+                render_import_character(&ui, &window, &mut import_state, &mut screen, &db);
                 0.0
             }
         };
@@ -580,7 +618,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character);
                 });
         }
 

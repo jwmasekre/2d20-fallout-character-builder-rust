@@ -2,7 +2,7 @@ use imgui::Ui;
 use sdl2::video::Window;
 use crate::AppScreen;
 use crate::db::Db;
-use crate::character::{Character, MutantType, RobotType, Origin, Trait, Special};
+use crate::character::{Character, RobotType, Origin, Trait};
 use crate::screens::skill_assignment::SkillState;
 use crate::screens::background_select::BackgroundState;
 use crate::theme::{render_text_wrapped, render_window};
@@ -66,24 +66,9 @@ impl OriginState {
         }
         //update the character origin
         character.origin = Some(active_origin);
-        //set mutant status
-        character.mutant = match selected_origin.id {
-            3 => MutantType::SuperMutant,
-            16 => MutantType::Nightkin,
-            _ => MutantType::None,
-        };
-        //set robot status
-        character.robot = match selected_origin.id {
-            4 => RobotType::Handy,
-            9 => RobotType::Protectron,
-            10 => RobotType::Robobrain,
-            11 => RobotType::Securitron,
-            12 => RobotType::Synth,
-            14 => RobotType::Assaultron,
-            _ => RobotType::None,
-        };
+        character.update_type();
         //update max special
-        Special::apply_max(character);
+        character.special.apply_max(&character.clone());
         //clear out any selected backgrounds
         background_state.reset_selection();
         //update limbs
@@ -159,6 +144,7 @@ impl OriginState {
                 skills[i].max = 4.min(skill_max);
             }
         }
+        character.calculate_xp();
     }
 }
 

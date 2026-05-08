@@ -165,6 +165,19 @@ pub struct PerkRow {
     pub sourcebook: String,
 }
 
+pub fn perk_description(desc: String) -> Vec<String> {
+    //at one point, i had the regex outside of this function, and holy shit did it just nuke performance. we only retrieve perks once, so we don't need to do this every frame lol 
+    //finds everything between each #: when multiple ranks 
+    let desc_reg_pattern = Regex::new(r"\d:\s+(.+?)(?=\s+\d:|$)").unwrap();//fancy-regex uses more error handling so this gets complicated
+    let desc_vec: Vec<String> = desc_reg_pattern.captures_iter(&desc).filter_map(|res| { match res {
+        Ok(caps) => {
+            caps.get(1).map(|m| m.as_str().trim().to_string())
+        }
+        _ => None,
+    }}).collect();
+    if desc_vec.len() > 0 {desc_vec} else {vec![desc]}
+}
+
 pub fn load_perks(db: &Db) -> Vec<PerkRow> {
     let result = db.block_on(async {
         sqlx::query!(
@@ -176,9 +189,6 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
             "#
         ).fetch_all(&db.pool).await
     });
-    //at one point, i had the regex outside of this function, and holy shit did it just nuke performance. we only retrieve perks once, so we don't need to do this every frame lol 
-    //finds everything between each #: when multiple ranks 
-    let desc_reg_pattern = Regex::new(r"\d:\s+(.+?)(?=\s+\d:|$)").unwrap();
     match result {
         Ok(rows) => rows.into_iter().map(|r| {
             let reqs: Vec<String> = r.reqs
@@ -189,18 +199,11 @@ pub fn load_perks(db: &Db) -> Vec<PerkRow> {
                 .as_deref()
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default();
-            //fancy-regex uses more error handling so this gets complicated
-            let desc_vec: Vec<String> = desc_reg_pattern.captures_iter(&r.description.clone().unwrap_or_default()).filter_map(|res| { match res {
-                Ok(caps) => {
-                    caps.get(1).map(|m| m.as_str().trim().to_string())
-                }
-                _ => None,
-            }}).collect();
             PerkRow {
                 id: r.id as i32,
                 name: r.name.unwrap_or_default(),
                 sourcebook: r.sourcebook.unwrap_or_default(),
-                description: if desc_vec.len() > 0 {desc_vec} else {vec![r.description.unwrap_or_default()]},
+                description: perk_description(r.description.unwrap_or_default()),
                 level_req: r.level_req.unwrap_or_default() as i32,
                 ranks: r.ranks.unwrap_or_default() as i32,
                 rank_range: r.rank_range.unwrap_or_default() as i32,
