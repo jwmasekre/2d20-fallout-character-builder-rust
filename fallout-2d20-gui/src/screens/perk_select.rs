@@ -485,6 +485,7 @@ pub fn render_perk_select(
                             character.perks.remove(i);
                         }
                         state.update(character);
+                        break
                     }
                 }
             }
