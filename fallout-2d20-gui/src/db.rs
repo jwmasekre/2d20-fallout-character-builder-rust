@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use crate::character::{AmmoInv, Character, Perk, Player, SkillBlock, SpecialBlock, TagType, WeaponMods, Party, Origin, Background, Special, Skills, Trait, Apparel, Weapon, AmmoData, Gear, Consumable, RobotModule, Version, resolve_prerelease, Skill, Limbs, MutantType, CompanionType, RobotType, MeleeModifiers, Junk, BaseDR};
 use crate::screens::perk_select::perk_description;
-use crate::screens::background_select::{resolve_apparel_type, resolve_consumable_type, resolve_apparel_covers, resolve_mod_effect, WeaponQuality, WeaponEffect, parse_damage_type, resolve_weapon_slot};
+use crate::screens::background_select::{resolve_apparel_type, resolve_consumable_type, resolve_apparel_covers, resolve_mod_effect, WeaponQuality, WeaponEffect, parse_damage_type, resolve_weapon_slot, load_mod_effect_async};
 use crate::screens::character_review::equip_apparel;
 
 pub struct Db {
@@ -898,7 +898,8 @@ impl Db {
                 for mrow in mod_rows {
                     mod_wgt = mrow.wgt.unwrap_or_default() as i32;
                     prefix += mrow.prefix.clone().unwrap_or_default().as_str();
-                    let weapon_mod_eff = resolve_mod_effect(self, mrow.effects, &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
+                    let name_set = load_mod_effect_async(&self.pool).await;
+                    let weapon_mod_eff = resolve_mod_effect(name_set, mrow.effects, &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
                     mods.push( WeaponMods {
                         slot: resolve_weapon_slot(mrow.slot.unwrap_or(0)),
                         installed: true,

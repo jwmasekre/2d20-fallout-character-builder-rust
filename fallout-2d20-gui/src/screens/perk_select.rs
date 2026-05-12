@@ -4,9 +4,11 @@ use serde_json;
 use fancy_regex::Regex;
 use crate::db::Db;
 use crate::AppScreen;
-use crate::screens::skill_assignment::SKILLS;
+use crate::screens::background_select::{BackgroundState, EquipmentState};
+use crate::screens::origin_select::OriginState;
+use crate::screens::skill_assignment::{SKILLS, SkillState};
 use crate::theme::{render_text_wrapped, render_window};
-use crate::screens::special_assignment::{SPECIAL_LABELS};
+use crate::screens::special_assignment::{SPECIAL_LABELS, SpecialState};
 use crate::character::{Character, CompanionType, TagType, Perk};
 //use crate::log_on_change;
 
@@ -38,6 +40,18 @@ impl PerkState {
             filters: [true; 8],
             pending_resolution: None,
         }
+    }
+    pub fn reset(&mut self, character: &Character) {
+        let taken_count: i32 = character.perks.iter().map(|p| p.ranks).sum();
+        let perk_lim = character.level + if character.has_trait(10) { 1 } else { 0 };
+        self.taken_count = taken_count;
+        self.perk_lim = perk_lim;
+        self.show_eligible_only = false;
+        self.show_taken = true;
+        self.show_taken_only = false;
+        self.show_flagged_only = false;
+        self.filters = [true; 8];
+        self.pending_resolution = None;
     }
     pub fn is_complete(&self) -> bool {
         self.perk_lim == self.taken_count
@@ -282,8 +296,13 @@ pub fn render_perk_select(
     _db: &Db,
     character: &mut Character,
     resolving: bool,
+    origin_state: &mut OriginState,
+    skill_state: &mut SkillState,
+    special_state: &mut SpecialState,
+    background_state: &mut BackgroundState,
+    equipment_state: &mut EquipmentState,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select", screen)
+    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select", screen, origin_state, special_state, skill_state, state, background_state, equipment_state, character)
         else { return 0.0 };
 
     ui.text("PERKS");

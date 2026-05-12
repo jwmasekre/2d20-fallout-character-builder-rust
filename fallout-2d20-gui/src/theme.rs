@@ -1,7 +1,7 @@
 use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
 
-use crate::{AppScreen, crt::CrtEffect};
+use crate::{AppScreen, character::Character, crt::CrtEffect, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::SkillState, special_assignment::SpecialState}};
 
 pub struct Theme {
     pub name: &'static str,
@@ -187,6 +187,13 @@ pub fn render_window<'ui>(
     label: &str,
     title: &str,
     screen: &mut AppScreen,
+    origin: &mut OriginState,
+    special: &mut SpecialState,
+    skill: &mut SkillState,
+    perk: &mut PerkState,
+    background: &mut BackgroundState,
+    equipment: &mut EquipmentState,
+    character: &mut Character,
 ) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
     let bar_h = BAR_HEIGHT;
@@ -210,6 +217,13 @@ pub fn render_window<'ui>(
     ui.text(title);
     ui.same_line_with_pos(close_x);
     if ui.button(format!("X##{}_close", title)) {
+        character.reset();
+        origin.reset();
+        special.reset();
+        skill.reset(character);
+        perk.reset(character);
+        background.reset();
+        equipment.reset();
         *screen = AppScreen::MainMenu;
     }
     ui.separator();

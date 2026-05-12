@@ -143,6 +143,47 @@ impl Character {
             notes: String::new(),
         }
     }
+    pub fn reset(&mut self){
+        self.id = Uuid::now_v7();
+        self.name = String::new();
+        self.level = 1;
+        self.xp = 0;
+        self.xp_next = 100;
+        self.origin = None;
+        self.background = None;
+        self.traits = vec![];
+        self.ghoul = false;
+        self.mutant = MutantType::None;
+        self.robot = RobotType::None;
+        self.companion = CompanionType::None;
+        self.robot_hat = None;
+        self.special = Special::new();
+        self.luck_points = 5;
+        self.luck_points_max = 5;
+        self.rad_points = 0;
+        self.skills = Skills::new();
+        self.perks = vec![];
+        self.flagged_perks = vec![];
+        self.melee_mod = MeleeModifiers::new();
+        self.defense = 0;
+        self.initiative = 10;
+        self.hp = 10;
+        self.hp_max = 10;
+        self.base_dr = BaseDR::new();
+        self.poison_dr = 0;
+        self.limb_dr = Limbs::new();
+        self.weapons = vec![];
+        self.ammo = vec![];
+        self.apparel = vec![];
+        self.robot_modules = vec![];
+        self.consumables = vec![];
+        self.gear = vec![];
+        self.junk = Junk::new();
+        self.misc = vec![];
+        self.carry_wgt = 0;
+        self.carry_wgt_max = 200;
+        self.notes = String::new();
+    }
     pub fn is_gifted(&self) -> bool {
         self.has_trait(7)
     }

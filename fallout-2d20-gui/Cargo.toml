@@ -1,6 +1,6 @@
 [package]
 name = "fallout-2d20-gui"
-version = "0.1.9"
+version = "0.2.5"
 edition = "2024"
 
 [dependencies]

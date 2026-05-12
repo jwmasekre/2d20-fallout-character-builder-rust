@@ -1,6 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, db::Db, character::Character};
+use crate::{AppScreen, character::Character, db::Db, screens::character_sheet::SheetState};
 
 pub struct LoadCharacterState {
     pub characters: Vec<(String, String, String)>, // (id, name, player_name)
@@ -53,6 +53,7 @@ pub fn render_load_character(
     screen: &mut AppScreen,
     db: &Db,
     character: &mut Character,
+    sheet_state: &mut SheetState,
 ) {
     state.load_list(db);
 
@@ -119,6 +120,7 @@ pub fn render_load_character(
                         Ok(loaded) => {
                             *character = loaded;
                             state.error = None;
+                            sheet_state.new_character(character);
                             *screen = AppScreen::CharacterSheet;
                         }
                         Err(e) => {

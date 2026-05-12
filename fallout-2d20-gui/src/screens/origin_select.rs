@@ -3,8 +3,10 @@ use sdl2::video::Window;
 use crate::AppScreen;
 use crate::db::Db;
 use crate::character::{Character, RobotType, Origin, Trait};
+use crate::screens::perk_select::PerkState;
 use crate::screens::skill_assignment::SkillState;
-use crate::screens::background_select::BackgroundState;
+use crate::screens::background_select::{BackgroundState, EquipmentState};
+use crate::screens::special_assignment::SpecialState;
 use crate::theme::{render_text_wrapped, render_window};
 //use crate::log_on_change;
 
@@ -35,6 +37,14 @@ impl OriginState {
             traits: vec![],
             _ghoul_trait: None,
         }
+    }
+    pub fn reset(&mut self) {
+        self.selected = false;
+        self.trait_count = 0;
+        self.origin_trait_count = 0;
+        self.origin_index = usize::MAX;
+        self.traits = vec![];
+        self._ghoul_trait = None;
     }
     pub fn is_complete(&self) -> bool {//do we need to be checking the character to make sure that's good to go too?
         self.selected && (self.trait_count == self.origin_trait_count)
@@ -273,11 +283,14 @@ pub fn render_origin_select(
     state: &mut OriginState,
     db: &Db,
     character: &mut Character,
+    special_state: &mut SpecialState,
     skill_state: &mut SkillState,
+    perk_state: &mut PerkState,
     background_state: &mut BackgroundState,
+    equipment_state: &mut EquipmentState,
     screen: &mut AppScreen,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select", screen)
+    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select", screen, state, special_state, skill_state, perk_state, background_state, equipment_state, character)
         else { return 0.0 };
     ui.text("ORIGIN");
     ui.separator();
