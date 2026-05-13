@@ -28,7 +28,7 @@ use crate::{
         skill_assignment::{SkillState, render_skill_assignment},
         special_assignment::{SpecialState, render_special_assignment},
         stat_calculation::render_stat_calculation,
-        character_sheet::render_character_sheet,
+        character_sheet::{render_character_sheet, SheetState},
         new_char_setup::{NewCharacterSetupState, render_new_character_setup},
         load_character::{render_load_character, LoadCharacterState},
         import_character::{render_import_character, ImportState},
@@ -64,8 +64,8 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 
 const VERSION: Version = Version {
     major: 0,
-    minor: 2,
-    patch: 5,
+    minor: 3,
+    patch: 0,
     prerelease: PreRelease::Alpha,
     prerelease_ver: 1,
 };
@@ -241,6 +241,7 @@ fn main() -> Result<()> {
     let mut pending_party_name: Option<String> = None;
     let mut load_character_state = LoadCharacterState::new();
     let mut import_state = ImportState::new();
+    let mut sheet_state = SheetState::new();
 
     //start the render loop
     'main: loop {
@@ -320,6 +321,7 @@ fn main() -> Result<()> {
             review: &mut ReviewState,
             db: &Db,
             character: &mut Character,
+            sheet: &mut SheetState,
         ) {
             let current = screen.clone();
             //figure out which tab/screen we're on
@@ -362,6 +364,7 @@ fn main() -> Result<()> {
                     character.gear = equipment.gear.clone();
                     character.junk = equipment.junk.clone();
                     character.misc = equipment.misc.clone();
+                    sheet.new_character(character);
                     match db.save_character(character) {
                         Ok(_) => *screen = AppScreen::CharacterSheet,
                         Err(e) => eprintln!("Failed to save character: {e}"),
@@ -523,21 +526,21 @@ fn main() -> Result<()> {
             }
 /*--------*/AppScreen::OriginSelect => {
                 let state = &mut origin;
-                render_origin_select(&ui, &window, state, &db, &mut character, &mut skill, &mut background, &mut screen)
+                render_origin_select(&ui, &window, state, &db, &mut character, &mut special, &mut skill, &mut perk, &mut background, &mut equipment, &mut screen,)
             }
 /*--------*/AppScreen::SpecialAssignment => {
                 //let state = &mut special.update(&character);
                 let state = &mut special;
-                render_special_assignment(&ui, &window, state, &db, &mut character, &mut screen)
+                render_special_assignment(&ui, &window, state, &db, &mut character, &mut screen, &mut origin, &mut skill, &mut perk, &mut background, &mut equipment)
             }
 /*--------*/AppScreen::SkillAssignment => {
                 skill.update(&character);
                 let state = &mut skill;
-                render_skill_assignment(&ui, &window, state, &db, &mut character, &mut screen)
+                render_skill_assignment(&ui, &window, state, &db, &mut character, &mut screen, &mut origin, &mut special, &mut perk, &mut background, &mut equipment)
             }
 /*--------*/AppScreen::PerkSelect => {
                 let state = &mut perk;
-                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character, perk_resolution.is_some());
+                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character, perk_resolution.is_some(), &mut origin, &mut skill, &mut special, &mut background, &mut equipment);
                 //resolution popup
                 if let Some((p_id, add, name)) = state.pending_resolution.take() {
                     let perk = state.perks.iter().find(|p| p.id == p_id).unwrap();
@@ -577,18 +580,18 @@ fn main() -> Result<()> {
                 h
             }
 /*--------*/AppScreen::StatCalculation => {
-                render_stat_calculation(&ui, &window, &special, &skill, &mut character, &mut screen)
+                render_stat_calculation(&ui, &window, &mut special, &mut skill, &mut character, &mut screen, &mut origin, &mut perk, &mut background, &mut equipment)
             }
 /*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review, &mut screen)
+                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review, &mut screen, &mut origin, &mut special, &mut skill, &mut perk)
             }
 /*--------*/AppScreen::CharacterReview => {
                 let state = &mut review;
-                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen)
+                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen, &mut origin, &mut special, &mut skill, &mut perk)
             }
 /*--------*/AppScreen::CharacterSheet => {
-                render_character_sheet(&ui, &window, &db, &mut character, &mut screen);
+                render_character_sheet(&ui, &window, &db, &mut character, &mut screen, &mut sheet_state, &mut origin, &mut special, &mut skill, &mut perk, &mut background, &mut equipment);
                 0.0
             }
 /*--------*/AppScreen::Settings => {
@@ -596,7 +599,7 @@ fn main() -> Result<()> {
                 0.0
             }
 /*--------*/AppScreen::LoadCharacter => {
-                render_load_character(&ui, &window,&mut load_character_state, &mut screen, &db, &mut character);
+                render_load_character(&ui, &window,&mut load_character_state, &mut screen, &db, &mut character, &mut sheet_state);
                 0.0
             }
 /*--------*/AppScreen::ImportCharacter => {
@@ -618,7 +621,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character);
+                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character, &mut sheet_state);
                 });
         }
 

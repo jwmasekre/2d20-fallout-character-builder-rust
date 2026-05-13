@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use crate::character::{AmmoInv, Character, Perk, Player, SkillBlock, SpecialBlock, TagType, WeaponMods, Party, Origin, Background, Special, Skills, Trait, Apparel, Weapon, AmmoData, Gear, Consumable, RobotModule, Version, resolve_prerelease, Skill, Limbs, MutantType, CompanionType, RobotType, MeleeModifiers, Junk, BaseDR};
 use crate::screens::perk_select::perk_description;
-use crate::screens::background_select::{resolve_apparel_type, resolve_consumable_type, resolve_apparel_covers, resolve_mod_effect, WeaponQuality, WeaponEffect, parse_damage_type, resolve_weapon_slot};
+use crate::screens::background_select::{resolve_apparel_type, resolve_consumable_type, resolve_apparel_covers, resolve_mod_effect, WeaponQuality, WeaponEffect, parse_damage_type, resolve_weapon_slot, load_mod_effect_async};
 use crate::screens::character_review::equip_apparel;
 
 pub struct Db {
@@ -61,6 +61,46 @@ impl Db {
                 .execute(&self.pool).await
         }).ok();
         uid
+    }
+    pub fn delete_character(&self, id: &str) -> anyhow::Result<()> {
+        self.block_on(async {
+            let mut tx = self.pool.begin().await?;
+            sqlx::query!("DELETE FROM character_perks WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM flagged_perks WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM perk_options WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_traits WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_apparel WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;            
+            sqlx::query!("DELETE FROM character_weapon_mods WHERE character_weapon_id IN (SELECT id FROM character_weapons WHERE character_id = ?)", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_weapons WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_ammo WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_gear WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_consumables WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_robot_modules WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM party_membership WHERE character_id = ?", id)
+                .execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_skills_skilled WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_tags_perk WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_tags_trait WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_tags WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_skills WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_special_training WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_special_gifted WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM character_special WHERE character_id = ?", id).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM characters WHERE id = ?", id).execute(&mut *tx).await?;
+            tx.commit().await?;
+            Ok(())
+        })
     }
     pub fn save_character(&self, character: &Character) -> anyhow::Result<()> {
         let id = character.id.to_string();
@@ -789,13 +829,13 @@ impl Db {
                 let apparel_id = row.id as i32;
                 let cover_list: Vec<i64> = sqlx::query!(
                     r#"SELECT
-                        ac.id as cid
+                        ac.location_id as cid
                     FROM apparel_covers ac
                     WHERE ac.apparel_id = ?
                     "#,
                     apparel_id
                 ).fetch_all(&self.pool).await
-                    .map_err(|e| sqlx::Error::Protocol(format!("load covers: {e}"))).unwrap_or_default().iter().map(|c| c.cid).collect();
+                    .map_err(|e| sqlx::Error::Protocol(format!("load covers: {e}"))).unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
                 let covers = resolve_apparel_covers(cover_list);
                 apparel.push(Apparel {
                     id: apparel_id,
@@ -898,7 +938,8 @@ impl Db {
                 for mrow in mod_rows {
                     mod_wgt = mrow.wgt.unwrap_or_default() as i32;
                     prefix += mrow.prefix.clone().unwrap_or_default().as_str();
-                    let weapon_mod_eff = resolve_mod_effect(self, mrow.effects, &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
+                    let name_set = load_mod_effect_async(&self.pool).await;
+                    let weapon_mod_eff = resolve_mod_effect(name_set, mrow.effects, &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
                     mods.push( WeaponMods {
                         slot: resolve_weapon_slot(mrow.slot.unwrap_or(0)),
                         installed: true,

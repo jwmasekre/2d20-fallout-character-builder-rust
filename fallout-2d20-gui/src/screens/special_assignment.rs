@@ -5,6 +5,10 @@ use sdl2::video::Window;
 use crate::AppScreen;
 use crate::db::Db;
 use crate::character::Character;
+use crate::screens::background_select::{BackgroundState, EquipmentState};
+use crate::screens::origin_select::OriginState;
+use crate::screens::perk_select::PerkState;
+use crate::screens::skill_assignment::SkillState;
 use crate::theme::{render_text_wrapped, render_window};
 //use crate::log_on_change;
 
@@ -72,6 +76,18 @@ impl SpecialState {
             total: 35,
         }
     }
+    pub fn reset(&mut self) {
+        self.selected_array = SpecialArray::None;
+        self.assignments = [None; 7];
+        self.values = [5; 7];
+        self.can_inc = [true; 7];
+        self.can_dec = [true; 7];
+        self.gifted = false;
+        self.gifted_count = 0;
+        self.trained = 0;
+        self.trained_count = 0;
+        self.total = 35;
+    }
     pub fn update(&mut self, character: &Character) {
         self.total = character.special.special_block().iter().map(|s| s.value).sum();
         self.selected_array = self.selected_array;
@@ -114,8 +130,13 @@ pub fn render_special_assignment(
     _db: &Db,
     character: &mut Character,
     screen: &mut AppScreen,
+    origin_state: &mut OriginState,
+    skill_state: &mut SkillState,
+    perk_state: &mut PerkState,
+    background_state: &mut BackgroundState,
+    equipment_state: &mut EquipmentState,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment", screen)
+    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment", screen, origin_state, state, skill_state, perk_state, background_state, equipment_state, character)
         else { return 0.0 };
 
     ui.text("SPECIAL");

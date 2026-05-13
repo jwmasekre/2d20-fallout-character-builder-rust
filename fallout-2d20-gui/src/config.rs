@@ -58,7 +58,6 @@ fn config_path() -> PathBuf {
     //just lets us have a persistent config when runing under cargo
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let path = PathBuf::from(manifest_dir).join(CONFIG_FILE);
-        //println!("running under cargo: {:?}", path);
         return path;
     }
     if let Ok(mut exe) = std::env::current_exe() {

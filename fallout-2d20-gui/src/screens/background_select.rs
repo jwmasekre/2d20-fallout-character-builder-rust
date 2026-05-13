@@ -1,7 +1,8 @@
-use crate::{AppScreen, character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, screens::character_review::ReviewState, theme::render_window};
+use crate::{AppScreen, character::{AmmoData, AmmoInv, Apparel, ApparelType, Background, BodyLocation, Character, Consumable, ConsumableType, DamageType, Gear, Junk, RobotModule, Skill, Weapon, WeaponMods, WeaponSlot}, db::Db, screens::{character_review::ReviewState, origin_select::OriginState, perk_select::PerkState, skill_assignment::SkillState, special_assignment::SpecialState}, theme::render_window};
 use std::collections::{HashMap, HashSet};
 use imgui::Ui;
 use sdl2::video::Window;
+use sqlx::SqlitePool;
 //use rand::rng;
 
 //db structs
@@ -295,6 +296,21 @@ impl EffectNameSets {
                 .collect(),
         }
     }
+    pub async fn load_async(pool: &SqlitePool) -> Self {
+        let effects = sqlx::query!("SELECT name FROM dam_effects").fetch_all(pool).await.unwrap_or_default();
+        let qualities = sqlx::query!("SELECT name FROM qualities").fetch_all(pool).await.unwrap_or_default();
+        //this needs to be adjusted to handle X effects/qualities
+        Self {
+            effect_names: effects.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+            quality_names: qualities.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+        }
+    }
     pub fn qual_not_eff(&self, name: &str) -> Option<bool> {
         let mut res = self.quality_names.contains(&name.to_lowercase());
         if res { return Some(res) } else {
@@ -328,6 +344,15 @@ impl BackgroundState {
             robot_module_selections: vec![],
             equipment_changed: false,
         }
+    }
+    pub fn reset(&mut self) {
+        self.selected_index = None;
+        self.current_background = None;
+        self.weapon_selections = vec![];
+        self.apparel_selections = vec![];
+        self.consumable_selections = vec![];
+        self.robot_module_selections = vec![];
+        self.equipment_changed = false;
     }
     fn origin_backgrounds(&self, character: Character) -> Vec<(usize, &BackgroundRow)> {
         self.all_backgrounds.iter()
@@ -399,6 +424,20 @@ impl EquipmentState {
             },
             misc: vec![],
         }
+    }
+    pub fn reset(&mut self) {
+        self.weapons = vec![];
+        self.ammo = vec![];
+        self.apparel = vec![];
+        self.robot_modules = vec![];
+        self.consumables = vec![];
+        self.gear = vec![];
+        self.junk = Junk {
+            common: 0,
+            uncommon: 0,
+            rare: 0,
+        };
+        self.misc = vec![];
     }
     pub fn load(&mut self, db: &Db, state: &BackgroundState, character: &Character) {
         if state.current_background.is_some() {
@@ -792,7 +831,8 @@ fn resolve_weapons(
         let tag = tags[skill_index];
         let target = skill_total + spec_value;
 
-        let weapon_mod_eff = resolve_mod_effect(db,row.mod_effects.clone(), &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
+        let name_set = load_mod_effect(db);
+        let weapon_mod_eff = resolve_mod_effect(name_set,row.mod_effects.clone(), &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
 
         let mut weapon_mods: Vec<WeaponMods> = vec![];
         weapon_mods.push(WeaponMods {
@@ -871,9 +911,17 @@ pub fn resolve_weapon_slot(slot: i64) -> WeaponSlot {
     }
 }
 
-pub fn resolve_mod_effect(db: &Db, eff: Option<String>, damage: &mut i32, rate: &mut i32, range: &mut String, effects: &mut Vec<WeaponEffect>, qualities: &mut Vec<WeaponQuality>, dam_type: &mut DamageType) -> ModEffectList {
+pub fn load_mod_effect(db: &Db) -> EffectNameSets {
+    EffectNameSets::load(db)
+}
+
+pub async fn load_mod_effect_async(pool: &SqlitePool) -> EffectNameSets {
+    EffectNameSets::load_async(pool).await
+}
+    
+pub fn resolve_mod_effect(name_set: EffectNameSets, eff: Option<String>, damage: &mut i32, rate: &mut i32, range: &mut String, effects: &mut Vec<WeaponEffect>, qualities: &mut Vec<WeaponQuality>, dam_type: &mut DamageType) -> ModEffectList {
     let ranges = ["R","C","M","L","X"];
-    let names = EffectNameSets::load(db);
+
     let mut weapon_mod_eff = ModEffectList::new();
     if let Some(mod_fx_json) = &eff {
         if let Ok(fx_strings) = serde_json::from_str::<Vec<String>>(mod_fx_json) {
@@ -920,10 +968,10 @@ pub fn resolve_mod_effect(db: &Db, eff: Option<String>, damage: &mut i32, rate: 
                         weapon_mod_eff.rng_sub = 1;
                     }
                     ModEffect::Gain(name, val) => {
-                        apply_gain(effects, qualities, &name, val, &names, &mut weapon_mod_eff);
+                        apply_gain(effects, qualities, &name, val, &name_set, &mut weapon_mod_eff);
                     }
                     ModEffect::Lose(name, val) => {
-                        apply_lose(effects, qualities, &name, val, &names, &mut weapon_mod_eff);
+                        apply_lose(effects, qualities, &name, val, &name_set, &mut weapon_mod_eff);
                     }
                     ModEffect::SetDamageType(dt) => {
                         *dam_type = dt.clone();
@@ -1005,13 +1053,13 @@ fn resolve_apparel(
         let cover_list: Vec<i64> = db.block_on(async {
             sqlx::query!(
                 r#"SELECT
-                    ac.id AS cid
+                    ac.location_id AS cid
                 FROM apparel_covers ac
                 WHERE ac.apparel_id = ?
                 "#,
                 apparel_id
             ).fetch_all(&db.pool).await
-        }).unwrap_or_default().iter().map(|c| c.cid).collect();
+        }).unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
         let covers = resolve_apparel_covers(cover_list);
         let effects = vec![row.effs.unwrap_or("".to_string())];
 
@@ -2083,8 +2131,12 @@ pub fn render_background_select(
     character: &mut Character,
     _review: &mut ReviewState,
     screen: &mut AppScreen,
+    origin: &mut OriginState,
+    special: &mut SpecialState,
+    skill: &mut SkillState,
+    perk: &mut PerkState,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select", screen)
+    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select", screen, origin, special, skill, perk, state, equipment, character)
         else { return 0.0 };
 
     ui.text("BACKGROUND");
@@ -2110,7 +2162,7 @@ pub fn render_background_select(
                 if state.selected_index != Some(*i) {
                     state.load_background(db, *i);
                     character.background = Some(Background {
-                        id: *i as i32,
+                        id: (*i + 1) as i32,
                         name: state.current_background.clone().unwrap().name,
                         desc: state.current_background.clone().unwrap().desc,
                     });

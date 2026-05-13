@@ -1,6 +1,6 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, character::{Character}, screens::{skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
+use crate::{AppScreen, character::Character, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
 
 pub fn get_staggered_bonus(val: i32) -> i32 {
     match val {
@@ -47,12 +47,16 @@ pub fn compute_stats(character: &mut Character) -> bool {
 pub fn render_stat_calculation(
     ui: &Ui,
     window: &Window,
-    special: &SpecialState,
-    skill: &SkillState,
+    special: &mut SpecialState,
+    skill: &mut SkillState,
     character: &mut Character,
     screen: &mut AppScreen,
+    origin: &mut OriginState,
+    perk: &mut PerkState,
+    background: &mut BackgroundState,
+    equipment: &mut EquipmentState,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen)
+    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen, origin, special, skill, perk, background, equipment, character)
         else { return 0.0 };
 
     let nocturnal = compute_stats(character);

@@ -3,6 +3,10 @@ use sdl2::video::Window;
 use crate::AppScreen;
 use crate::db::Db;
 use crate::character::{Character, TagType};
+use crate::screens::background_select::{BackgroundState, EquipmentState};
+use crate::screens::origin_select::OriginState;
+use crate::screens::perk_select::PerkState;
+use crate::screens::special_assignment::SpecialState;
 use crate::theme::{render_text_wrapped, render_window};
 //use crate::log_on_change;
 
@@ -128,8 +132,13 @@ pub fn render_skill_assignment(
     _db: &Db, //leaving this here so i can pull in the skill descriptions eventually
     character: &mut Character,
     screen: &mut AppScreen,
+    origin_state: &mut OriginState,
+    special_state: &mut SpecialState,
+    perk_state: &mut PerkState,
+    background_state: &mut BackgroundState,
+    equipment_state: &mut EquipmentState,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen)
+    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen, origin_state, special_state, state, perk_state, background_state, equipment_state, character)
         else { return 0.0 };
 
     ui.text("SKILLS");
