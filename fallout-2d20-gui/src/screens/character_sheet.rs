@@ -5,11 +5,11 @@ use std::path::Path;
 use anyhow::Result;
 use crate::{
     AppScreen,
-    character::{Character, RobotType},
+    character::{Apparel, ApparelType, BodyLocation, Character, RobotType},
     db::Db,
     log_on_change,
     screens::{
-        background_select::{BackgroundState, EquipmentState}, character_review::{render_inventory, render_weapons}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str
+        background_select::{BackgroundState, EquipmentState}, character_review::{equip_apparel, render_inventory, render_weapons}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str
     },
     theme::render_window
 };
@@ -61,6 +61,96 @@ pub fn sanitize_filename(name: &str) -> String {
     } else {
         sanitized
     }
+}
+
+pub fn toggle_apparel(character: &mut Character, apparel_id: i32) {
+    let Some(index) = character.apparel.iter().position(|a| a.id == apparel_id) else { return };
+    let item = character.apparel[index].clone();
+    if item.equipped {
+        character.apparel[index].equipped = false;
+    } else {
+        match item.apparel_type {
+            ApparelType::RobotArmor => {
+                if !character.is_robot() { return; }
+            }
+            _ => {
+                if character.is_robot() { return; }
+            }
+        }
+        for loc in &item.covers {
+            if *loc == BodyLocation::None { continue; }
+            let currently_equipped: Vec<&Apparel> = character.apparel.iter()
+                .filter(|a| a.equipped && a.id != apparel_id && a.covers.contains(loc))
+                .collect();
+            //check if the action would be blocked
+            for blocking in &currently_equipped {
+                match (&item.apparel_type, &blocking.apparel_type) {
+                    (_, ApparelType::Outfit) => return,
+                    (ApparelType::Outfit, _) => {},
+                    (ApparelType::Clothing, ApparelType::Clothing) => return,
+                    (ApparelType::Armor, ApparelType::Armor) => return,
+                    (ApparelType::RobotArmor, ApparelType::RobotArmor) => return,
+                    _ => {}
+                }
+            }
+        }
+        if item.apparel_type == ApparelType::Outfit {
+            let covered = item.covers.clone();
+            for a in character.apparel.iter_mut() {
+                if a.id == apparel_id { continue }
+                if a.covers.iter().any(|loc| covered.contains(loc)) {
+                    a.equipped = false;
+                }
+            }
+        }
+        if item.apparel_type == ApparelType::Clothing {
+            for a in character.apparel.iter_mut() {
+                if a.id == apparel_id { continue; }
+                if ApparelType::Clothing == a.apparel_type || ApparelType::Outfit == a.apparel_type {
+                    a.equipped = false;
+                }
+            }
+        }
+        character.apparel[index].equipped = true;
+    }
+    for limb in character.limb_dr.mut_active_limbs().iter_mut() {
+        limb.0.equipped.clear();
+    }
+    equip_apparel(character);
+}
+
+#[derive(Debug)]
+pub enum EquipBlock {
+    Free,
+    WouldBlock(String)
+}
+pub fn can_equip(character: &Character, apparel_id: i32) -> EquipBlock {
+    let Some(item) = character.apparel.iter().find(|a| a.id == apparel_id) else {
+        return EquipBlock::WouldBlock("item not found".into());
+    };
+    if item.equipped { return EquipBlock::Free }
+    match item.apparel_type {
+        ApparelType::RobotArmor if !character.is_robot() => return EquipBlock::WouldBlock("only robots can wear robot armor".into()),
+        ApparelType::Clothing | ApparelType::Headgear | ApparelType::Outfit | ApparelType::Armor if character.is_robot() => return EquipBlock::WouldBlock("robots cannot wear clothing, outfits, or standard armor".into()),
+        _ => {}
+    }
+    for loc in &item.covers {
+        if *loc == BodyLocation::None { continue; }
+        for blocking in character.apparel.iter().filter(|a| a.equipped && a.id != apparel_id && a.covers.contains(loc)) {
+            match (&item.apparel_type, &blocking.apparel_type) {
+                (_, ApparelType::Outfit) =>
+                    return EquipBlock::WouldBlock(format!("{} covers that location", blocking.name)),
+                (ApparelType::Clothing, ApparelType::Clothing) =>
+                    return EquipBlock::WouldBlock(format!("{} already equipped", blocking.name)),
+                (ApparelType::Armor, ApparelType::Armor) =>
+                    return EquipBlock::WouldBlock(format!("{} already on that limb", blocking.name)),
+                (ApparelType::RobotArmor, ApparelType::RobotArmor) =>
+                    return EquipBlock::WouldBlock(format!("{} already on that limb", blocking.name)),
+                _ => {}
+            }
+        }
+    }
+    EquipBlock::Free
 }
 
 pub fn render_expandable_block(
@@ -491,7 +581,7 @@ pub fn render_character_sheet(
     }
     if a2_eq.is_some() {
         ui.set_cursor_pos([a2_p1[0] + (block_w - a2_eq_size.unwrap()[0]) / 2.0, a2_p1[1] + new_line * 2.0]);
-        ui.text(a2_eq.unwrap());
+        ui.text_disabled(a2_eq.unwrap());
     }
     ui.set_cursor_pos([a3_p1[0] + (block_w - a3_size[0]) / 2.0, a3_p1[1]]);
     ui.text(a3_str);
@@ -504,7 +594,7 @@ pub fn render_character_sheet(
     ui.set_cursor_pos([body_p1[0] + (block_w - body_dr_size[0]) / 2.0, body_p1[1] + new_line]);
     ui.text(body_dr);
     ui.set_cursor_pos([body_p1[0] + (block_w - body_eq_size[0]) / 2.0, body_p1[1] + new_line * 2.0]);
-    ui.text(body_eq);
+    ui.text_disabled(body_eq);
     if l1_str.is_some() {
         ui.set_cursor_pos([l1_p1[0] + (block_w - l1_size.unwrap()[0]) / 2.0, l1_p1[1]]);
         ui.text(l1_str.unwrap());
@@ -515,7 +605,7 @@ pub fn render_character_sheet(
     }
     if l1_eq.is_some() {
         ui.set_cursor_pos([l1_p1[0] + (block_w - l1_eq_size.unwrap()[0]) / 2.0, l1_p1[1] + new_line * 2.0]);
-        ui.text(l1_eq.unwrap());
+        ui.text_disabled(l1_eq.unwrap());
     }
     if l2_str.is_some() {
         ui.set_cursor_pos([l2_p1[0] + (block_w - l2_size.unwrap()[0]) / 2.0, l2_p1[1]]);
@@ -527,7 +617,7 @@ pub fn render_character_sheet(
     }
     if l2_eq.is_some() {
         ui.set_cursor_pos([l2_p1[0] + (block_w - l2_eq_size.unwrap()[0]) / 2.0, l2_p1[1] + new_line * 2.0]);
-        ui.text(l2_eq.unwrap());
+        ui.text_disabled(l2_eq.unwrap());
     }
     if l3_str.is_some() {
         ui.set_cursor_pos([l3_p1[0] + (block_w - l3_size.unwrap()[0]) / 2.0, l3_p1[1]]);
@@ -539,7 +629,7 @@ pub fn render_character_sheet(
     }
     if l3_eq.is_some() {
         ui.set_cursor_pos([l3_p1[0] + (block_w - l3_eq_size.unwrap()[0]) / 2.0, l3_p1[1] + new_line * 2.0]);
-        ui.text(l3_eq.unwrap());
+        ui.text_disabled(l3_eq.unwrap());
     }
 
     /*
@@ -591,137 +681,161 @@ pub fn render_character_sheet(
     let t_padding = 16.0_f32;
     let t_block_w = w - t_padding * 2.0 - 300.0;
     let t_gap = 8.0_f32;
-    let t_col_w = (t_block_w - t_gap) / 2.0;
+    let p_col_w = (t_block_w - t_gap) / 2.0;
+    let t_col_w = if character.traits.len() > 1 { p_col_w } else { t_block_w };
     let t_collapse_h = 44.0_f32;
     let t_expanded_h = 160.0_f32;
 
     let trait_h = if state.traits_expanded { t_expanded_h } else { t_collapse_h };
 
     ui.set_cursor_pos([inv_cursor[0] + t_padding + 300.0, inv_cursor[1]]);
-    ui.child_window("##t_block")
-        .size([t_block_w, trait_h])
-        .border(false)
-        .build(|| {
-            render_expandable_block(
-                ui,
-                "##t1_col",
-                t_col_w,
-                trait_h,
-                &mut state.traits_expanded,
-                &["Trait:".to_string(),character.traits[0].name.clone()].join(" "),
-                Some(&character.traits[0].desc),
-            );
-            if character.traits.len() > 1 {
-                ui.same_line_with_spacing(0.0, t_gap);
+    if character.traits.len() < 1 {
+        state.traits_expanded = false;
+        ui.text_disabled("no traits");
+    } else {
+        ui.child_window("##t_block")
+            .size([t_block_w, trait_h])
+            .border(false)
+            .build(|| {
                 render_expandable_block(
                     ui,
-                    "##t2_col",
+                    "##t1_col",
                     t_col_w,
                     trait_h,
                     &mut state.traits_expanded,
-                    &["Trait:".to_string(),character.traits[1].name.clone()].join(" "),
-                    Some(&character.traits[1].desc),
+                    &["Trait:".to_string(),character.traits[0].name.clone()].join(" "),
+                    Some(&character.traits[0].desc),
                 );
-            }
-    });
-
-    for i in 0..(state.perks_expanded.len() + 1) / 2 {
-        let perk1_h = if state.perks_expanded[i*2] {
-            t_expanded_h
-        } else { t_collapse_h };
-        let perk2_h = if if state.perks_expanded.len()%2 == 0 { state.perks_expanded[i*2 + 1] } else { false } {
-            t_expanded_h
-        } else {
-            t_collapse_h
-        };
-        let perk_h = perk1_h.max(perk2_h);
-
-        match i {
-            0 => {
-                ui.set_cursor_pos([inv_cursor[0] + 300.0 + t_padding, inv_cursor[1] + trait_h + t_padding]);
-                ui.child_window(format!("##p_block_{}", i))
-                    .size([t_block_w, perk_h])
-                    .border(false)
-                    .build(|| {
-                        let mut p1_desc: Vec<String> = vec![];
-                        for j in 0..character.perks[i*2].ranks as usize {
-                            p1_desc.push(format!("{}: {}", j+1, character.perks[i*2].desc[j]));
-                        }
-                        render_expandable_block(
-                            ui,
-                            &format!("##p{}_col", i*2),
-                            t_col_w,
-                            perk1_h,
-                            &mut state.perks_expanded[i*2],
-                            &character.perks[i*2].name,
-                            Some(&p1_desc.join("\n")),
-                        );
-                        if character.perks.len()%2 == 0 {
-                            let mut p2_desc: Vec<String> = vec![];
-                            for j in 0..character.perks[i*2+1].ranks as usize {
-                                p2_desc.push(format!("{}: {}", j+1, character.perks[i*2+1].desc[j]));
-                            }
-                            ui.same_line_with_spacing(0.0, t_gap);
-                            render_expandable_block(
-                                ui,
-                                &format!("##p{}_col", i*2+1),
-                                t_col_w,
-                                perk2_h,
-                                &mut state.perks_expanded[i*2+1],
-                                &character.perks[i*2+1].name,
-                                Some(&p2_desc.join("\n")),
-                            );
-                        }
-                });
-            }
-            _ => {
-                let mut  curr_h = inv_cursor[1] + trait_h + t_padding;
-                for j in 0..i {
-                    curr_h += t_padding;
-                    if state.perks_expanded[j*2] || state.perks_expanded[j*2+1] {
-                        curr_h += t_expanded_h;
-                    } else {
-                        curr_h += t_collapse_h;
-                    }
+                if character.traits.len() > 1 {
+                    ui.same_line_with_spacing(0.0, t_gap);
+                    render_expandable_block(
+                        ui,
+                        "##t2_col",
+                        t_col_w,
+                        trait_h,
+                        &mut state.traits_expanded,
+                        &["Trait:".to_string(),character.traits[1].name.clone()].join(" "),
+                        Some(&character.traits[1].desc),
+                    );
                 }
-                ui.set_cursor_pos([inv_cursor[0] + 300.0 + t_padding, curr_h]);
-                ui.child_window(format!("##p_block_{}", i))
-                    .size([t_block_w, perk_h])
-                    .border(false)
-                    .build(|| {
-                        let mut p1_desc: Vec<String> = vec![];
-                        for j in 0..character.perks[i*2].ranks as usize {
-                            p1_desc.push(format!("{}: {}", j+1, character.perks[i*2].desc[j]));
-                        }
-                        render_expandable_block(
-                            ui,
-                            &format!("##p{}_col", i*2),
-                            t_col_w,
-                            perk1_h,
-                            &mut state.perks_expanded[i*2],
-                            &character.perks[i*2].name,
-                            Some(&p1_desc.join("\n")),
-                        );
-                        if character.perks.len() >=  i*3 {
-                            let mut p2_desc: Vec<String> = vec![];
-                            for j in 0..character.perks[i*2+1].ranks as usize {
-                                p2_desc.push(format!("{}: {}", j+1, character.perks[i*2+1].desc[j]));
+        });
+    }
+    if character.perks.len() < 1 {
+        ui.text_disabled("no perks");
+    } else {
+        for i in 0..(state.perks_expanded.len() + 1) / 2 {
+            let perk1_h = if state.perks_expanded[i*2] {
+                t_expanded_h
+            } else { t_collapse_h };
+            let perk2_h = if if character.perks.len() - (i*2+1) > 0 { state.perks_expanded[i*2 + 1] } else { false } {
+                t_expanded_h
+            } else {
+                t_collapse_h
+            };
+            let perk_h = perk1_h.max(perk2_h);
+
+            match i {
+                0 => {
+                    ui.set_cursor_pos([inv_cursor[0] + 300.0 + t_padding, inv_cursor[1] + trait_h + t_padding]);
+                    ui.child_window(format!("##p_block_{}", i))
+                        .size([t_block_w, perk_h])
+                        .border(false)
+                        .build(|| {
+                            let mut p1_desc: Vec<String> = vec![];
+                            for j in 0..character.perks[i*2].ranks as usize {
+                                if character.perks[i*2].desc.len() == 1 {
+                                    p1_desc.push(format!("{}: {}", j+1, character.perks[i*2].desc[0]));
+                                } else {
+                                    p1_desc.push(format!("{}: {}", j+1, character.perks[i*2].desc[j]));
+                                }
                             }
-                            ui.same_line_with_spacing(0.0, t_gap);
                             render_expandable_block(
                                 ui,
-                                &format!("##p{}_col", i*2+1),
-                                t_col_w,
-                                perk2_h,
-                                &mut state.perks_expanded[i*2+1],
-                                &character.perks[i*2+1].name,
-                                Some(&p2_desc.join("\n")),
+                                &format!("##p{}_col", i*2),
+                                p_col_w,
+                                perk1_h,
+                                &mut state.perks_expanded[i*2],
+                                &character.perks[i*2].name,
+                                Some(&p1_desc.join("\n")),
                             );
+                            if character.perks.len() - (i*2+1) > 0 {
+                                let mut p2_desc: Vec<String> = vec![];
+                                for j in 0..character.perks[i*2+1].ranks as usize {
+                                    if character.perks[i*2+1].desc.len() == 1 {
+                                        p2_desc.push(format!("{}: {}", j+1, character.perks[i*2+1].desc[0]));
+                                    } else {
+                                        p2_desc.push(format!("{}: {}", j+1, character.perks[i*2+1].desc[j]));
+                                    }
+                                }
+                                ui.same_line_with_spacing(0.0, t_gap);
+                                render_expandable_block(
+                                    ui,
+                                    &format!("##p{}_col", i*2+1),
+                                    p_col_w,
+                                    perk2_h,
+                                    &mut state.perks_expanded[i*2+1],
+                                    &character.perks[i*2+1].name,
+                                    Some(&p2_desc.join("\n")),
+                                );
+                            }
+                    });
+                }
+                _ => {
+                    let mut  curr_h = inv_cursor[1] + trait_h + t_padding;
+                    for j in 0..i {
+                        curr_h += t_padding;
+                        if state.perks_expanded[j*2] || state.perks_expanded[j*2+1] {
+                            curr_h += t_expanded_h;
+                        } else {
+                            curr_h += t_collapse_h;
                         }
-                });
+                    }
+                    ui.set_cursor_pos([inv_cursor[0] + 300.0 + t_padding, curr_h]);
+                    ui.child_window(format!("##p_block_{}", i))
+                        .size([t_block_w, perk_h])
+                        .border(false)
+                        .build(|| {
+                            let mut p1_desc: Vec<String> = vec![];
+                            for j in 0..character.perks[i*2].ranks as usize {
+                                if character.perks[i*2].desc.len() == 1 {
+                                    p1_desc.push(format!("{}: {}", j+1, character.perks[i*2].desc[0]));
+                                } else {
+                                    p1_desc.push(format!("{}: {}", j+1, character.perks[i*2].desc[j]));
+                                }
+                            }
+                            render_expandable_block(
+                                ui,
+                                &format!("##p{}_col", i*2),
+                                p_col_w,
+                                perk1_h,
+                                &mut state.perks_expanded[i*2],
+                                &character.perks[i*2].name,
+                                Some(&p1_desc.join("\n")),
+                            );
+                            if character.perks.len() - (i*2+1) > 0 {
+                                let mut p2_desc: Vec<String> = vec![];
+                                for j in 0..character.perks[i*2+1].ranks as usize {
+                                    if character.perks[i*2+1].desc.len() == 1 {
+                                        p2_desc.push(format!("{}: {}", j+1, character.perks[i*2+1].desc[0]));
+                                    } else {
+                                        p2_desc.push(format!("{}: {}", j+1, character.perks[i*2+1].desc[j]));
+                                    }
+                                }
+                                ui.same_line_with_spacing(0.0, t_gap);
+                                render_expandable_block(
+                                    ui,
+                                    &format!("##p{}_col", i*2+1),
+                                    p_col_w,
+                                    perk2_h,
+                                    &mut state.perks_expanded[i*2+1],
+                                    &character.perks[i*2+1].name,
+                                    Some(&p2_desc.join("\n")),
+                                );
+                            }
+                    });
+                }
             }
         }
     }
-
     h
 }

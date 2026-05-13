@@ -1061,7 +1061,6 @@ fn resolve_apparel(
             ).fetch_all(&db.pool).await
         }).unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
         let covers = resolve_apparel_covers(cover_list);
-        println!("{} resolved covers: {:?}", apparel_id, covers);
         let effects = vec![row.effs.unwrap_or("".to_string())];
 
         result.push(Apparel {
@@ -1095,7 +1094,6 @@ pub fn resolve_apparel_type(atype: i64) -> ApparelType {
 
 pub fn resolve_apparel_covers(results: Vec<i64>) -> Vec<BodyLocation> {
     let mut covers: Vec<BodyLocation> = vec![];
-    println!("resolving covers: {:?}", results);
     for item in results {
         covers.push(match item {
             1 => BodyLocation::Head,

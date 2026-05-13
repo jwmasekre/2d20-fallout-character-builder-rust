@@ -1,7 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BaseDR, BodyLocation, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon}, db::Db, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str}, theme::render_window
+use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BaseDR, BodyLocation, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon}, db::Db, screens::{background_select::{BackgroundState, EquipmentState}, character_sheet::{EquipBlock, can_equip, toggle_apparel}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str}, theme::render_window
 };
 
 //for this i think we want to build the state to be something we can apply directly to the character struct upon acceptance; applying to the character directly here would likely lead to weird issues with clearing stuff when changing backgrounds/origins
@@ -25,7 +25,6 @@ pub fn equip_bg_apparel(
 ) {
     if background.selected_index.is_none() || background.apparel_selections.is_empty() { return }
 
-    println!("bg selected, so we're good here");
     let apparel = equipment.apparel.clone();
     let mut _armor: Vec<(usize,&Apparel)> = vec![];
     let mut outfit_dr = BaseDR::new();
@@ -36,7 +35,6 @@ pub fn equip_bg_apparel(
     let mut armored_limbs: Vec<BodyLocation> = vec![];
 
     if character.is_robot() {
-        println!("robot");
         _armor = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::RobotArmor).collect();
 
         if !headgear.is_empty() {
@@ -48,20 +46,18 @@ pub fn equip_bg_apparel(
             character.robot_modules[i].installed = true;
         }
     } else {
-        println!("not robot");
         let outfits: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Outfit).collect();
         let clothing: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Clothing).collect();
         _armor = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Armor).collect();
         (outfit_dr, outfit_pos) = match outfits.len() {
-            0 => {println!("no outfit"); (outfit_dr, outfit_pos)},
-            1 => {println!("1 outfit"); (
+            0 => { (outfit_dr, outfit_pos)},
+            1 => { (
                 BaseDR {
                     ph_dr: outfits[0].1.ph_dr,
                     en_dr: outfits[0].1.en_dr,
                     rd_dr: outfits[0].1.rd_dr
                 }, outfits[0].0)},
             _ => {
-                println!(">1 outfit");
                 let best = outfits
                     .iter()
                     .max_by(|a, b| {
@@ -79,15 +75,14 @@ pub fn equip_bg_apparel(
             },
         };
         (clothing_dr, clothing_pos) = match clothing.len() {
-            0 => {println!("no clothing");(clothing_dr, clothing_pos)},
-            1 => {println!("1 clothing");(
+            0 => { (clothing_dr, clothing_pos)},
+            1 => { (
                 BaseDR {
                     ph_dr: clothing[0].1.ph_dr,
                     en_dr: clothing[0].1.en_dr,
                     rd_dr: clothing[0].1.rd_dr
                 }, clothing[0].0)},
             _ => {
-                println!(">1 clothing");
                 let best = clothing
                     .iter()
                     .max_by(|a, b| {
@@ -106,13 +101,12 @@ pub fn equip_bg_apparel(
         };
     }
     for item in _armor.clone() {
-        println!("item {}: {:?}", item.0, item.1);
+        println!("armor {}: {:?}", item.0, item.1);
         let covers = item.1.covers.clone();
         for loc in covers {
             if !armored_limbs.contains(&loc) { armored_limbs.push(loc) }
         }
     }
-    println!("armored limbs: {:?}", armored_limbs);
     let mut top_each: Vec<(usize, &Apparel)> = vec![];
     for (i, loc) in armored_limbs.iter().enumerate() {
         let mut loc_armor: Vec<(usize, &Apparel)> = vec![];
@@ -131,7 +125,6 @@ pub fn equip_bg_apparel(
             }
         }
     }
-    println!("top each: {:?}", top_each);
     let mut outfit = false;
     if outfit_pos != usize::MAX {
         outfit = true;
@@ -208,6 +201,7 @@ pub fn equip_bg_apparel(
             character.limb_dr.head.equipped.push(equipment.apparel[headgear[0].0].clone());
         }
         for (i,loc) in armored_limbs.iter().enumerate() {
+            equipment.apparel[top_each[i].0].equipped = true;
             let item = equipment.apparel[top_each[i].0].clone();
             match loc {
                 BodyLocation::None => {},
@@ -231,7 +225,9 @@ pub fn equip_bg_apparel(
 }
 
 pub fn equip_apparel(character: &mut Character) {
+    println!("equipping apparel");
     let equipped_apparel: Vec<&Apparel> = character.apparel.iter().filter(|a| a.equipped).collect();
+    println!("equipped: {:?}", equipped_apparel);
     for item in equipped_apparel {
         let covered = item.covers.clone();
         for loc in covered {
@@ -338,7 +334,7 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
     }
 }
 
-pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &Character) {
+pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &mut Character) {
     let name_w = 150.0_f32;
     let wgt_w = 55.0_f32;
     let quan_w = 75.0_f32;
@@ -384,11 +380,31 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
         ui.next_column();
         ui.separator();
         for item in apparel.clone() {
+            let label = if item.equipped {
+                format!("[*]##ap_{}", item.id)
+            } else {
+                format!("[ ]##ap_{}", item.id)
+            };
+            let block = can_equip(character, item.id);
+            let blocked = matches!(block, EquipBlock::WouldBlock(_));
+            //println!("{} - {:?} - {}", item.name, block, blocked);
             ui.text(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
             ui.next_column();
-            ui.text(format!("{}", if item.equipped {"*"} else {""}));
+            let _d = if blocked && !item.equipped {
+                Some(ui.begin_disabled(true))
+            } else { None };
+            if ui.button(&label) {
+                toggle_apparel(character, item.id);
+                //does not save yet
+            }
+            drop(_d);
+            if blocked && ui.is_item_hovered() {
+                if let EquipBlock::WouldBlock(reason) = block {
+                    ui.tooltip_text(&reason);
+                }
+            }
             ui.next_column();
             eq_wgt += item.wgt;
         }
@@ -517,7 +533,6 @@ pub fn render_character_review(
     ui.spacing();
 
     if !state.loaded {
-        println!("equipping apparel");
         equip_bg_apparel(character, equipment, background);
         state.loaded = true;
     }
@@ -626,7 +641,7 @@ pub fn render_character_review(
     character.limb_dr.update_dr(character.base_dr.clone());
     let active_limbs = character.limb_dr.mut_active_limbs();
     for (limb, name) in active_limbs {
-        if state.debug_load { println!("limb: {:?}", limb) }
+        //if state.debug_load { println!("limb: {:?}", limb) }
         let worn: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", name, limb.ph_dr, limb.en_dr, if limb.rd_dr < 99 {limb.rd_dr.to_string()} else {"Immune".to_string()}, worn.join(", ")));
     }
