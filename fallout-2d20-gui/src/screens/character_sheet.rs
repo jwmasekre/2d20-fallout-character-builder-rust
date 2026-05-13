@@ -260,7 +260,7 @@ pub fn render_character_sheet(
     ui.spacing();
 
     let Some(_scroll) = ui.child_window("##sheet_scroll")
-        .size([w - 16.0, h - 84.0])
+        .size([w - 16.0, h - 92.0])
         .begin()
     else { return h };
     
@@ -370,18 +370,19 @@ pub fn render_character_sheet(
 
     let def_str = format!("Defense: {}", character.defense);
     let init_str = format!("Initiative: {}", character.initiative);
-    let hp_str = format!("HP: {}/{}", character.hp, character.hp_max);
+    let hp_str1 = format!("HP:");
+    let hp_str2 = format!("{}/{}", character.hp, character.hp_max);
     let melee_str = format!("Melee: {}", get_melee_str(character));
     let poison_str = format!("Poison DR: {}", if character.poison_dr < 99 {character.poison_dr.to_string()} else {"Immune".to_string()});
     let def_size = ui.calc_text_size(def_str.clone());
     let init_size = ui.calc_text_size(init_str.clone());
-    let hp_size = ui.calc_text_size(hp_str.clone());
+    let hp_size = ui.calc_text_size(hp_str1.clone())[0] + ui.calc_text_size(hp_str2.clone())[0] + 20.0;
     let melee_size = ui.calc_text_size(melee_str.clone());
     let poison_size = ui.calc_text_size(poison_str.clone());
     let new_line = def_size[1] + 8.0;
     let pos_1 = [off_1 + (block_w - def_size[0]) / 2.0, skill_cursor[1] + new_line];
     let pos_3 = [off_3 + (block_w - init_size[0]) / 2.0, skill_cursor[1] + new_line];
-    let pos_5 = [off_5 + (block_w - hp_size[0]) / 2.0, skill_cursor[1] + new_line];
+    let pos_5 = [off_5 + (block_w - hp_size) / 2.0, skill_cursor[1] + new_line];
     let pos_2 = [off_2 + (block_w - melee_size[0]) / 2.0, skill_cursor[1] + new_line * 2.0];
     let pos_4 = [off_4 + (block_w - poison_size[0]) / 2.0, skill_cursor[1] + new_line * 2.0];
     ui.set_cursor_pos(pos_1);
@@ -389,7 +390,23 @@ pub fn render_character_sheet(
     ui.set_cursor_pos(pos_3);
     ui.text(init_str);
     ui.set_cursor_pos(pos_5);
-    ui.text(hp_str);
+    ui.text(hp_str1);
+    ui.same_line();
+    if ui.button("-##hp_dec") {
+        character.hp -= 1;
+        if character.hp < 0 {
+            character.hp = 0;
+        }
+    }
+    ui.same_line();
+    ui.text(hp_str2);
+    ui.same_line();
+    if ui.button("+##hp_inc") {
+        character.hp += 1;
+        if character.hp > character.hp_max {
+            character.hp = character.hp_max;
+        }
+    }
     ui.set_cursor_pos(pos_2);
     ui.text(melee_str);
     ui.set_cursor_pos(pos_4);
@@ -689,6 +706,7 @@ pub fn render_character_sheet(
     let inv_cursor = ui.cursor_pos().clone();
 
     ui.child_window("##inv_block")
+        //not sure how we go about calculating this
         .size([290.0, 400.0])
         .border(false)
         .build(|| {
