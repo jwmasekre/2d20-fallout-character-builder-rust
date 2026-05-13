@@ -235,14 +235,7 @@ impl Character {
         self.xp = self.level * (self.level - 1) * 50;
     }
     pub fn calculate_level(&mut self) {
-        println!("xp: {}", self.xp);
-        println!("calc: {}", 1.0 + self.xp as f32 / 50.0);
-        println!(" calc: {}", (1.0 + self.xp as f32 / 50.0).sqrt());
-        println!("  calc: {}", (1.0 + (1.0 + self.xp as f32 / 50.0).sqrt()) / 2.0);
-        println!("   calc: {}", ((1.0 + (1.0 + (self.xp + 1) as f32 / 50.0).sqrt()) / 2.0).floor());
-        //self.level = ((1.0 + (1.0 + (self.xp + 1) as f32 / 50.0).sqrt()) / 2.0).floor() as i32;
         self.level = (0.5 + ((25.0 + (2.0 * self.xp as f32)).sqrt() / 10.0)).floor() as i32;
-        println!("lvl: {}", self.level);
         //xp for next level
         self.xp_next = (self.level + 1) * self.level * 50 - self.xp;
     }

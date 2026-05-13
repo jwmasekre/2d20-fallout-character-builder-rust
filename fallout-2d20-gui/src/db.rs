@@ -836,7 +836,6 @@ impl Db {
                     apparel_id
                 ).fetch_all(&self.pool).await
                     .map_err(|e| sqlx::Error::Protocol(format!("load covers: {e}"))).unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
-                println!("resolving covers for {:?} : {:?}", row, cover_list);
                 let covers = resolve_apparel_covers(cover_list);
                 apparel.push(Apparel {
                     id: apparel_id,

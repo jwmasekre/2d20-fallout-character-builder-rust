@@ -101,7 +101,6 @@ pub fn equip_bg_apparel(
         };
     }
     for item in _armor.clone() {
-        println!("armor {}: {:?}", item.0, item.1);
         let covers = item.1.covers.clone();
         for loc in covers {
             if !armored_limbs.contains(&loc) { armored_limbs.push(loc) }
@@ -225,9 +224,7 @@ pub fn equip_bg_apparel(
 }
 
 pub fn equip_apparel(character: &mut Character) {
-    println!("equipping apparel");
     let equipped_apparel: Vec<&Apparel> = character.apparel.iter().filter(|a| a.equipped).collect();
-    println!("equipped: {:?}", equipped_apparel);
     for item in equipped_apparel {
         let covered = item.covers.clone();
         for loc in covered {
@@ -387,7 +384,6 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
             };
             let block = can_equip(character, item.id);
             let blocked = matches!(block, EquipBlock::WouldBlock(_));
-            //println!("{} - {:?} - {}", item.name, block, blocked);
             ui.text(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
@@ -641,7 +637,6 @@ pub fn render_character_review(
     character.limb_dr.update_dr(character.base_dr.clone());
     let active_limbs = character.limb_dr.mut_active_limbs();
     for (limb, name) in active_limbs {
-        //if state.debug_load { println!("limb: {:?}", limb) }
         let worn: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
         ui.text(format!("{:10} - P:{} E:{} R:{} - {}", name, limb.ph_dr, limb.en_dr, if limb.rd_dr < 99 {limb.rd_dr.to_string()} else {"Immune".to_string()}, worn.join(", ")));
     }
