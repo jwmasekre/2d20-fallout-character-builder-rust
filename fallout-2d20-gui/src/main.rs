@@ -65,9 +65,9 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 const VERSION: Version = Version {
     major: 0,
     minor: 3,
-    patch: 0,
+    patch: 1,
     prerelease: PreRelease::Alpha,
-    prerelease_ver: 1,
+    prerelease_ver: 2,
 };
 
 const DATE: &str = "20260508";

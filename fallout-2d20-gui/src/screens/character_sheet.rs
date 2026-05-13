@@ -7,7 +7,7 @@ use crate::{
     AppScreen,
     character::{Apparel, ApparelType, BodyLocation, Character, RobotType},
     db::Db,
-    log_on_change,
+    //log_on_change,
     screens::{
         background_select::{BackgroundState, EquipmentState}, character_review::{equip_apparel, render_inventory, render_weapons}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str
     },
@@ -19,6 +19,8 @@ pub struct SheetState {
     background_expanded: bool,
     traits_expanded: bool,
     perks_expanded: Vec<bool>,
+    notes_open: bool,
+    notes_buf: String,
 }
 
 impl SheetState {
@@ -28,6 +30,8 @@ impl SheetState {
             background_expanded: false,
             traits_expanded: false,
             perks_expanded: vec![],
+            notes_open: false,
+            notes_buf: String::new(),
         }
     }
     pub fn new_character(&mut self, character: &Character) {
@@ -61,6 +65,12 @@ pub fn sanitize_filename(name: &str) -> String {
     } else {
         sanitized
     }
+}
+
+pub fn toggle_module(character: &mut Character, module_id: i32) {
+    let Some(index) = character.robot_modules.iter().position(|m| m.id == module_id) else { return };
+    let installed = character.robot_modules[index].installed;
+    character.robot_modules[index].installed = !installed;
 }
 
 pub fn toggle_apparel(character: &mut Character, apparel_id: i32) {
@@ -219,12 +229,19 @@ pub fn render_character_sheet(
     let Some((w, h, _token)) = render_window(ui, window, "##character_sheet", "Character Sheet", screen, origin, special,  skill, perk, background, equipment, character)
         else { return 0.0 };
 
-    log_on_change!(character);
+    //log_on_change!(character);
 
     //could probably do columns here with wrapping
     ui.text(format!("{} --- {} ({})", character.name, character.player.name, character.party.name));
     ui.same_line();
     ui.text(format!("                {:4}xp ({} to next)  Lv {}  |here you would add xp|", character.xp, character.xp_next, character.level));
+    ui.same_line_with_pos(w - 140.0);
+    if ui.button("Notes##notes_open") {
+        state.notes_open = true;
+        state.notes_buf = character.notes.clone();
+    }
+    ui.same_line_with_pos(w - 88.0);
+    ui.text_disabled("|");
     ui.same_line_with_pos(w - 80.0);
     if ui.button("Export##export") {
         let default_name = format!("{}.json", sanitize_filename(&character.name));
@@ -836,6 +853,54 @@ pub fn render_character_sheet(
                 }
             }
         }
+    }
+    drop(_scroll);
+
+    if state.notes_open {
+        let nw = 500.0_f32;
+        let nh = 400.0_f32;
+        let (win_w, win_h) = window.size();
+
+        ui.window("##notes_window")
+        .title_bar(false)
+        .resizable(true)
+        .movable(true)
+        .size([nw, nh], imgui::Condition::Appearing)
+        .position(
+            [(win_w as f32 - nw) * 0.5, (win_h as f32 - nh) * 0.5],
+            imgui::Condition::Appearing,
+        )
+        .build(|| {
+            ui.text("Notes");
+            let close_x = ui.content_region_avail()[0] - 20.0;
+            ui.same_line_with_pos(close_x);
+            if ui.button("X##notes_close") {
+                state.notes_open = false;
+            }
+            ui.separator();
+            ui.spacing();
+
+            let text_h = nh - 72.0;
+            ui.input_text_multiline(
+                "##notes_input",
+                &mut state.notes_buf,
+                [ui.content_region_avail()[0], text_h],
+            ).build();
+
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+
+            if ui.button("Save##notes_save") {
+                character.notes = state.notes_buf.to_string();
+                state.notes_open = false;
+            }
+            ui.same_line();
+            if ui.button("Cancel##notes_cancel") {
+                state.notes_open = false;
+                // buf is discarded without writing back to character.notes
+            }
+        });
     }
     h
 }

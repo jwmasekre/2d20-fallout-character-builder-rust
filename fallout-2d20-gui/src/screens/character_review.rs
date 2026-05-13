@@ -1,7 +1,7 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use std::cmp::Ordering;
-use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BaseDR, BodyLocation, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon}, db::Db, screens::{background_select::{BackgroundState, EquipmentState}, character_sheet::{EquipBlock, can_equip, toggle_apparel}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str}, theme::render_window
+use crate::{AppScreen, character::{AmmoInv, Apparel, ApparelType, BaseDR, BodyLocation, Character, Consumable, DamageType, Gear, Junk, RobotModule, Skill, Weapon}, db::Db, screens::{background_select::{BackgroundState, EquipmentState}, character_sheet::{EquipBlock, can_equip, toggle_apparel, toggle_module}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str}, theme::render_window
 };
 
 //for this i think we want to build the state to be something we can apply directly to the character struct upon acceptance; applying to the character directly here would likely lead to weird issues with clearing stuff when changing backgrounds/origins
@@ -442,11 +442,28 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
         ui.next_column();
         ui.separator();
         for item in modules.clone() {
+            let label = if item.installed {
+                format!("[*]##rm_{}", item.id)
+            } else {
+                format!("[ ]##rm_{}", item.id)
+            };
+            let installed = character.robot_modules.iter().filter(|m| m.installed).count();
+            let blocked = installed >= 3;
             ui.text(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
             ui.next_column();
-            ui.text(format!("{}", if item.installed {"*"} else {""}));
+            let _d = if blocked && !item.installed {
+                Some(ui.begin_disabled(true))
+            } else { None };
+            if ui.button(&label) {
+                toggle_module(character, item.id);
+                //does not save yet
+            }
+            drop(_d);
+            if blocked && ui.is_item_hovered() {
+                ui.tooltip_text("cannot install more than 3 modules");
+            }
             ui.next_column();
             eq_wgt += item.wgt;
         }
