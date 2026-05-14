@@ -849,6 +849,7 @@ impl Db {
                     en_dr: row.enrg_dr.unwrap_or_default() as i32,
                     rd_dr: row.rads_dr.unwrap_or_default() as i32,
                     wgt: row.wgt.unwrap_or_default() as i32,
+                    db_id: row.id,
                 })
             };
 
@@ -1043,7 +1044,7 @@ impl Db {
                 }).collect();
 
             let robot_modules: Vec<RobotModule> = sqlx::query!(
-                r#"SELECT crm.equipped, rm.*
+                r#"SELECT crm.equipped, crm.id as db_id, rm.*
                 FROM character_robot_modules crm
                 JOIN robot_modules rm ON rm.id = crm.module_id
                 WHERE crm.character_id = ?"#,
@@ -1056,6 +1057,7 @@ impl Db {
                     installed: m.equipped.unwrap_or(0) != 0,
                     effect: serde_json::from_str(&m.eff.clone().unwrap_or_default()).unwrap_or_default(),
                     wgt: m.wgt.unwrap_or(0) as i32,
+                    db_id: m.db_id,
                 }).collect();
 
             let misc: Vec<String> = serde_json::from_str(
@@ -1134,5 +1136,82 @@ impl Db {
             character.limb_dr.update_dr(character.base_dr.clone());
             Ok(character)
         }).map_err(anyhow::Error::from)
+    }
+    pub fn update_apparel(&self, db_id: i64, eq: bool) {
+        let eqv = if eq { 1 } else { 0 };
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE character_apparel
+                SET equipped = ?1
+                WHERE id = ?2",
+                eqv, db_id,
+            ).execute(&self.pool).await
+        }).ok();
+    }
+    pub fn update_module(&self, db_id: i64, eq: bool) {
+        let eqv = if eq { 1 } else { 0 };
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE character_robot_modules
+                SET equipped = ?1
+                WHERE id = ?2",
+                eqv, db_id,
+            ).execute(&self.pool).await
+        }).ok();
+    }
+    pub fn update_lp(&self, character: &Character) {
+        let id: &str = &character.id.to_string();
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE characters
+                SET luck_points = ?1
+                WHERE id = ?2",
+                character.luck_points, id
+            ).execute(&self.pool).await
+        }).ok();
+    }
+    pub fn update_rp(&self, character: &Character) {
+        let id: &str = &character.id.to_string();
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE characters
+                SET rad_points = ?1
+                WHERE id = ?2",
+                character.rad_points, id
+            ).execute(&self.pool).await
+        }).ok();
+    }
+    pub fn update_hp(&self, character: &Character) {
+        let id: &str = &character.id.to_string();
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE characters
+                SET current_health = ?1
+                WHERE id = ?2",
+                character.hp, id
+            ).execute(&self.pool).await
+        }).ok();
+    }
+    pub fn update_xp(&self, character: &Character) {
+        let id: &str = &character.id.to_string();
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE characters
+                SET xp = ?1
+                WHERE id = ?2",
+                character.xp, id
+            ).execute(&self.pool).await
+        }).ok();
+    }
+    pub fn update_notes(&self, character: &Character) {
+        let id: &str = &character.id.to_string();
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE characters
+                SET notes = ?1
+                WHERE id = ?2",
+                character.notes, id
+            ).execute(&self.pool).await
+        }).ok();
     }
 }

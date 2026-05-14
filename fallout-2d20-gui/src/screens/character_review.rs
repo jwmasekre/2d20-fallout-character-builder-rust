@@ -331,7 +331,7 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
     }
 }
 
-pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &mut Character) {
+pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &mut Character, db: &Db) {
     let name_w = 150.0_f32;
     let wgt_w = 55.0_f32;
     let quan_w = 75.0_f32;
@@ -392,7 +392,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
                 Some(ui.begin_disabled(true))
             } else { None };
             if ui.button(&label) {
-                toggle_apparel(character, item.id);
+                toggle_apparel(character, item.id, item.db_id, db);
                 //does not save yet
             }
             drop(_d);
@@ -457,7 +457,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
                 Some(ui.begin_disabled(true))
             } else { None };
             if ui.button(&label) {
-                toggle_module(character, item.id);
+                toggle_module(character, item.id, item.db_id, db);
                 //does not save yet
             }
             drop(_d);
@@ -530,7 +530,7 @@ pub fn render_character_review(
     state: &mut ReviewState,
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
-    _db: &Db,
+    db: &Db,
     character: &mut Character,
     screen: &mut AppScreen,
     origin: &mut OriginState,
@@ -714,7 +714,7 @@ pub fn render_character_review(
     ui.separator();
     ui.spacing();
 
-    render_inventory(ui, equipment.ammo.clone(), equipment.apparel.clone(), equipment.consumables.clone(), equipment.robot_modules.clone(), equipment.gear.clone(), equipment.junk.clone(), equipment.misc.clone(), character);
+    render_inventory(ui, equipment.ammo.clone(), equipment.apparel.clone(), equipment.consumables.clone(), equipment.robot_modules.clone(), equipment.gear.clone(), equipment.junk.clone(), equipment.misc.clone(), character, db);
 
 
     ui.columns(1,"##end_eq", false);

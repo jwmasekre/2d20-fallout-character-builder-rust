@@ -365,9 +365,22 @@ fn main() -> Result<()> {
                     character.junk = equipment.junk.clone();
                     character.misc = equipment.misc.clone();
                     sheet.new_character(character);
+                    let mut success = false;
                     match db.save_character(character) {
-                        Ok(_) => *screen = AppScreen::CharacterSheet,
+                        Ok(_) => {success = true;},
                         Err(e) => eprintln!("Failed to save character: {e}"),
+                    }
+                    if success {
+                        match db.load_character(&character.id.to_string()) {
+                            Ok(loaded) => {
+                                *character = loaded;
+                                sheet.new_character(character);
+                                *screen = AppScreen::CharacterSheet;
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to load: {e}");
+                            }
+                        }
                     }
                 }
             }
