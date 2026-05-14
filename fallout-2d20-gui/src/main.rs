@@ -65,7 +65,7 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 const VERSION: Version = Version {
     major: 0,
     minor: 5,
-    patch: 0,
+    patch: 2,
     prerelease: PreRelease::Alpha,
     prerelease_ver: 0,
 };

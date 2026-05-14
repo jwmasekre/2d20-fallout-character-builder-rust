@@ -337,7 +337,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
     let quan_w = 75.0_f32;
     let eq_w = 75.0_f32;
 
-    let mut eq_wgt = 0;
+    let mut eq_wgt: i32 = character.weapons.iter().map(|w| w.wgt).sum();
 
     let ammo_actual: Vec<&AmmoInv> = ammo.iter().filter(|a| a.quantity > 0).collect();
 

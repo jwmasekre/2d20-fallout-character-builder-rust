@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "fallout-2d20-gui"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "bytemuck",
