@@ -1071,13 +1071,6 @@ pub enum WeaponSlot {
     Frame,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct AmmoData {
-    pub id: i32,
-    pub name: String,
-    pub wgt: i32
-}
-
 /*
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Ammo {
@@ -1085,6 +1078,13 @@ pub struct Ammo {
     pub variants: Vec<AmmoData>,
 }
 */
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct AmmoData {
+    pub id: i32,
+    pub name: String,
+    pub wgt: i32
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AmmoInv {

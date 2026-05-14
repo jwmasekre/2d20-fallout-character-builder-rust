@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::Result;
 use crate::{
     AppScreen,
-    character::{Apparel, ApparelType, BodyLocation, Character, Perk, RobotType},
+    character::{AmmoData, AmmoInv, Apparel, ApparelType, BodyLocation, Character, Consumable, ConsumableType, Gear, Perk, RobotModule, RobotType, WeaponMods},
     db::Db,
     //log_on_change,
     screens::{
@@ -19,6 +19,48 @@ use crate::{
     },
     theme::render_window
 };
+
+#[derive(Clone, PartialEq)]
+pub enum InventoryTab {
+    Ammo,
+    Apparel,
+    Consumables,
+    RobotModules,
+    Gear,
+    Misc,
+}
+
+pub struct InventoryState {
+    pub open: bool,
+    pub tab: InventoryTab,
+    pub all_apparel: Vec<Apparel>,
+    pub all_ammo: Vec<AmmoData>,
+    pub all_consumables: Vec<Consumable>,
+    pub all_modules: Vec<RobotModule>,
+    pub all_gear: Vec<Gear>,
+    pub filter: String,
+    pub apparel_type_filter: Option<ApparelType>,
+    pub misc_buf: String,
+    pub ammo_qty: i32,
+}
+
+impl InventoryState {
+    pub fn new() -> Self {
+        Self {
+            open: false,
+            tab: InventoryTab::Apparel,
+            all_apparel: vec![],
+            all_ammo: vec![],
+            all_consumables: vec![],
+            all_modules: vec![],
+            all_gear: vec![],
+            filter: String::new(),
+            apparel_type_filter: None,
+            misc_buf: String::new(),
+            ammo_qty: 1,
+        }
+    }
+}
 
 pub struct SheetState {
     origin_expanded: bool,
@@ -34,6 +76,11 @@ pub struct SheetState {
     perks: Vec<PerkRow>,
     skill_choice: i32,
     perk_choice: i32,
+    pub weapons_open: bool,
+    pub weapon_list: Vec<(i32, String, String, String)>,
+    pub weapon_filter: String,
+    pub weapon_selected: Option<i32>,
+    pub inventory: InventoryState,
 }
 
 impl SheetState {
@@ -52,6 +99,11 @@ impl SheetState {
             perks: vec![],
             skill_choice: i32::MAX,
             perk_choice: i32::MAX,
+            weapons_open: false,
+            weapon_list: vec![],
+            weapon_filter: String::new(),
+            weapon_selected: None,
+            inventory: InventoryState::new(),
         }
     }
     pub fn new_character(&mut self, character: &Character) {
@@ -87,14 +139,19 @@ pub fn sanitize_filename(name: &str) -> String {
     }
 }
 
-pub fn toggle_module(character: &mut Character, module_id: i32, db_id: i64, db: &Db) {
+pub fn toggle_module(character: &mut Character, module_id: i32, _db_id: i64, db: &Db) {
     let Some(index) = character.robot_modules.iter().position(|m| m.id == module_id) else { return };
     let installed = character.robot_modules[index].installed;
     character.robot_modules[index].installed = !installed;
-    db.update_module(db_id, installed);
+    equip_apparel(character);
+    match db.save_character(character) {
+        Ok(_) => {},
+        Err(e) => eprintln!("Failed to save character: {e}"),
+    }
+    //db.update_module(db_id, installed);
 }
 
-pub fn toggle_apparel(character: &mut Character, apparel_id: i32, db_id: i64, db: &Db) {
+pub fn toggle_apparel(character: &mut Character, apparel_id: i32, _db_id: i64, db: &Db) {
     let Some(index) = character.apparel.iter().position(|a| a.id == apparel_id) else { return };
     let item = character.apparel[index].clone();
     if item.equipped {
@@ -148,7 +205,11 @@ pub fn toggle_apparel(character: &mut Character, apparel_id: i32, db_id: i64, db
         limb.0.equipped.clear();
     }
     equip_apparel(character);
-    db.update_apparel(db_id, item.equipped);
+    match db.save_character(character) {
+        Ok(_) => {},
+        Err(e) => eprintln!("Failed to save character: {e}"),
+    }
+    //db.update_apparel(db_id, item.equipped);
 }
 
 #[derive(Debug)]
@@ -751,6 +812,12 @@ pub fn render_character_sheet(
     ui.spacing();
 
     render_weapons(ui, character.weapons.clone(), character);
+    if ui.button("Add/Remove Weapons##weapons_open") {
+        state.weapons_open = true;
+        state.weapon_selected = None;
+        state.weapon_filter = String::new();
+        state.weapon_list = db.get_all_weapons().unwrap_or_default();
+    }
 
     ui.separator();
     ui.spacing();
@@ -765,6 +832,15 @@ pub fn render_character_sheet(
         .border(false)
         .build(|| {
             render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character, db);
+            if ui.button("Add/Remove Items##inv_open") {
+                state.inventory.open = true;
+                state.inventory.filter = String::new();
+                state.inventory.all_apparel = db.get_all_apparel().unwrap_or_default();
+                state.inventory.all_ammo = db.get_all_ammo().unwrap_or_default();
+                state.inventory.all_consumables = db.get_all_consumables().unwrap_or_default();
+                state.inventory.all_modules = db.get_all_robot_modules().unwrap_or_default();
+                state.inventory.all_gear = db.get_all_gear().unwrap_or_default();
+            }
     });
 
     let t_padding = 16.0_f32;
@@ -1271,6 +1347,595 @@ pub fn render_character_sheet(
                     });
             });
     }
+    if state.weapons_open {
+        let (win_w, win_h) = window.size();
+        ui.window("##overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .scrollable(false)
+            .size([win_w as f32, win_h as f32], imgui::Condition::Always)
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .bg_alpha(0.6)
+            .build(|| {
+                let ww = 700.0_f32;
+                let wh = 600.0_f32;
+                ui.set_cursor_pos([(win_w as f32 - ww) * 0.5, (win_h as f32 - wh) * 0.5]);
+                ui.child_window("##weapons_modal")
+                    .size([ww, wh])
+                    .border(true)
+                    .build(|| {
+                        // ── Header ───────────────────────────────────────────
+                        ui.text("Weapons");
+                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        ui.same_line_with_pos(close_x);
+                        if ui.button("X##weapons_close") {
+                            state.weapons_open = false;
+                        }
+                        ui.separator();
+                        ui.spacing();
+
+                        let half = (ww - 16.0) / 2.0;
+                        let list_h = wh - 96.0;
+
+                        // ── Left: current inventory ───────────────────────────
+                        ui.child_window("##weap_inv")
+                            .size([half, list_h])
+                            .begin()
+                            .map(|_| {
+                                ui.text("Inventory");
+                                ui.separator();
+                                ui.spacing();
+
+                                if character.weapons.is_empty() {
+                                    ui.text_disabled("No weapons");
+                                }
+
+                                let mut to_remove: Option<usize> = None;
+                                for (i, w) in character.weapons.iter().enumerate() {
+                                    let prefix = if w.prefix.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!("{} ", w.prefix)
+                                    };
+                                    ui.text(format!("{}{}", prefix, w.name));
+                                    ui.same_line_with_pos(half - 96.0);
+                                    ui.text_disabled(&w.range);
+
+                                    ui.same_line_with_pos(half - 96.0 + 42.0);
+                                    let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                    let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                    if ui.button(format!("Rem##wrem_{}", i)) {
+                                        to_remove = Some(i);
+                                    }
+                                    drop(c); drop(c2);
+
+                                    // show mods if any are installed
+                                    let installed: Vec<&WeaponMods> = w.mods.iter()
+                                        .filter(|m| m.installed && m.id != 0)
+                                        .collect();
+                                    if !installed.is_empty() {
+                                        for m in &installed {
+                                            let y = ui.cursor_pos()[1];
+                                            ui.set_cursor_pos([12.0, y]);
+                                            ui.text_disabled(format!("↳ {}", m.name));
+                                        }
+                                    }
+                                    ui.separator();
+                                }
+
+                                if let Some(idx) = to_remove {
+                                    character.weapons.remove(idx);
+                                }
+                            });
+
+                        ui.same_line();
+
+                        // ── Right: db list ────────────────────────────────────
+                        ui.child_window("##weap_db")
+                            .size([half, list_h])
+                            .begin()
+                            .map(|_| {
+                                ui.text("Add Weapon");
+                                ui.separator();
+                                ui.spacing();
+
+                                // filter input
+                                ui.set_next_item_width(half - 16.0);
+                                ui.input_text("##wfilter", &mut state.weapon_filter).hint("Filter...").build();
+                                ui.spacing();
+
+                                let filter = state.weapon_filter.to_lowercase();
+                                let mut current_skill = String::new();
+
+                                for (id, name, skill, _range) in &state.weapon_list {
+                                    if !filter.is_empty()
+                                        && !name.to_lowercase().contains(&filter)
+                                        && !skill.to_lowercase().contains(&filter)
+                                    {
+                                        continue;
+                                    }
+
+                                    // skill group header
+                                    if *skill != current_skill {
+                                        if !current_skill.is_empty() { ui.spacing(); }
+                                        ui.text_disabled(skill);
+                                        ui.separator();
+                                        current_skill = skill.clone();
+                                    }
+
+                                    let is_sel = state.weapon_selected == Some(*id);
+                                    let already_owned = character.weapons.iter().any(|w| w.id == *id);
+
+                                    if already_owned {
+                                        ui.text_disabled(format!("  {} [owned]", name));
+                                    } else if is_sel {
+                                        let c = ui.push_style_color(
+                                            imgui::StyleColor::Header,
+                                            [0.15, 0.35, 0.15, 0.6],
+                                        );
+                                        ui.selectable_config(format!("  {}##wsel_{}", name, id))
+                                            .selected(true)
+                                            .build();
+                                        drop(c);
+                                    } else {
+                                        if ui.selectable_config(format!("  {}##wsel_{}", name, id))
+                                            .selected(false)
+                                            .build()
+                                        {
+                                            state.weapon_selected = Some(*id);
+                                        }
+                                    }
+                                }
+                            });
+
+                        // ── Footer ────────────────────────────────────────────
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
+
+                        let _d = state.weapon_selected.is_none().then(|| ui.begin_disabled(true));
+                        let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
+                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
+                        if ui.button_with_size("Add Selected##weap_add", [140.0, 0.0]) {
+                            if let Some(wid) = state.weapon_selected {
+                                match db.get_weapon_by_id(wid, character) {
+                                    Ok(w) => {
+                                        character.weapons.push(w);
+                                        state.weapon_selected = None;
+                                        // db.save_character(character).ok();
+                                    }
+                                    Err(e) => eprintln!("Failed to load weapon {}: {}", wid, e),
+                                }
+                            }
+                        }
+                        drop(c); drop(c2);
+                        drop(_d);
+
+                        ui.same_line();
+                        if ui.button_with_size("Done##weap_done", [80.0, 0.0]) {
+                            state.weapons_open = false;
+                            match db.save_character(character) {
+                                Ok(_) => {},
+                                Err(e) => eprintln!("Failed to save character: {e}"),
+                            }
+                        }
+
+                        if state.weapon_selected.is_none() {
+                            ui.same_line();
+                            ui.text_disabled("Select a weapon from the list to add it");
+                        }
+                    });
+            });
+
+    }
+    if state.inventory.open {
+        let (win_w, win_h) = window.size();
+        ui.window("##overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .scrollable(false)
+            .size([win_w as f32, win_h as f32], imgui::Condition::Always)
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .bg_alpha(0.6)
+            .build(|| {
+                let iw = 960.0_f32;
+                let ih = 600.0_f32;
+                let inv = &mut state.inventory;
+                ui.set_cursor_pos([(win_w as f32 - iw) * 0.5, (win_h as f32 - ih) * 0.5]);
+                ui.child_window("##inv_modal")
+                    .size([iw, ih])
+                    .border(true)
+                    .build(|| {
+                        // ── Header ───────────────────────────────────────
+                        ui.text("Inventory");
+                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        ui.same_line_with_pos(close_x);
+                        if ui.button("X##inv_close") { inv.open = false; }
+                        ui.separator();
+                        ui.spacing();
+
+                        // ── Tabs ─────────────────────────────────────────
+                        let tabs = [
+                            ("Ammo",         InventoryTab::Ammo),
+                            ("Apparel",      InventoryTab::Apparel),
+                            ("Consumables",  InventoryTab::Consumables),
+                            ("Modules",      InventoryTab::RobotModules),
+                            ("Gear",         InventoryTab::Gear),
+                            ("Misc",         InventoryTab::Misc),
+                        ];
+                        for (label, tab) in &tabs {
+                            let active = inv.tab == *tab;
+                            if active {
+                                let c = ui.push_style_color(imgui::StyleColor::Button, [0.2, 0.4, 0.2, 1.0]);
+                                ui.button(label);
+                                drop(c);
+                            } else {
+                                if ui.button(label) {
+                                    inv.tab = tab.clone();
+                                    inv.filter = String::new();
+                                    inv.apparel_type_filter = None;
+                                }
+                            }
+                            ui.same_line();
+                        }
+                        ui.new_line();
+                        ui.separator();
+                        ui.spacing();
+
+                        let half = (iw - 16.0) / 2.0;
+                        let list_h = ih - 136.0;
+
+                        match inv.tab {
+
+                            // ── AMMO ─────────────────────────────────────
+                            InventoryTab::Ammo => {
+                                ui.child_window("##ammo_inv").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Inventory");
+                                    ui.separator(); ui.spacing();
+                                    if character.ammo.is_empty() { ui.text_disabled("No ammo"); }
+                                    let mut to_remove = None;
+                                    for (i, a) in character.ammo.iter_mut().enumerate() {
+                                        ui.text(format!("{}x {}", a.quantity, a.ammo.name));
+                                        ui.same_line_with_pos(half - 100.0);
+                                        if ui.button(format!("-##ammo_dec_{}", i)) {
+                                            a.quantity -= 1;
+                                        }
+                                        ui.same_line();
+                                        if ui.button(format!("+##ammo_inc_{}", i)) {
+                                            a.quantity += 1;
+                                        }
+                                        ui.same_line();
+                                        let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                        if ui.button(format!("Remove##ammo_rem_{}", i)) { to_remove = Some(i); }
+                                        drop(c); drop(c2);
+                                        ui.separator();
+                                    }
+                                    if let Some(i) = to_remove { character.ammo.remove(i); }
+                                });
+                                ui.same_line();
+                                ui.child_window("##ammo_db").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Add Ammo");
+                                    ui.separator(); ui.spacing();
+                                    ui.set_next_item_width(half - 16.0);
+                                    ui.input_text("##ammo_filter", &mut inv.filter).hint("Filter...").build();
+                                    ui.text("Qty:"); ui.same_line();
+                                    ui.set_next_item_width(60.0);
+                                    ui.input_int("##ammo_qty", &mut inv.ammo_qty).build();
+                                    inv.ammo_qty = inv.ammo_qty.max(1);
+                                    ui.spacing();
+                                    let filter = inv.filter.to_lowercase();
+                                    for a in &inv.all_ammo {
+                                        if !filter.is_empty() && !a.name.to_lowercase().contains(&filter) { continue; }
+                                        let already = character.ammo.iter().any(|ca| ca.ammo.id == a.id);
+                                        let label = format!("{}##ammo_add_{}", a.name, a.id);
+                                        let _d = already.then(|| ui.begin_disabled(true));
+                                        if already {
+                                            ui.text_disabled(format!("{} [in inventory]", a.name));
+                                        } else if ui.selectable_config(&label).build() {
+                                            character.ammo.push(AmmoInv {
+                                                ammo: a.clone(),
+                                                quantity: inv.ammo_qty,
+                                            });
+                                        }
+                                        drop(_d);
+                                    }
+                                });
+                            }
+
+                            // ── APPAREL ───────────────────────────────────
+                            InventoryTab::Apparel => {
+                                ui.child_window("##app_inv").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Inventory");
+                                    ui.separator(); ui.spacing();
+                                    if character.apparel.is_empty() { ui.text_disabled("No apparel"); }
+                                    let mut to_remove = None;
+                                    for (i, a) in character.apparel.iter().enumerate() {
+                                        let type_str = match a.apparel_type {
+                                            ApparelType::Clothing   => "Clothing",
+                                            ApparelType::Outfit     => "Outfit",
+                                            ApparelType::Headgear   => "Headgear",
+                                            ApparelType::Armor      => "Armor",
+                                            ApparelType::PowerArmor => "Power Armor",
+                                            ApparelType::RobotArmor => "Robot Armor",
+                                        };
+                                        ui.text(format!("[{}] {}", type_str, a.name));
+                                        ui.same_line_with_pos(half - 64.0);
+                                        let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                        if ui.button(format!("Remove##app_rem_{}", i)) { to_remove = Some(i); }
+                                        drop(c); drop(c2);
+                                        ui.separator();
+                                    }
+                                    if let Some(i) = to_remove { character.apparel.remove(i); }
+                                });
+                                ui.same_line();
+                                ui.child_window("##app_db").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Add Apparel");
+                                    ui.separator(); ui.spacing();
+                                    ui.set_next_item_width(half - 16.0);
+                                    ui.input_text("##app_filter", &mut inv.filter).hint("Filter...").build();
+                                    ui.spacing();
+
+                                    // type filter buttons
+                                    let type_filters: &[(&str, Option<ApparelType>)] = &[
+                                        ("All",         None),
+                                        ("Clothing",    Some(ApparelType::Clothing)),
+                                        ("Outfit",      Some(ApparelType::Outfit)),
+                                        ("Headgear",    Some(ApparelType::Headgear)),
+                                        ("Armor",       Some(ApparelType::Armor)),
+                                        ("Power",       Some(ApparelType::PowerArmor)),
+                                        ("Robot",       Some(ApparelType::RobotArmor)),
+                                    ];
+                                    for (label, filter_type) in type_filters {
+                                        let active = inv.apparel_type_filter == *filter_type;
+                                        if active {
+                                            let c = ui.push_style_color(imgui::StyleColor::Button, [0.2, 0.35, 0.2, 1.0]);
+                                            ui.button(label);
+                                            drop(c);
+                                        } else if ui.button(label) {
+                                            inv.apparel_type_filter = filter_type.clone();
+                                        }
+                                        ui.same_line();
+                                    }
+                                    ui.new_line();
+                                    ui.spacing();
+
+                                    let filter = inv.filter.to_lowercase();
+                                    let mut current_type = String::new();
+                                    for a in &inv.all_apparel {
+                                        if let Some(ref tf) = inv.apparel_type_filter {
+                                            if a.apparel_type != *tf { continue; }
+                                        }
+                                        if !filter.is_empty() && !a.name.to_lowercase().contains(&filter) { continue; }
+
+                                        let type_str = match a.apparel_type {
+                                            ApparelType::Clothing   => "Clothing",
+                                            ApparelType::Outfit     => "Outfit",
+                                            ApparelType::Headgear   => "Headgear",
+                                            ApparelType::Armor      => "Armor",
+                                            ApparelType::PowerArmor => "Power Armor",
+                                            ApparelType::RobotArmor => "Robot Armor",
+                                        };
+                                        if type_str != current_type {
+                                            if !current_type.is_empty() { ui.spacing(); }
+                                            ui.text_disabled(type_str);
+                                            ui.separator();
+                                            current_type = type_str.to_string();
+                                        }
+
+                                        let already = character.apparel.iter().any(|ca| ca.id == a.id);
+                                        if already {
+                                            ui.text_disabled(format!("  {} [owned]", a.name));
+                                        } else if ui.selectable_config(
+                                            format!("  {}##app_add_{}", a.name, a.id)
+                                        ).build() {
+                                            character.apparel.push(a.clone());
+                                        }
+                                    }
+                                });
+                            }
+
+                            // ── CONSUMABLES ───────────────────────────────
+                            InventoryTab::Consumables => {
+                                ui.child_window("##con_inv").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Inventory");
+                                    ui.separator(); ui.spacing();
+                                    if character.consumables.is_empty() { ui.text_disabled("No consumables"); }
+                                    let mut to_remove = None;
+                                    for (i, c) in character.consumables.iter_mut().enumerate() {
+                                        ui.text(format!("{}x {}", c.quantity, c.name));
+                                        ui.same_line_with_pos(half - 104.0);
+                                        if ui.button(format!("-##con_dec_{}", i)) { c.quantity = (c.quantity - 1).max(1); }
+                                        ui.same_line();
+                                        if ui.button(format!("+##con_inc_{}", i)) { c.quantity += 1; }
+                                        ui.same_line();
+                                        let c2  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                        let c3 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                        if ui.button(format!("Remove##con_rem_{}", i)) { to_remove = Some(i); }
+                                        drop(c2); drop(c3);
+                                        ui.separator();
+                                    }
+                                    if let Some(i) = to_remove { character.consumables.remove(i); }
+                                });
+                                ui.same_line();
+                                ui.child_window("##con_db").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Add Consumable");
+                                    ui.separator(); ui.spacing();
+                                    ui.set_next_item_width(half - 16.0);
+                                    ui.input_text("##con_filter", &mut inv.filter).hint("Filter...").build();
+                                    ui.spacing();
+                                    let filter = inv.filter.to_lowercase();
+                                    let mut current_type = String::new();
+                                    for c in &inv.all_consumables {
+                                        if !filter.is_empty() && !c.name.to_lowercase().contains(&filter) { continue; }
+                                        let type_str = match c.consumable_type {
+                                            ConsumableType::Chem        => "Chems",
+                                            ConsumableType::Food        => "Food",
+                                            ConsumableType::Beverage    => "Beverages",
+                                            ConsumableType::Publication => "Publications",
+                                            ConsumableType::Other       => "Other",
+                                        };
+                                        if type_str != current_type {
+                                            if !current_type.is_empty() { ui.spacing(); }
+                                            ui.text_disabled(type_str);
+                                            ui.separator();
+                                            current_type = type_str.to_string();
+                                        }
+                                        let already = character.consumables.iter().any(|cc| cc.id == c.id);
+                                        if already {
+                                            ui.text_disabled(format!("  {} [in inventory]", c.name));
+                                        } else if ui.selectable_config(
+                                            format!("  {}##con_add_{}", c.name, c.id)
+                                        ).build() {
+                                            character.consumables.push(c.clone());
+                                        }
+                                    }
+                                });
+                            }
+
+                            // ── ROBOT MODULES ─────────────────────────────
+                            InventoryTab::RobotModules => {
+                                ui.child_window("##mod_inv").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Inventory");
+                                    ui.separator(); ui.spacing();
+                                    if character.robot_modules.is_empty() { ui.text_disabled("No modules"); }
+                                    let mut to_remove = None;
+                                    for (i, m) in character.robot_modules.iter().enumerate() {
+                                        let inst = if m.installed { " [installed]" } else { "" };
+                                        ui.text(format!("{}{}", m.name, inst));
+                                        ui.same_line_with_pos(half - 64.0);
+                                        let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                        if ui.button(format!("Remove##mod_rem_{}", i)) { to_remove = Some(i); }
+                                        drop(c); drop(c2);
+                                        ui.separator();
+                                    }
+                                    if let Some(i) = to_remove { character.robot_modules.remove(i); }
+                                });
+                                ui.same_line();
+                                ui.child_window("##mod_db").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Add Module");
+                                    ui.separator(); ui.spacing();
+                                    ui.set_next_item_width(half - 16.0);
+                                    ui.input_text("##mod_filter", &mut inv.filter).hint("Filter...").build();
+                                    ui.spacing();
+                                    let filter = inv.filter.to_lowercase();
+                                    for m in &inv.all_modules {
+                                        if !filter.is_empty() && !m.name.to_lowercase().contains(&filter) { continue; }
+                                        let already = character.robot_modules.iter().any(|cm| cm.id == m.id);
+                                        if already {
+                                            ui.text_disabled(format!("{} [owned]", m.name));
+                                        } else if ui.selectable_config(
+                                            format!("{}##mod_add_{}", m.name, m.id)
+                                        ).build() {
+                                            character.robot_modules.push(m.clone());
+                                        }
+                                    }
+                                });
+                            }
+
+                            // ── GEAR ──────────────────────────────────────
+                            InventoryTab::Gear => {
+                                ui.child_window("##gear_inv").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Inventory");
+                                    ui.separator(); ui.spacing();
+                                    if character.gear.is_empty() { ui.text_disabled("No gear"); }
+                                    let mut to_remove = None;
+                                    for (i, g) in character.gear.iter_mut().enumerate() {
+                                        ui.text(format!("{}x {}", g.quantity, g.name));
+                                        ui.same_line_with_pos(half - 104.0);
+                                        if ui.button(format!("-##gear_dec_{}", i)) { g.quantity = (g.quantity - 1).max(1); }
+                                        ui.same_line();
+                                        if ui.button(format!("+##gear_inc_{}", i)) { g.quantity += 1; }
+                                        ui.same_line();
+                                        let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                        if ui.button(format!("Remove##gear_rem_{}", i)) { to_remove = Some(i); }
+                                        drop(c); drop(c2);
+                                        ui.separator();
+                                    }
+                                    if let Some(i) = to_remove { character.gear.remove(i); }
+                                });
+                                ui.same_line();
+                                ui.child_window("##gear_db").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Add Gear");
+                                    ui.separator(); ui.spacing();
+                                    ui.set_next_item_width(half - 16.0);
+                                    ui.input_text("##gear_filter", &mut inv.filter).hint("Filter...").build();
+                                    ui.spacing();
+                                    let filter = inv.filter.to_lowercase();
+                                    for g in &inv.all_gear {
+                                        if !filter.is_empty() && !g.name.to_lowercase().contains(&filter) { continue; }
+                                        let already = character.gear.iter().any(|cg| cg.id == g.id);
+                                        if already {
+                                            ui.text_disabled(format!("{} [in inventory]", g.name));
+                                        } else if ui.selectable_config(
+                                            format!("{}##gear_add_{}", g.name, g.id)
+                                        ).build() {
+                                            character.gear.push(g.clone());
+                                        }
+                                    }
+                                });
+                            }
+
+                            // ── MISC ──────────────────────────────────────
+                            InventoryTab::Misc => {
+                                ui.child_window("##misc_inv").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Misc Items");
+                                    ui.separator(); ui.spacing();
+                                    if character.misc.is_empty() { ui.text_disabled("No misc items"); }
+                                    let mut to_remove = None;
+                                    for (i, m) in character.misc.iter().enumerate() {
+                                        ui.text(m);
+                                        ui.same_line_with_pos(half - 64.0);
+                                        let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                                        if ui.button(format!("Remove##misc_rem_{}", i)) { to_remove = Some(i); }
+                                        drop(c); drop(c2);
+                                        ui.separator();
+                                    }
+                                    if let Some(i) = to_remove { character.misc.remove(i); }
+                                });
+                                ui.same_line();
+                                ui.child_window("##misc_add").size([half, list_h]).begin().map(|_| {
+                                    ui.text("Add Item");
+                                    ui.separator(); ui.spacing();
+                                    ui.text("Item name:");
+                                    ui.set_next_item_width(half - 16.0);
+                                    ui.input_text("##misc_buf", &mut inv.misc_buf).build();
+                                    ui.spacing();
+                                    let empty = inv.misc_buf.trim().is_empty();
+                                    let _d = empty.then(|| ui.begin_disabled(true));
+                                    let c  = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
+                                    let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
+                                    if ui.button("Add##misc_add_btn") {
+                                        let trimmed = inv.misc_buf.trim().to_string();
+                                        if !trimmed.is_empty() {
+                                            character.misc.push(trimmed);
+                                            inv.misc_buf = String::new();
+                                        }
+                                    }
+                                    drop(c); drop(c2);
+                                    drop(_d);
+                                });
+                            }
+                        }
+
+                        // ── Footer ────────────────────────────────────────
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
+                        if ui.button_with_size("Done##inv_done", [80.0, 0.0]) {
+                            inv.open = false;
+                            // db.save_character(character).ok();
+                        }
+                    });
+            });
+    }
+
     h
 }
 

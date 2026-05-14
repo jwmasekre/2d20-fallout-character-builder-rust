@@ -4,11 +4,13 @@ rebuilding the partially-functional svelte webapp in rust
 
 many sins have probably been committed here unwittingly
 
-this project isn't even remotely close to functional, if you can't tell what's going on and how to build/run it, you shouldn't be here
+this project is nearing 1.0. if you want to support testing, please take a look at the latest release, find ways to break it, and submit issues.
 
 ## ai disclaimer
 
-ai was used for the generation of a large bulk of this code. while I have a decent understanding of programming *concepts*, I don't know every language, so this is a great opportunity to see how the concept translates to a new language (in this case, rust). I still review every line of code for both validation and learning purposes. prior to 1.0, I will also be doing a full pass through the app, improving documentation and ensuring full understanding.
+ai was used for the generation of a large bulk of this code. while i have a decent understanding of programming *concepts*, i don't know every language, so this is a great opportunity to see how the concept translates to a new language (in this case, rust). i still review every line of code for both validation and learning purposes. prior to 1.0, i will also be doing a full pass through the app, improving documentation and ensuring full understanding.
+
+as development has continued, i've used less and less ai. Most of the use has been more speeding up busy work over creating new things, especially as context becomes a significant constraint.
 
 the db and its architecture was 100% designed and crafted by myself. the design, logic, and flow of the application was designed by myself.
 
@@ -41,9 +43,9 @@ the db and its architecture was 100% designed and crafted by myself. the design,
         * ~~0.4.3 - perk add~~
         * ~~0.4.4 - review and accept~~
         * ~~0.4.5 - de-level workflow~~
-    * 0.5.0 - levelup workflow `<- YOU ARE HERE`
-        * 0.5.1 - add/remove items
-        * 0.5.2 - add/remove weapons
+    * ~~0.5.0 - levelup workflow~~
+        * ~~0.5.1 - add/remove items~~
+        * 0.5.2 - add/remove weapons `<- YOU ARE HERE`
         * 0.5.3 - apply perk modifiers
     * 0.6.0 - inventory management
         * 0.6.1 - scale to font size

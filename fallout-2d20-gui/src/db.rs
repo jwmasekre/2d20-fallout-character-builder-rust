@@ -1214,4 +1214,203 @@ impl Db {
             ).execute(&self.pool).await
         }).ok();
     }
+    pub fn get_all_weapons(&self) -> anyhow::Result<Vec<(i32, String, String, String)>> {
+    // returns (weapon_id, name, skill_name, range)
+        self.block_on(async {
+            let rows = sqlx::query!(
+                r#"SELECT w.id, w.name, s.name AS skill_name, w.range
+                FROM weapons w
+                JOIN skills s ON s.id = w.type
+                ORDER BY s.name, w.name"#
+            )
+            .fetch_all(&self.pool).await?;
+
+            Ok(rows.iter().map(|r| (
+                r.id as i32,
+                r.name.clone().unwrap_or_default(),
+                r.skill_name.clone().unwrap_or_default(),
+                r.range.clone().unwrap_or_default(),
+            )).collect())
+        })
+    }
+    pub fn get_weapon_by_id(&self, weapon_id: i32, character: &Character) -> anyhow::Result<Weapon> {
+        self.block_on(async {
+            let row = sqlx::query!(
+                r#"SELECT
+                    w.id AS weapon_id, w.name AS weapon_name,
+                    w.dam, w.dtype, w.rate, w.range, w.wgt,
+                    s.name AS skill_name
+                FROM weapons w
+                JOIN skills s ON s.id = w.type
+                WHERE w.id = ?"#,
+                weapon_id
+            )
+            .fetch_one(&self.pool).await?;
+
+            // qualities
+            let qual_rows = sqlx::query!(
+                r#"SELECT q.name, wq.qual_val FROM weapon_quals wq
+                JOIN qualities q ON q.id = wq.qual_id
+                WHERE wq.weapon_id = ?"#, weapon_id
+            ).fetch_all(&self.pool).await?;
+
+            // effects
+            let eff_rows = sqlx::query!(
+                r#"SELECT de.name, we.effect_val FROM weapon_effects we
+                JOIN dam_effects de ON de.id = we.effect_id
+                WHERE we.weapon_id = ?"#, weapon_id
+            ).fetch_all(&self.pool).await?;
+
+            let damage_str = row.dam.clone().unwrap_or_default();
+            let damage: i32 = damage_str.trim_end_matches(|c: char| c.is_alphabetic()).parse().unwrap_or(0);
+            let rate = row.rate.unwrap_or_default() as i32;
+            let range = row.range.clone().unwrap_or_default();
+            let dam_type = parse_damage_type(&row.dtype.clone().unwrap_or_default());
+
+            let skill_name = row.skill_name.clone().unwrap_or_default();
+            let special: Vec<i32> = character.special.special_block().iter().map(|s| s.value).collect();
+            let skills: Vec<i32>  = character.skills.skill_block().iter().map(|s| s.total).collect();
+            let tags: Vec<bool>   = character.skills.skill_block().iter().map(|s| s.is_tagged()).collect();
+            let (spec_index, skill_index, skill) = match skill_name.as_str() {
+                "Melee Weapons"   => (0, 7,  Skill::MeleeWeapons),
+                "Unarmed"         => (0, 16, Skill::Unarmed),
+                "Small Guns"      => (5, 11, Skill::SmallGuns),
+                "Throwing"        => (5, 15, Skill::Throwing),
+                "Energy Weapons"  => (1, 3,  Skill::EnergyWeapons),
+                "Explosives"      => (1, 4,  Skill::Explosives),
+                "Big Guns"        => (2, 2,  Skill::BigGuns),
+                _                 => (6, 0,  Skill::Athletics),
+            };
+            let target = skills[skill_index] + special[spec_index];
+            let tag = tags[skill_index];
+
+            let effects: Vec<String> = eff_rows.iter().map(|e| {
+                let n = e.name.clone().unwrap_or_default();
+                match e.effect_val { Some(v) if v != 0 => format!("{} {}", n, v), _ => n }
+            }).collect();
+            let qualities: Vec<String> = qual_rows.iter().map(|q| {
+                let n = q.name.clone().unwrap_or_default();
+                match q.qual_val { Some(v) if v != 0 => format!("{} {}", n, v), _ => n }
+            }).collect();
+
+            Ok(Weapon {
+                id: row.weapon_id as i32,
+                name: row.weapon_name.clone().unwrap_or_default(),
+                prefix: String::new(),
+                skill,
+                target,
+                tag,
+                damage,
+                effects,
+                dam_type,
+                rate,
+                range,
+                qualities,
+                ammo: String::new(),
+                wgt: row.wgt.unwrap_or(0) as i32,
+                mods: vec![],
+            })
+        })
+    }
+    pub fn get_all_apparel(&self) -> anyhow::Result<Vec<Apparel>> {
+        self.block_on(async {
+            let rows = sqlx::query!(
+                r#"SELECT a.id, a.name, a.phys_dr AS ph_dr, a.enrg_dr AS en_dr,
+                        a.rads_dr AS rd_dr, a.wgt, a.eff AS effs, a.type AS a_type
+                FROM apparel a ORDER BY a.type, a.name"#
+            ).fetch_all(&self.pool).await?;
+
+            let mut result = vec![];
+            for row in rows {
+                let apparel_id = row.id as i32;
+                let cover_list: Vec<i64> = sqlx::query!(
+                    "SELECT ac.location_id AS cid FROM apparel_covers ac WHERE ac.apparel_id = ?",
+                    apparel_id
+                ).fetch_all(&self.pool).await
+                .unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
+
+                result.push(Apparel {
+                    id: apparel_id,
+                    name: row.name.clone().unwrap_or_default(),
+                    prefix: String::new(),
+                    apparel_type: resolve_apparel_type(row.a_type.unwrap_or(0)),
+                    ph_dr: row.ph_dr.unwrap_or(0) as i32,
+                    en_dr: row.en_dr.unwrap_or(0) as i32,
+                    rd_dr: row.rd_dr.unwrap_or(0) as i32,
+                    wgt: row.wgt.unwrap_or(0) as i32,
+                    effects: vec![row.effs.unwrap_or_default()],
+                    covers: resolve_apparel_covers(cover_list),
+                    equipped: false,
+                    db_id: 0,
+                });
+            }
+            Ok(result)
+        })
+    }
+
+    pub fn get_all_ammo(&self) -> anyhow::Result<Vec<AmmoData>> {
+        self.block_on(async {
+            let rows = sqlx::query!(
+                "SELECT id, name, wgt FROM ammo ORDER BY name"
+            ).fetch_all(&self.pool).await?;
+            Ok(rows.iter().map(|r| AmmoData {
+                id: r.id as i32,
+                name: r.name.clone().unwrap_or_default(),
+                wgt: r.wgt.unwrap_or(0) as i32,
+            }).collect())
+        })
+    }
+
+    pub fn get_all_consumables(&self) -> anyhow::Result<Vec<Consumable>> {
+        self.block_on(async {
+            let rows = sqlx::query!(
+                r#"SELECT c.id, c.name, c.type AS c_type, c.heals AS health,
+                        c.eff AS effs, c.rads, c.wgt, c.duration, c.addiction
+                FROM consumables c ORDER BY c.type, c.name"#
+            ).fetch_all(&self.pool).await?;
+            Ok(rows.iter().map(|r| Consumable {
+                id: r.id as i32,
+                name: r.name.clone().unwrap_or_default(),
+                consumable_type: resolve_consumable_type(r.c_type.unwrap_or(0)),
+                health: r.health.unwrap_or(0) as i32,
+                effects: vec![r.effs.clone().unwrap_or_default()],
+                rads: r.rads.unwrap_or(0) as i32,
+                wgt: r.wgt.unwrap_or(0) as i32,
+                duration: r.duration.clone().unwrap_or_default(),
+                addiction: r.addiction.unwrap_or(0) as i32,
+                quantity: 1,
+            }).collect())
+        })
+    }
+
+    pub fn get_all_robot_modules(&self) -> anyhow::Result<Vec<RobotModule>> {
+        self.block_on(async {
+            let rows = sqlx::query!(
+                "SELECT id, name, eff AS effs, wgt FROM robot_modules ORDER BY name"
+            ).fetch_all(&self.pool).await?;
+            Ok(rows.iter().map(|r| RobotModule {
+                id: r.id as i32,
+                name: r.name.clone().unwrap_or_default(),
+                installed: false,
+                effect: vec![r.effs.clone().unwrap_or_default()],
+                wgt: r.wgt.unwrap_or(0) as i32,
+                db_id: 0,
+            }).collect())
+        })
+    }
+
+    pub fn get_all_gear(&self) -> anyhow::Result<Vec<Gear>> {
+        self.block_on(async {
+            let rows = sqlx::query!(
+                "SELECT id, name, eff AS effs, wgt FROM gear ORDER BY name"
+            ).fetch_all(&self.pool).await?;
+            Ok(rows.iter().map(|r| Gear {
+                id: r.id as i32,
+                name: r.name.clone().unwrap_or_default(),
+                effect: vec![r.effs.clone().unwrap_or_default()],
+                wgt: r.wgt.unwrap_or(0) as i32,
+                quantity: 1,
+            }).collect())
+        })
+    }
 }
