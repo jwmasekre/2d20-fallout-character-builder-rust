@@ -35,13 +35,13 @@ the db and its architecture was 100% designed and crafted by myself. the design,
         * ~~0.3.1 - equip/unequip apparel/modules~~
         * ~~0.3.2 - increase/decrease hp, lp, rp~~
         * ~~0.3.3 - increase/decrease xp~~
-    * 0.4.0 - interactive character sheet `<- YOU ARE HERE`
-        * 0.4.1 - level-up button
-        * 0.4.2 - skill add
-        * 0.4.3 - perk add
-        * 0.4.4 - review and accept
-        * 0.4.5 - de-level workflow
-    * 0.5.0 - levelup workflow
+    * ~~0.4.0 - interactive character sheet~~
+        * ~~0.4.1 - level-up button~~
+        * ~~0.4.2 - skill add~~
+        * ~~0.4.3 - perk add~~
+        * ~~0.4.4 - review and accept~~
+        * ~~0.4.5 - de-level workflow~~
+    * 0.5.0 - levelup workflow `<- YOU ARE HERE`
         * 0.5.1 - add/remove items
         * 0.5.2 - add/remove weapons
         * 0.5.3 - apply perk modifiers
