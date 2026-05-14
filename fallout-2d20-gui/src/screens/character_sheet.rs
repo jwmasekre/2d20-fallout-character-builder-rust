@@ -5,11 +5,17 @@ use std::path::Path;
 use anyhow::Result;
 use crate::{
     AppScreen,
-    character::{Apparel, ApparelType, BodyLocation, Character, RobotType},
+    character::{Apparel, ApparelType, BodyLocation, Character, Perk, RobotType},
     db::Db,
     //log_on_change,
     screens::{
-        background_select::{BackgroundState, EquipmentState}, character_review::{equip_apparel, render_inventory, render_weapons}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str
+        background_select::{BackgroundState, EquipmentState},
+        character_review::{equip_apparel, render_inventory, render_weapons},
+        origin_select::OriginState,
+        perk_select::{PerkRow, PerkState, load_perks},
+        skill_assignment::{SKILLS, SkillState},
+        special_assignment::{SPECIAL_LABELS, SpecialState},
+        stat_calculation::get_melee_str
     },
     theme::render_window
 };
@@ -23,6 +29,11 @@ pub struct SheetState {
     notes_buf: String,
     xp_open: bool,
     xp_amount: i32,
+    level: bool,
+    up: bool,
+    perks: Vec<PerkRow>,
+    skill_choice: i32,
+    perk_choice: i32,
 }
 
 impl SheetState {
@@ -36,6 +47,11 @@ impl SheetState {
             notes_buf: String::new(),
             xp_open: false,
             xp_amount: 0,
+            level: false,
+            up: true,
+            perks: vec![],
+            skill_choice: i32::MAX,
+            perk_choice: i32::MAX,
         }
     }
     pub fn new_character(&mut self, character: &Character) {
@@ -242,11 +258,22 @@ pub fn render_character_sheet(
     ui.same_line();
     ui.text(format!("                {:4}xp", character.xp));
     ui.same_line();
-    if character.xp_next > 0 {
+    let mut char_clone = character.clone();
+    char_clone.calculate_level();
+    if char_clone.level < character.level {
+        if ui.button("Delevel##level_down") {
+            state.up = false;
+            state.level = true;
+        }
+    } else if character.xp_next > 0 {
         ui.text(format!(" ({} to next) ", character.xp_next))
     } else {
         if ui.button("Level Up##level_up") {
-            //*screen = AppScreen::LevelUp
+            state.skill_choice = i32::MAX;
+            state.perk_choice = i32::MAX;
+            state.perks = load_perks(db);
+            state.up = true;
+            state.level = true;
         }
     }
     ui.same_line();
@@ -902,121 +929,405 @@ pub fn render_character_sheet(
     drop(_scroll);
 
     if state.notes_open {
-        let nw = 500.0_f32;
-        let nh = 400.0_f32;
+        //render_overlay(ui, window);
         let (win_w, win_h) = window.size();
+        ui.window("##overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .scrollable(false)
+            .size([win_w as f32, win_h as f32], imgui::Condition::Always)
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .bg_alpha(0.6)
+            //.no_inputs()
+            .build(|| {
+                //ui.invisible_button("##blocker_btn", [win_w as f32, win_h as f32]);
+                let nw = 500.0_f32;
+                let nh = 400.0_f32;
+                ui.set_cursor_pos([(win_w as f32 - nw) * 0.5, (win_h as f32 - nh) * 0.5]);
+                ui.child_window("##notes")
+                    .size([nw, nh])
+                    .border(true)
+                    .build(|| {
+                        ui.text("Notes");
+                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        ui.same_line_with_pos(close_x);
+                        if ui.button("X##notes_close") {
+                            state.notes_open = false;
+                        }
+                        ui.separator();
+                        ui.spacing();
 
-        ui.window("##notes_window")
-        .title_bar(false)
-        .resizable(true)
-        .movable(true)
-        .size([nw, nh], imgui::Condition::Appearing)
-        .position(
-            [(win_w as f32 - nw) * 0.5, (win_h as f32 - nh) * 0.5],
-            imgui::Condition::Appearing,
-        )
-        .build(|| {
-            ui.text("Notes");
-            let close_x = ui.content_region_avail()[0] - 20.0;
-            ui.same_line_with_pos(close_x);
-            if ui.button("X##notes_close") {
-                state.notes_open = false;
-            }
-            ui.separator();
-            ui.spacing();
+                        let text_h = nh - 96.0;
+                        ui.input_text_multiline(
+                            "##notes_input",
+                            &mut state.notes_buf,
+                            [ui.content_region_avail()[0], text_h],
+                        ).build();
 
-            let text_h = nh - 96.0;
-            ui.input_text_multiline(
-                "##notes_input",
-                &mut state.notes_buf,
-                [ui.content_region_avail()[0], text_h],
-            ).build();
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
 
-            ui.spacing();
-            ui.separator();
-            ui.spacing();
+                        if ui.button("Save##notes_save") {
+                            character.notes = state.notes_buf.to_string();
+                            state.notes_open = false;
+                            db.update_notes(character);
+                        }
+                        ui.same_line();
+                        if ui.button("Cancel##notes_cancel") {
+                            state.notes_open = false;
+                            // buf is discarded without writing back to character.notes
+                        }
+                    });
+            });
 
-            if ui.button("Save##notes_save") {
-                character.notes = state.notes_buf.to_string();
-                state.notes_open = false;
-                db.update_notes(character);
-            }
-            ui.same_line();
-            if ui.button("Cancel##notes_cancel") {
-                state.notes_open = false;
-                // buf is discarded without writing back to character.notes
-            }
-        });
     }
 
     if state.xp_open {
-        let xw = 280.0_f32;
-        let xh = 160.0_f32;
         let (win_w, win_h) = window.size();
+        ui.window("##overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .scrollable(false)
+            .size([win_w as f32, win_h as f32], imgui::Condition::Always)
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .bg_alpha(0.6)
+            .build(|| {
+                let xw = 280.0_f32;
+                let xh = 160.0_f32;
+                ui.set_cursor_pos( [(win_w as f32 - xw) * 0.5, (win_h as f32 - xh) * 0.5]);
+                ui.child_window("##xp")
+                    .size([xw, xh])
+                    .border(true)
+                    .build(|| {
+                        ui.text("Experience Points");
+                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        ui.same_line_with_pos(close_x);
+                        if ui.button("X##xp_close") {
+                            state.xp_open = false;
+                        }
+                        ui.separator();
+                        ui.spacing();
 
-        ui.window("##xp_window")
-        .title_bar(false)
-        .resizable(false)
-        .movable(true)
-        .size([xw, xh], imgui::Condition::Appearing)
-        .position(
-            [(win_w as f32 - xw) * 0.5, (win_h as f32 - xh) * 0.5],
-            imgui::Condition::Appearing,
-        )
-        .build(|| {
-            ui.text("Experience Points");
-            let close_x = ui.content_region_avail()[0] - 20.0;
-            ui.same_line_with_pos(close_x);
-            if ui.button("X##xp_close") {
-                state.xp_open = false;
-            }
-            ui.separator();
-            ui.spacing();
+                        ui.text(format!("Current XP: {}", character.xp));
+                        ui.spacing();
 
-            ui.text(format!("Current XP: {}", character.xp));
-            ui.spacing();
+                        ui.set_next_item_width(ui.content_region_avail()[0]);
+                        ui.input_int("##xp_amount", &mut state.xp_amount).build();
 
-            ui.set_next_item_width(ui.content_region_avail()[0]);
-            ui.input_int("##xp_amount", &mut state.xp_amount).build();
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
 
-            ui.spacing();
-            ui.separator();
-            ui.spacing();
+                        // Add button
+                        let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
+                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
+                        if ui.button_with_size("Add##xp_add", [80.0, 0.0]) {
+                            if state.xp_amount > 0 {
+                                character.xp += state.xp_amount;
+                                state.xp_open = false;
+                                character.calculate_xp_next();
+                                db.update_xp(character);
+                            }
+                        }
+                        drop(c); drop(c2);
 
-            // Add button
-            let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
-            let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
-            if ui.button_with_size("Add##xp_add", [80.0, 0.0]) {
-                if state.xp_amount > 0 {
-                    character.xp += state.xp_amount;
-                    state.xp_open = false;
-                    character.calculate_xp_next();
-                    db.update_xp(character);
-                }
-            }
-            drop(c); drop(c2);
+                        ui.same_line();
 
-            ui.same_line();
+                        // Remove button
+                        let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                        if ui.button_with_size("Remove##xp_remove", [80.0, 0.0]) {
+                            if state.xp_amount > 0 {
+                                character.xp = (character.xp - state.xp_amount).max(0);
+                                state.xp_open = false;
+                                character.calculate_xp_next();
+                                db.update_xp(character);
+                            }
+                        }
+                        drop(c); drop(c2);
 
-            // Remove button
-            let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
-            let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
-            if ui.button_with_size("Remove##xp_remove", [80.0, 0.0]) {
-                if state.xp_amount > 0 {
-                    character.xp = (character.xp - state.xp_amount).max(0);
-                    state.xp_open = false;
-                    character.calculate_xp_next();
-                    db.update_xp(character);
-                }
-            }
-            drop(c); drop(c2);
+                        ui.same_line();
 
-            ui.same_line();
-
-            if ui.button_with_size("Cancel##xp_cancel", [80.0, 0.0]) {
-                state.xp_open = false;
-            }
+                        if ui.button_with_size("Cancel##xp_cancel", [80.0, 0.0]) {
+                            state.xp_open = false;
+                        }
+                });
         });
     }
+    if state.level {
+        let (win_w, win_h) = window.size();
+        ui.window("##overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .scrollable(false)
+            .size([win_w as f32, win_h as f32], imgui::Condition::Always)
+            .position([0.0,0.0], imgui::Condition::Always)
+            .bg_alpha(0.6)
+            .build(|| {
+                let lw = 750.0_f32;
+                let lh = 600.0_f32;
+                ui.set_cursor_pos([(win_w as f32 - lw) * 0.5, (win_h as f32 - lh) * 0.5]);
+                ui.child_window("##levelup")
+                    .size([lw, lh])
+                    .border(true)
+                    .build(|| {
+                        let title = if state.up {
+                            format!("Level Up → Lv {}", character.level + 1)
+                        } else {
+                            format!("Delevel → Lv {}", character.level - 1)
+                        };
+                        ui.text(&title);
+                        ui.separator();
+                        ui.spacing();
+
+                        let skill_half = 300.0;
+                        let perk_half = lw - skill_half - 24.0;
+                        // ── Left: Skill selection ─────────────────────────────────
+                        ui.child_window("##lu_skills")
+                            .size([skill_half, lh - 80.0])
+                            .begin()
+                            .map(|_child| {
+                                ui.text(if state.up { "Increase a Skill" } else { "Reduce a Skill" });
+                                ui.separator();
+                                ui.spacing();
+                                let mut char_clone = character.clone();
+                                char_clone.level += if state.up { 1 } else { -1 };
+                                char_clone.skills.apply_max(&char_clone.clone());
+                                let skills = char_clone.skills.skill_block();
+                                for (i, skill) in skills.iter().enumerate() {
+                                    // on levelup: only show skills not at cap
+                                    // on delevel: only show skills with at least 1 rank
+                                    let eligible = if state.up {
+                                        skill.total < skill.max
+                                    } else {
+                                        skill.total > 0
+                                    };
+
+                                    let label = format!(
+                                        "{}: {}/{}##skill_{}",
+                                        SKILLS[i], skill.total, skill.max, i
+                                    );
+
+                                    let is_sel = state.skill_choice == i as i32;
+                                    let _d = (!eligible).then(|| ui.begin_disabled(true));
+
+                                    // highlight selected row
+                                    if is_sel {
+                                        let c = ui.push_style_color(
+                                            imgui::StyleColor::Header,
+                                            [0.15, 0.35, 0.15, 0.6],
+                                        );
+                                        if ui.selectable_config(&label).selected(true).build() {
+                                            state.skill_choice = i as i32;
+                                        }
+                                        drop(c);
+                                    } else {
+                                        if ui.selectable_config(&label).selected(false).build() {
+                                            if eligible { state.skill_choice = i as i32; }
+                                        }
+                                    }
+                                    drop(_d);
+                                }
+                            });
+
+                        ui.same_line();
+
+                        // ── Right: Perk selection ─────────────────────────────────
+                        ui.child_window("##lu_perks")
+                            .size([perk_half, lh - 80.0])
+                            .begin()
+                            .map(|_child| {
+                                ui.text(if state.up { "Choose a Perk" } else { "Remove a Perk" });
+                                ui.separator();
+                                ui.spacing();
+
+                                if state.up {
+                                    // levelup: show eligible perks not yet at cap
+                                    let target_level = character.level + 1;
+                                    for perk in &state.perks {
+                                        let taken = character.perks.iter()
+                                            .find(|p| p.id == perk.id)
+                                            .map(|p| p.ranks)
+                                            .unwrap_or(0);
+                                        let at_cap = taken >= perk.ranks;
+                                        let meets_level = target_level >= perk.level_req
+                                            && (taken == 0 || target_level >= perk.level_req + taken * perk.rank_range);
+
+                                        if at_cap || !meets_level { continue; }
+
+                                        let label = format!(
+                                            "{} ({}/{})##plu_{}",
+                                            perk.name, taken, perk.ranks, perk.id
+                                        );
+                                        let is_sel = state.perk_choice == perk.id;
+
+                                        if is_sel {
+                                            let c = ui.push_style_color(
+                                                imgui::StyleColor::Header,
+                                                [0.15, 0.35, 0.15, 0.6],
+                                            );
+                                            if ui.selectable_config(&label).selected(true).build() {
+                                                state.perk_choice = perk.id;
+                                            }
+                                            drop(c);
+                                            // show description inline
+                                            if !perk.description.is_empty() {
+                                                let desc = if perk.description.len() > 1 {
+                                                    perk.description.iter().enumerate()
+                                                        .map(|(i, d)| format!("{}: {}", i + 1, d))
+                                                        .collect::<Vec<_>>().join("\n")
+                                                } else {
+                                                    perk.description[0].clone()
+                                                };
+                                                let y = ui.cursor_pos()[1];
+                                                ui.set_cursor_pos([8.0, y]);
+                                                let _d = ui.begin_disabled(true);
+                                                ui.text_wrapped(&desc);
+                                                drop(_d);
+                                            }
+                                        } else {
+                                            if ui.selectable_config(&label).selected(false).build() {
+                                                state.perk_choice = perk.id;
+                                            }
+                                        }
+                                        ui.separator();
+                                    }
+                                } else {
+                                    // delevel: only show perks the character actually has
+                                    for cperk in &character.perks {
+                                        let label = format!(
+                                            "{} (rank {})##pld_{}",
+                                            cperk.name, cperk.ranks, cperk.id
+                                        );
+                                        let is_sel = state.perk_choice == cperk.id;
+
+                                        if is_sel {
+                                            let c = ui.push_style_color(
+                                                imgui::StyleColor::Header,
+                                                [0.45, 0.1, 0.1, 0.6],
+                                            );
+                                            if ui.selectable_config(&label).selected(true).build() {
+                                                state.perk_choice = cperk.id;
+                                            }
+                                            drop(c);
+                                        } else {
+                                            if ui.selectable_config(&label).selected(false).build() {
+                                                state.perk_choice = cperk.id;
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
+                        // ── Footer ────────────────────────────────────────────────
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
+
+                        let ready = state.skill_choice != i32::MAX && state.perk_choice != i32::MAX;
+
+                        let confirm_label = if state.up { "Confirm Level Up" } else { "Confirm Delevel" };
+                        let btn_color = if state.up {
+                            ([0.1, 0.45, 0.1, 1.0], [0.15, 0.6, 0.15, 1.0])
+                        } else {
+                            ([0.55, 0.1, 0.1, 1.0], [0.75, 0.15, 0.15, 1.0])
+                        };
+
+                        let _d = (!ready).then(|| ui.begin_disabled(true));
+                        let c = ui.push_style_color(imgui::StyleColor::Button, btn_color.0);
+                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, btn_color.1);
+
+                        if ui.button_with_size(confirm_label, [160.0, 0.0]) {
+                            apply_level_change(character, state, db);
+                            character.calculate_xp_next();
+                            state.level = false;
+                        }
+                        drop(c); drop(c2);
+                        drop(_d);
+
+                        ui.same_line();
+                        if ui.button_with_size("Cancel##lu_cancel", [80.0, 0.0]) {
+                            state.level = false;
+                            state.skill_choice = i32::MAX;
+                            state.perk_choice = i32::MAX;
+                        }
+
+                        // hint when not ready
+                        if !ready {
+                            ui.same_line();
+                            ui.text_disabled(if state.skill_choice == i32::MAX && state.perk_choice == i32::MAX {
+                                "Select a skill and perk to continue"
+                            } else if state.skill_choice == i32::MAX {
+                                "Select a skill to continue"
+                            } else {
+                                "Select a perk to continue"
+                            });
+                        }
+
+                    });
+            });
+    }
     h
+}
+
+fn apply_level_change(character: &mut Character, state: &mut SheetState, db: &Db) {
+    let idx = state.skill_choice as usize;
+
+    if state.up {
+        // ── Level up ──────────────────────────────────────────────
+        character.level += 1;
+
+        // increase chosen skill rank
+        let skills = character.skills.mut_skill_block();
+        skills[idx].ranks += 1;
+        skills[idx].update();
+
+        // add or rank up chosen perk
+        let perk_id = state.perk_choice;
+        if let Some(existing) = character.perks.iter_mut().find(|p| p.id == perk_id) {
+            existing.ranks += 1;
+        } else if let Some(prow) = state.perks.iter().find(|p| p.id == perk_id) {
+            character.perks.push(Perk {
+                id: prow.id,
+                name: prow.name.clone(),
+                desc: prow.description.clone(),
+                ranks: 1,
+            });
+        }
+    } else {
+        // ── Delevel ───────────────────────────────────────────────
+        character.level -= 1;
+
+        // reduce chosen skill rank
+        let skills = character.skills.mut_skill_block();
+        if skills[idx].ranks > 0 {
+            skills[idx].ranks -= 1;
+            skills[idx].update();
+        }
+
+        // remove or reduce chosen perk rank
+        let perk_id = state.perk_choice;
+        if let Some(pos) = character.perks.iter().position(|p| p.id == perk_id) {
+            if character.perks[pos].ranks > 1 {
+                character.perks[pos].ranks -= 1;
+            } else {
+                character.perks.remove(pos);
+            }
+        }
+    }
+
+    // reapply skill caps now that level changed
+    character.skills.apply_max(&character.clone());
+    match db.save_character(character) {
+        Ok(_) => {},
+        Err(e) => eprintln!("Failed to save character: {e}"),
+    }
+    state.new_character(character);
+
+    state.skill_choice = i32::MAX;
+    state.perk_choice = i32::MAX;
 }
