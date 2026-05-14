@@ -236,7 +236,8 @@ impl Character {
     }
     pub fn calculate_level(&mut self) {
         self.level = (0.5 + ((25.0 + (2.0 * self.xp as f32)).sqrt() / 10.0)).floor() as i32;
-        //xp for next level
+    }
+    pub fn calculate_xp_next(&mut self) {
         self.xp_next = (self.level + 1) * self.level * 50 - self.xp;
     }
     pub fn calculate_carry_weight(&mut self) {
@@ -335,6 +336,7 @@ impl Character {
     }
     pub fn full_update(&mut self) {
         self.calculate_level();
+        self.calculate_xp_next();
         self.update_type();
         self.limb_dr.update_active(self.robot.clone());
         self.special.apply_max(&self.clone());
@@ -1103,6 +1105,7 @@ pub struct Apparel {
     pub effects: Vec<String>,
     pub covers: Vec<BodyLocation>,
     pub equipped: bool,
+    pub db_id: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -1140,6 +1143,7 @@ pub struct RobotModule {
     pub installed: bool,
     pub effect: Vec<String>,
     pub wgt: i32,
+    pub db_id: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

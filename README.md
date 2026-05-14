@@ -31,11 +31,11 @@ the db and its architecture was 100% designed and crafted by myself. the design,
         * ~~0.2.3 - import~~
         * ~~0.2.4 - export~~
         * ~~0.2.5 - character sheet~~
-    * 0.3.0 - view character sheet, character saving, loading, importing, exporting `<- YOU ARE HERE`
-        * 0.3.1 - equip/unequip apparel/modules
-        * 0.3.2 - increase/decrease hp, lp, rp
-        * 0.3.3 - increase/decrease xp
-    * 0.4.0 - interactive character sheet
+    * ~~0.3.0 - view character sheet, character saving, loading, importing, exporting~~
+        * ~~0.3.1 - equip/unequip apparel/modules~~
+        * ~~0.3.2 - increase/decrease hp, lp, rp~~
+        * ~~0.3.3 - increase/decrease xp~~
+    * 0.4.0 - interactive character sheet `<- YOU ARE HERE`
         * 0.4.1 - level-up button
         * 0.4.2 - skill add
         * 0.4.3 - perk add

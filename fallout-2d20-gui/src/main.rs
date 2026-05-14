@@ -64,13 +64,13 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 
 const VERSION: Version = Version {
     major: 0,
-    minor: 3,
+    minor: 4,
     patch: 0,
     prerelease: PreRelease::Alpha,
-    prerelease_ver: 1,
+    prerelease_ver: 0,
 };
 
-const DATE: &str = "20260508";
+const DATE: &str = "20260513";
 
 pub fn screen_unlocked(
     screen: &AppScreen,
@@ -365,9 +365,22 @@ fn main() -> Result<()> {
                     character.junk = equipment.junk.clone();
                     character.misc = equipment.misc.clone();
                     sheet.new_character(character);
+                    let mut success = false;
                     match db.save_character(character) {
-                        Ok(_) => *screen = AppScreen::CharacterSheet,
+                        Ok(_) => {success = true;},
                         Err(e) => eprintln!("Failed to save character: {e}"),
+                    }
+                    if success {
+                        match db.load_character(&character.id.to_string()) {
+                            Ok(loaded) => {
+                                *character = loaded;
+                                sheet.new_character(character);
+                                *screen = AppScreen::CharacterSheet;
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to load: {e}");
+                            }
+                        }
                     }
                 }
             }

@@ -7,7 +7,7 @@ use crate::{
     AppScreen,
     character::{Apparel, ApparelType, BodyLocation, Character, RobotType},
     db::Db,
-    log_on_change,
+    //log_on_change,
     screens::{
         background_select::{BackgroundState, EquipmentState}, character_review::{equip_apparel, render_inventory, render_weapons}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}, stat_calculation::get_melee_str
     },
@@ -19,6 +19,10 @@ pub struct SheetState {
     background_expanded: bool,
     traits_expanded: bool,
     perks_expanded: Vec<bool>,
+    notes_open: bool,
+    notes_buf: String,
+    xp_open: bool,
+    xp_amount: i32,
 }
 
 impl SheetState {
@@ -28,6 +32,10 @@ impl SheetState {
             background_expanded: false,
             traits_expanded: false,
             perks_expanded: vec![],
+            notes_open: false,
+            notes_buf: String::new(),
+            xp_open: false,
+            xp_amount: 0,
         }
     }
     pub fn new_character(&mut self, character: &Character) {
@@ -63,7 +71,14 @@ pub fn sanitize_filename(name: &str) -> String {
     }
 }
 
-pub fn toggle_apparel(character: &mut Character, apparel_id: i32) {
+pub fn toggle_module(character: &mut Character, module_id: i32, db_id: i64, db: &Db) {
+    let Some(index) = character.robot_modules.iter().position(|m| m.id == module_id) else { return };
+    let installed = character.robot_modules[index].installed;
+    character.robot_modules[index].installed = !installed;
+    db.update_module(db_id, installed);
+}
+
+pub fn toggle_apparel(character: &mut Character, apparel_id: i32, db_id: i64, db: &Db) {
     let Some(index) = character.apparel.iter().position(|a| a.id == apparel_id) else { return };
     let item = character.apparel[index].clone();
     if item.equipped {
@@ -117,6 +132,7 @@ pub fn toggle_apparel(character: &mut Character, apparel_id: i32) {
         limb.0.equipped.clear();
     }
     equip_apparel(character);
+    db.update_apparel(db_id, item.equipped);
 }
 
 #[derive(Debug)]
@@ -205,7 +221,7 @@ pub fn render_expandable_block(
 pub fn render_character_sheet(
     ui: &Ui,
     window: &Window,
-    _db: &Db,
+    db: &Db,
     character: &mut Character,
     screen: &mut AppScreen,
     state: &mut SheetState,
@@ -219,12 +235,34 @@ pub fn render_character_sheet(
     let Some((w, h, _token)) = render_window(ui, window, "##character_sheet", "Character Sheet", screen, origin, special,  skill, perk, background, equipment, character)
         else { return 0.0 };
 
-    log_on_change!(character);
+    //log_on_change!(character);
 
     //could probably do columns here with wrapping
     ui.text(format!("{} --- {} ({})", character.name, character.player.name, character.party.name));
     ui.same_line();
-    ui.text(format!("                {:4}xp ({} to next)  Lv {}  |here you would add xp|", character.xp, character.xp_next, character.level));
+    ui.text(format!("                {:4}xp", character.xp));
+    ui.same_line();
+    if character.xp_next > 0 {
+        ui.text(format!(" ({} to next) ", character.xp_next))
+    } else {
+        if ui.button("Level Up##level_up") {
+            //*screen = AppScreen::LevelUp
+        }
+    }
+    ui.same_line();
+    ui.text(format!("Lv {}", character.level));
+    ui.same_line();
+    if ui.button("Add/Remove XP##xp_open") {
+        state.xp_open = true;
+        state.xp_amount = 0;
+    }
+    ui.same_line_with_pos(w - 140.0);
+    if ui.button("Notes##notes_open") {
+        state.notes_open = true;
+        state.notes_buf = character.notes.clone();
+    }
+    ui.same_line_with_pos(w - 88.0);
+    ui.text_disabled("|");
     ui.same_line_with_pos(w - 80.0);
     if ui.button("Export##export") {
         let default_name = format!("{}.json", sanitize_filename(&character.name));
@@ -243,7 +281,7 @@ pub fn render_character_sheet(
     ui.spacing();
 
     let Some(_scroll) = ui.child_window("##sheet_scroll")
-        .size([w - 16.0, h - 84.0])
+        .size([w - 16.0, h - 92.0])
         .begin()
     else { return h };
     
@@ -295,6 +333,7 @@ pub fn render_character_sheet(
     if ui.button("-##lp_dec") {
         if character.luck_points > 0 {
             character.luck_points -= 1;
+            db.update_lp(character);
         }
     }
     ui.same_line();
@@ -303,6 +342,7 @@ pub fn render_character_sheet(
     if ui.button("+##lp_inc") {
         if character.luck_points < character.luck_points_max {
             character.luck_points += 1;
+            db.update_lp(character);
         }
     }
     if character.luck_points < 0 { character.luck_points = 0 };
@@ -315,6 +355,7 @@ pub fn render_character_sheet(
         if ui.button("-##rp_dec") {
             if character.rad_points > 0 {
                 character.rad_points -= 1;
+                db.update_rp(character);
             }
         }
         ui.same_line();
@@ -323,6 +364,7 @@ pub fn render_character_sheet(
         if ui.button("+##rp_inc") {
             if character.rad_points < 5 {
                 character.rad_points += 1;
+                db.update_rp(character);
             }
         }
         if character.rad_points < 0 { character.rad_points = 0 };
@@ -353,18 +395,19 @@ pub fn render_character_sheet(
 
     let def_str = format!("Defense: {}", character.defense);
     let init_str = format!("Initiative: {}", character.initiative);
-    let hp_str = format!("HP: {}/{}", character.hp, character.hp_max);
+    let hp_str1 = format!("HP:");
+    let hp_str2 = format!("{}/{}", character.hp, character.hp_max);
     let melee_str = format!("Melee: {}", get_melee_str(character));
     let poison_str = format!("Poison DR: {}", if character.poison_dr < 99 {character.poison_dr.to_string()} else {"Immune".to_string()});
     let def_size = ui.calc_text_size(def_str.clone());
     let init_size = ui.calc_text_size(init_str.clone());
-    let hp_size = ui.calc_text_size(hp_str.clone());
+    let hp_size = ui.calc_text_size(hp_str1.clone())[0] + ui.calc_text_size(hp_str2.clone())[0] + 20.0;
     let melee_size = ui.calc_text_size(melee_str.clone());
     let poison_size = ui.calc_text_size(poison_str.clone());
     let new_line = def_size[1] + 8.0;
     let pos_1 = [off_1 + (block_w - def_size[0]) / 2.0, skill_cursor[1] + new_line];
     let pos_3 = [off_3 + (block_w - init_size[0]) / 2.0, skill_cursor[1] + new_line];
-    let pos_5 = [off_5 + (block_w - hp_size[0]) / 2.0, skill_cursor[1] + new_line];
+    let pos_5 = [off_5 + (block_w - hp_size) / 2.0, skill_cursor[1] + new_line];
     let pos_2 = [off_2 + (block_w - melee_size[0]) / 2.0, skill_cursor[1] + new_line * 2.0];
     let pos_4 = [off_4 + (block_w - poison_size[0]) / 2.0, skill_cursor[1] + new_line * 2.0];
     ui.set_cursor_pos(pos_1);
@@ -372,7 +415,25 @@ pub fn render_character_sheet(
     ui.set_cursor_pos(pos_3);
     ui.text(init_str);
     ui.set_cursor_pos(pos_5);
-    ui.text(hp_str);
+    ui.text(hp_str1);
+    ui.same_line();
+    if ui.button("-##hp_dec") {
+        character.hp -= 1;
+        if character.hp < 0 {
+            character.hp = 0;
+        }
+        db.update_hp(character);
+    }
+    ui.same_line();
+    ui.text(hp_str2);
+    ui.same_line();
+    if ui.button("+##hp_inc") {
+        character.hp += 1;
+        if character.hp > character.hp_max {
+            character.hp = character.hp_max;
+        }
+        db.update_hp(character);
+    }
     ui.set_cursor_pos(pos_2);
     ui.text(melee_str);
     ui.set_cursor_pos(pos_4);
@@ -672,10 +733,11 @@ pub fn render_character_sheet(
     let inv_cursor = ui.cursor_pos().clone();
 
     ui.child_window("##inv_block")
+        //not sure how we go about calculating this
         .size([290.0, 400.0])
         .border(false)
         .build(|| {
-            render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character);
+            render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character, db);
     });
 
     let t_padding = 16.0_f32;
@@ -836,6 +898,125 @@ pub fn render_character_sheet(
                 }
             }
         }
+    }
+    drop(_scroll);
+
+    if state.notes_open {
+        let nw = 500.0_f32;
+        let nh = 400.0_f32;
+        let (win_w, win_h) = window.size();
+
+        ui.window("##notes_window")
+        .title_bar(false)
+        .resizable(true)
+        .movable(true)
+        .size([nw, nh], imgui::Condition::Appearing)
+        .position(
+            [(win_w as f32 - nw) * 0.5, (win_h as f32 - nh) * 0.5],
+            imgui::Condition::Appearing,
+        )
+        .build(|| {
+            ui.text("Notes");
+            let close_x = ui.content_region_avail()[0] - 20.0;
+            ui.same_line_with_pos(close_x);
+            if ui.button("X##notes_close") {
+                state.notes_open = false;
+            }
+            ui.separator();
+            ui.spacing();
+
+            let text_h = nh - 96.0;
+            ui.input_text_multiline(
+                "##notes_input",
+                &mut state.notes_buf,
+                [ui.content_region_avail()[0], text_h],
+            ).build();
+
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+
+            if ui.button("Save##notes_save") {
+                character.notes = state.notes_buf.to_string();
+                state.notes_open = false;
+                db.update_notes(character);
+            }
+            ui.same_line();
+            if ui.button("Cancel##notes_cancel") {
+                state.notes_open = false;
+                // buf is discarded without writing back to character.notes
+            }
+        });
+    }
+
+    if state.xp_open {
+        let xw = 280.0_f32;
+        let xh = 160.0_f32;
+        let (win_w, win_h) = window.size();
+
+        ui.window("##xp_window")
+        .title_bar(false)
+        .resizable(false)
+        .movable(true)
+        .size([xw, xh], imgui::Condition::Appearing)
+        .position(
+            [(win_w as f32 - xw) * 0.5, (win_h as f32 - xh) * 0.5],
+            imgui::Condition::Appearing,
+        )
+        .build(|| {
+            ui.text("Experience Points");
+            let close_x = ui.content_region_avail()[0] - 20.0;
+            ui.same_line_with_pos(close_x);
+            if ui.button("X##xp_close") {
+                state.xp_open = false;
+            }
+            ui.separator();
+            ui.spacing();
+
+            ui.text(format!("Current XP: {}", character.xp));
+            ui.spacing();
+
+            ui.set_next_item_width(ui.content_region_avail()[0]);
+            ui.input_int("##xp_amount", &mut state.xp_amount).build();
+
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+
+            // Add button
+            let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
+            let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
+            if ui.button_with_size("Add##xp_add", [80.0, 0.0]) {
+                if state.xp_amount > 0 {
+                    character.xp += state.xp_amount;
+                    state.xp_open = false;
+                    character.calculate_xp_next();
+                    db.update_xp(character);
+                }
+            }
+            drop(c); drop(c2);
+
+            ui.same_line();
+
+            // Remove button
+            let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+            let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+            if ui.button_with_size("Remove##xp_remove", [80.0, 0.0]) {
+                if state.xp_amount > 0 {
+                    character.xp = (character.xp - state.xp_amount).max(0);
+                    state.xp_open = false;
+                    character.calculate_xp_next();
+                    db.update_xp(character);
+                }
+            }
+            drop(c); drop(c2);
+
+            ui.same_line();
+
+            if ui.button_with_size("Cancel##xp_cancel", [80.0, 0.0]) {
+                state.xp_open = false;
+            }
+        });
     }
     h
 }

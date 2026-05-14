@@ -1075,6 +1075,7 @@ fn resolve_apparel(
             effects,
             covers,
             equipped: false,
+            db_id: 0,
         })
     }
     result
@@ -1219,7 +1220,8 @@ fn resolve_robot_modules(
                 r.id         AS id,
                 r.name       AS name,
                 r.eff        AS effs,
-                r.wgt        AS wgt
+                r.wgt        AS wgt,
+                r.id         AS db_id
                 FROM background_robot_modules br
             JOIN robot_modules r ON r.id  = br.robot_module_id
             WHERE br.id IN (
@@ -1237,6 +1239,7 @@ fn resolve_robot_modules(
             installed: false,
             effect: vec![row.effs.unwrap_or("".to_string())],
             wgt: row.wgt.unwrap_or(0) as i32,
+            db_id: row.db_id.unwrap_or(0),
         })
     }
     result
