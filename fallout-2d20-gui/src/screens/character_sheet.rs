@@ -9,7 +9,7 @@ use crate::{
     db::Db,
     //log_on_change,
     screens::{
-        background_select::{BackgroundState, EquipmentState},
+        background_select::{BackgroundState, EquipmentState, sync_derived_weapons},
         character_review::{equip_apparel, render_inventory, render_weapons},
         origin_select::OriginState,
         perk_select::{PerkRow, PerkState, load_perks},
@@ -1426,6 +1426,7 @@ pub fn render_character_sheet(
 
                                 if let Some(idx) = to_remove {
                                     character.weapons.remove(idx);
+                                    sync_derived_weapons(character, db);
                                 }
                             });
 
@@ -1503,7 +1504,7 @@ pub fn render_character_sheet(
                                     Ok(w) => {
                                         character.weapons.push(w);
                                         state.weapon_selected = None;
-                                        // db.save_character(character).ok();
+                                        sync_derived_weapons(character, db);
                                     }
                                     Err(e) => eprintln!("Failed to load weapon {}: {}", wid, e),
                                 }

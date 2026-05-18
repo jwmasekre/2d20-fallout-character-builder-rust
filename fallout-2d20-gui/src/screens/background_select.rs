@@ -890,6 +890,48 @@ fn resolve_weapons(
     (w_result,a_result)
 }
 
+fn is_derived(id: i32) -> bool {
+    matches!(id, 28 | 29 | 51 | 52)
+}
+
+fn is_2h(weapon: &Weapon) -> bool {
+    weapon.qualities.contains(&"Two-Handed".to_string())
+}
+
+pub fn sync_derived_weapons(character: &mut Character, db: &Db) {
+    const UNARMED: i32 = 51;
+    const ROCK: i32 = 52;
+    const GUN_BASH_2H: i32 = 29;
+    const GUN_BASH_1H: i32 = 28;
+
+    let two_handed_skills = [Skill::BigGuns, Skill::SmallGuns, Skill::EnergyWeapons];
+    let one_handed_skills = [Skill::SmallGuns, Skill::EnergyWeapons];
+
+    let has_2h_gun = character.weapons.iter().any(|w| {
+        !is_derived(w.id) && two_handed_skills.contains(&w.skill) && is_2h(w)
+    });
+    let has_1h_gun = character.weapons.iter().any(|w| {
+        !is_derived(w.id) && one_handed_skills.contains(&w.skill) && !is_2h(w)
+    });
+
+    let mut desired: Vec<i32> = vec![UNARMED, ROCK];
+    if has_2h_gun { desired.push(GUN_BASH_2H) }
+    if has_1h_gun { desired.push(GUN_BASH_1H) }
+
+    character.weapons.retain(|w| {
+        !is_derived(w.id) || desired.contains(&w.id)
+    });
+
+    for id in desired {
+        if !character.weapons.iter().any(|w| w.id == id) {
+            match db.get_weapon_by_id(id, character) {
+                Ok(w) => character.weapons.push(w),
+                Err(e) => eprintln!("Failed to load derived weapon {}: {e}", id),
+            }
+        }
+    }
+}
+
 pub fn resolve_weapon_slot(slot: i64) -> WeaponSlot {
     match slot {
         1 => WeaponSlot::Receiver,
