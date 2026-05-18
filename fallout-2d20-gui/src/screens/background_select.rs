@@ -890,11 +890,11 @@ fn resolve_weapons(
     (w_result,a_result)
 }
 
-fn is_derived(id: i32) -> bool {
+pub fn is_derived(id: i32) -> bool {
     matches!(id, 28 | 29 | 51 | 52)
 }
 
-fn is_2h(weapon: &Weapon) -> bool {
+pub fn is_2h(weapon: &Weapon) -> bool {
     weapon.qualities.contains(&"Two-Handed".to_string())
 }
 
