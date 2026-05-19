@@ -19,19 +19,7 @@ use crate::{
     character::{Character, Party, Player, PreRelease, Version},
     config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db,
     screens::{
-        background_select::{BackgroundState, EquipmentState, render_background_select},
-        character_review::{ReviewState, render_character_review},
-        main_menu::render_main_menu,
-        origin_select::{OriginState, render_origin_select},
-        perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select},
-        settings::render_settings,
-        skill_assignment::{SkillState, render_skill_assignment},
-        special_assignment::{SpecialState, render_special_assignment},
-        stat_calculation::render_stat_calculation,
-        character_sheet::{render_character_sheet, SheetState},
-        new_char_setup::{NewCharacterSetupState, render_new_character_setup},
-        load_character::{render_load_character, LoadCharacterState},
-        import_character::{render_import_character, ImportState},
+        background_select::{BackgroundState, EquipmentState, render_background_select, sync_derived_weapons}, character_review::{ReviewState, render_character_review}, character_sheet::{SheetState, render_character_sheet}, import_character::{ImportState, render_import_character}, load_character::{LoadCharacterState, render_load_character}, main_menu::render_main_menu, new_char_setup::{NewCharacterSetupState, render_new_character_setup}, origin_select::{OriginState, render_origin_select}, perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select}, settings::render_settings, skill_assignment::{SkillState, render_skill_assignment}, special_assignment::{SpecialState, render_special_assignment}, stat_calculation::render_stat_calculation
     }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
 };
 
@@ -64,13 +52,13 @@ pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
 
 const VERSION: Version = Version {
     major: 0,
-    minor: 5,
-    patch: 2,
+    minor: 6,
+    patch: 0,
     prerelease: PreRelease::Alpha,
     prerelease_ver: 0,
 };
 
-const DATE: &str = "20260514";
+const DATE: &str = "20260518";
 
 pub fn screen_unlocked(
     screen: &AppScreen,
@@ -365,6 +353,7 @@ fn main() -> Result<()> {
                     character.junk = equipment.junk.clone();
                     character.misc = equipment.misc.clone();
                     sheet.new_character(character);
+                    sync_derived_weapons(character, db);
                     let mut success = false;
                     match db.save_character(character) {
                         Ok(_) => {success = true;},

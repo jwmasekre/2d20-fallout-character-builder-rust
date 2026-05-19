@@ -965,7 +965,15 @@ impl Db {
                     })
                 }
 
-                let weap_eff_str: Vec<String> = effects.iter().map(|e| if e.value != Some(0) && e.value.is_some() { format!("{} {}", e.name, e.value.unwrap()) } else { e.name.clone() }).collect();
+                let weap_eff_str: Vec<String> = effects.iter().map(|e| if e.value != Some(0) && e.value.is_some() {
+                    if e.name.contains("X") {
+                        e.name.replace("X", &e.value.unwrap().to_string())
+                    } else {
+                        format!("{} {}", e.name, e.value.unwrap())
+                    }
+                } else {
+                    e.name.clone()
+                }).collect();
                 let weap_qual_str: Vec<String> = qualities.iter().map(|q| if q.value != Some(0) && q.value.is_some() { format!("{} {}", q.name, q.value.unwrap()) } else { q.name.clone() }).collect();
                 let weight = base_wgt + mod_wgt;
 
@@ -1133,7 +1141,7 @@ impl Db {
             character.limb_dr.track_right.injuries = row.rt_inj.unwrap_or(0) as i32;
             character.limb_dr.wheel.injuries = row.wheel_inj.unwrap_or(0) as i32;
             equip_apparel(&mut character);
-            character.limb_dr.update_dr(character.base_dr.clone());
+            character.limb_dr.update_dr(character.base_dr.clone(), character.perk_ranks(144), character.junk.common + character.junk.uncommon + character.junk.rare, character.perk_ranks(172));
             Ok(character)
         }).map_err(anyhow::Error::from)
     }
