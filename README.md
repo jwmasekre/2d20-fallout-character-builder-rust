@@ -45,9 +45,9 @@ the db and its architecture was 100% designed and crafted by myself. the design,
         * ~~0.4.5 - de-level workflow~~
     * ~~0.5.0 - levelup workflow~~
         * ~~0.5.1 - add/remove items~~
-        * 0.5.2 - add/remove weapons `<- YOU ARE HERE`
-        * 0.5.3 - apply perk modifiers
-    * 0.6.0 - inventory management
+        * ~~0.5.2 - add/remove weapons~~
+        * ~~0.5.3 - apply perk modifiers~~
+    * 0.6.0 - inventory management `<- YOU ARE HERE`
         * 0.6.1 - scale to font size
         * 0.6.2 - "reactive" (960px - 1920px)
         * 0.6.3 - high dpi considerations

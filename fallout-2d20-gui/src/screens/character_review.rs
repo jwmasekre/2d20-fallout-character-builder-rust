@@ -302,7 +302,16 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
             if character.has_perk(69) && [Skill::Unarmed, Skill::MeleeWeapons].contains(&weapon.skill) {
                 let p_pos = effs.iter().position(|e| e.starts_with("Piercing"));
                 if p_pos.is_some() {
-                    let p_val: i32 = effs[p_pos.unwrap()].strip_prefix("Piercing ").unwrap().parse().ok().unwrap();
+                    let p_val_str = if effs[p_pos.unwrap()].contains("X") {
+                        effs[p_pos.unwrap()].strip_prefix("Piercing X ")
+                    } else {
+                        effs[p_pos.unwrap()].strip_prefix("Piercing ")
+                    };
+                    let mut p_val = 0;
+                    match p_val_str.unwrap().parse::<i32>() {
+                        Ok(_) => p_val = p_val_str.unwrap().parse().ok().unwrap(),
+                        Err(e) => eprintln!("failed to parse piercing value: {e}"),
+                    };
                     effs[p_pos.unwrap()] = format!("Piercing {}", p_val + 1);
                 } else {
                     effs.push("Piercing 1".to_string());
