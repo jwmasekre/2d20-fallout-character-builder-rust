@@ -246,7 +246,7 @@ pub fn equip_apparel(character: &mut Character) {
             }
         }
     }
-    character.limb_dr.update_dr(character.base_dr.clone());
+    character.limb_dr.update_dr(character.base_dr.clone(), character.perk_ranks(144), character.junk.common + character.junk.uncommon + character.junk.rare, character.perk_ranks(172));
 }
 
 pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
@@ -277,38 +277,66 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
 
         for weapon in &weapons {
             let weapon_name = format!("{} {}",weapon.prefix, weapon.name);
-            let eff_str = weapon.effects.join(", ");
-            let qual_str = weapon.qualities.join(",");
+            let mut effs = weapon.effects.clone();
+            let mut quals = weapon.qualities.clone();
             //basher
-            let mut p_eff_str = if character.has_perk(9) && [28,29].contains(&weapon.id) {
-                eff_str + ", Vicious"
-            } else { eff_str };
+            if character.has_perk(9) && [28,29].contains(&weapon.id) && !effs.contains(&"Vicious".to_string()) {
+                effs.push("Vicious".to_string());
+            }
             //big leagues
-            if character.has_perk(11) && is_2h(weapon) && !is_derived(weapon.id) && weapon.skill == Skill::MeleeWeapons {p_eff_str += ", Vicious"};
+            if character.has_perk(11) && is_2h(weapon) && !is_derived(weapon.id) && weapon.skill == Skill::MeleeWeapons && !effs.contains(&"Vicious".to_string()) {
+                effs.push("Vicious".to_string());
+            };
             //demo expert
-            if character.has_perk(26) && weapon.qualities.contains(&"Blast".to_string()) && !weapon.effects.contains(&"Vicious".to_string()) { p_eff_str += ", Vicious" };
+            if character.has_perk(26) && weapon.qualities.contains(&"Blast".to_string()) && !weapon.effects.contains(&"Vicious".to_string()) {
+                effs.push("Vicious".to_string());
+            };
+            //licensed plumber
+            if character.has_perk(160) && weapon.name.contains("Pipe") {
+                let u_pos = quals.iter().position(|q| q == &"Unreliable".to_string());
+                if u_pos.is_some() {
+                    quals.remove(u_pos.unwrap());
+                }
+            }
             //piercing strike
             if character.has_perk(69) && [Skill::Unarmed, Skill::MeleeWeapons].contains(&weapon.skill) {
-                //we gotta handle all the piercing stuff anyways so fuck it
-                p_eff_str += ", Piercing 1";
+                let p_pos = effs.iter().position(|e| e.starts_with("Piercing"));
+                if p_pos.is_some() {
+                    let p_val: i32 = effs[p_pos.unwrap()].strip_prefix("Piercing ").unwrap().parse().ok().unwrap();
+                    effs[p_pos.unwrap()] = format!("Piercing {}", p_val + 1);
+                } else {
+                    effs.push("Piercing 1".to_string());
+                }
             }
             //shotgun surgeon
             if character.has_perk(82) && weapon.name.ends_with("Shotgun") {
-                //really need better piercing handling lol
-                p_eff_str += ", Piercing 1";
+                let p_pos = effs.iter().position(|e| e.starts_with("Piercing"));
+                if p_pos.is_some() {
+                    let p_val: i32 = effs[p_pos.unwrap()].strip_prefix("Piercing ").unwrap().parse().ok().unwrap();
+                    effs[p_pos.unwrap()] = format!("Piercing {}", p_val + 1);
+                } else {
+                    effs.push("Piercing 1".to_string());
+                }
             }
             //incisor
             if character.has_perk(127) && weapon.skill == Skill::MeleeWeapons {
-                p_eff_str += &format!(", Piercing {}", character.perk_ranks(127));
+                let p_pos = effs.iter().position(|e| e.starts_with("Piercing"));
+                if p_pos.is_some() {
+                    let p_val: i32 = effs[p_pos.unwrap()].strip_prefix("Piercing ").unwrap().parse().ok().unwrap();
+                    effs[p_pos.unwrap()] = format!("Piercing {}", p_val + character.perk_ranks(127));
+                } else {
+                    effs.push(format!("Piercing {}", character.perk_ranks(127)));
+                }
             }
             //bow before me
             if character.has_perk(133) && weapon.name.ends_with("ow") {
-                p_eff_str += ", Piercing 1";
-            }
-            //licensed plumber
-            if character.has_perk(160) && weapon.name.contains("Pipe") {
-                //we'll need a way to resolve this
-                //p_qual_str -= "Unreliable"
+                let p_pos = effs.iter().position(|e| e.starts_with("Piercing"));
+                if p_pos.is_some() {
+                    let p_val: i32 = effs[p_pos.unwrap()].strip_prefix("Piercing ").unwrap().parse().ok().unwrap();
+                    effs[p_pos.unwrap()] = format!("Piercing {}", p_val + 1);
+                } else {
+                    effs.push("Piercing 1".to_string());
+                }
             }
             let tag_str = if weapon.tag { "*" } else { "" };
             let skill_str = match weapon.skill {
@@ -354,8 +382,13 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
             if character.has_perk(76) && is_2h(weapon) && [Skill::SmallGuns, Skill::EnergyWeapons, Skill::BigGuns].contains(&weapon.skill) {
                 damage += character.perk_ranks(76);
                 if character.perk_ranks(76) > 1 {
-                    //again, we need better piercing handling
-                    p_eff_str += ", Piercing 1"
+                    let p_pos = effs.iter().position(|e| e.starts_with("Piercing"));
+                    if p_pos.is_some() {
+                        let p_val: i32 = effs[p_pos.unwrap()].strip_prefix("Piercing ").unwrap().parse().ok().unwrap();
+                        effs[p_pos.unwrap()] = format!("Piercing {}", p_val + 1);
+                    } else {
+                        effs.push("Piercing 1".to_string());
+                    }
                 }
             }
             //size matters
@@ -375,13 +408,15 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
             let rate = if character.has_perk(109) && weapon.skill == Skill::BigGuns && weapon.rate > 0 {
                 weapon.rate + character.perk_ranks(109)
             } else { weapon.rate };
+            let eff_str = effs.join(", ");
+            let qual_str = quals.join(",");
             let cells: &[&str] = &[
                 &weapon_name,
                 skill_str,
                 &weapon.target.to_string(),
                 tag_str,
                 &damage.to_string(),
-                &p_eff_str,
+                &eff_str,
                 dam_type,
                 &rate.to_string(),
                 &weapon.range,
@@ -469,7 +504,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
                 }
             }
             ui.next_column();
-            eq_wgt += item.wgt;
+            eq_wgt += item.wgt * if item.apparel_type != ApparelType::PowerArmor { (4 - character.perk_ranks(131)) / 4 } else { 1 };
         }
         ui.spacing();
     }
@@ -565,7 +600,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
         ui.same_line();
         ui.text(format!("{}",junk.common));
         ui.spacing();
-            eq_wgt += junk.common * 2;
+            eq_wgt += junk.common * if character.has_perk(129) { 1 } else { 2 };
     }
     let misc_actual: Vec<&String> = misc.iter().filter(|s| *s != "").collect();
     if !misc_actual.is_empty() {
@@ -718,7 +753,7 @@ pub fn render_character_review(
     ui.separator();
     ui.spacing();
     ui.text_disabled("temporary display:");
-    character.limb_dr.update_dr(character.base_dr.clone());
+    character.limb_dr.update_dr(character.base_dr.clone(), character.perk_ranks(144), character.junk.common + character.junk.uncommon + character.junk.rare, character.perk_ranks(172));
     let active_limbs = character.limb_dr.mut_active_limbs();
     for (limb, name) in active_limbs {
         let worn: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();

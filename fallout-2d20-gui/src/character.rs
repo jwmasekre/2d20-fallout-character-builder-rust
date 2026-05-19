@@ -941,16 +941,17 @@ impl Limbs {
         if self.track_right.active { active.push((&mut self.track_right, "track_right".to_string())) };
         active
     }
-    pub fn update_dr(&mut self, base_dr: BaseDR) {
+    pub fn update_dr(&mut self, base_dr: BaseDR, ironclad_ranks: i32, junk: i32, junk_ranks: i32) {
         for (loc,_) in self.mut_active_limbs() {
             let mut equip_dr = BaseDR::new();
+                let junk_dr = (junk / 5).min(junk_ranks);
             for item in loc.equipped.clone() {
-                equip_dr.ph_dr += item.ph_dr;
-                equip_dr.en_dr += item.en_dr;
+                equip_dr.ph_dr += item.ph_dr + if item.apparel_type == ApparelType::Armor {ironclad_ranks} else { 0 };
+                equip_dr.en_dr += item.en_dr + if item.apparel_type == ApparelType::Armor {ironclad_ranks} else { 0 };
                 equip_dr.rd_dr += item.rd_dr;
             }
-            loc.ph_dr = base_dr.ph_dr + equip_dr.ph_dr;
-            loc.en_dr = base_dr.en_dr + equip_dr.en_dr;
+            loc.ph_dr = base_dr.ph_dr + equip_dr.ph_dr + junk_dr;
+            loc.en_dr = base_dr.en_dr + equip_dr.en_dr + junk_dr;
             if base_dr.rd_dr < 99 {
                 loc.rd_dr = base_dr.rd_dr + equip_dr.rd_dr;
             } else {
