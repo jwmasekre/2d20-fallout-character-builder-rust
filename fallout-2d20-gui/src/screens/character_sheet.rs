@@ -1,29 +1,19 @@
 
 use fallout_2d20_core::{
-    apply_level_change,
-    export_character,
-    get_melee_str,
-    render_inventory,
-    render_weapons,
-    sanitize_filename,
-    sync_derived_weapons,
-    character::{
+    apply_level_change, character::{
         AmmoInv,
         ApparelType,
         Character,
         ConsumableType,
         RobotType,
         WeaponMods
-    },
-    constants::{
+    }, constants::{
         SKILLS,
         SPECIAL_LABELS
-    },
-    db::{
+    }, db::{
         Db,
         load_perks
-    },
-    states::{
+    }, export_character, get_melee_str, render_inventory, render_weapons, sanitize_filename, states::{
         BackgroundState,
         EquipmentState,
         InventoryTab,
@@ -32,7 +22,7 @@ use fallout_2d20_core::{
         SheetState,
         SkillState,
         SpecialState
-    },
+    }, structs::AppConfig, sync_derived_weapons
 };
 use imgui::Ui;
 use sdl2::video::Window;
@@ -54,8 +44,9 @@ pub fn render_character_sheet(
     perk: &mut PerkState,
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
+    cfg: &AppConfig
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##character_sheet", "Character Sheet", screen, origin, special,  skill, perk, background, equipment, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##character_sheet", "Character Sheet", screen, origin, special,  skill, perk, background, equipment, character, cfg)
         else { return 0.0 };
 
     //log_on_change!(character);
@@ -90,14 +81,14 @@ pub fn render_character_sheet(
         state.xp_open = true;
         state.xp_amount = 0;
     }
-    ui.same_line_with_pos(w - 140.0);
+    ui.same_line_with_pos(w - 140.0 * cfg.ui_scale);
     if ui.button("Notes##notes_open") {
         state.notes_open = true;
         state.notes_buf = character.notes.clone();
     }
-    ui.same_line_with_pos(w - 88.0);
+    ui.same_line_with_pos(w - 88.0 * cfg.ui_scale);
     ui.text_disabled("|");
-    ui.same_line_with_pos(w - 80.0);
+    ui.same_line_with_pos(w - 80.0 * cfg.ui_scale);
     if ui.button("Export##export") {
         let default_name = format!("{}.json", sanitize_filename(&character.name));
         if let Some(path) = rfd::FileDialog::new()
@@ -115,20 +106,20 @@ pub fn render_character_sheet(
     ui.spacing();
 
     let Some(_scroll) = ui.child_window("##sheet_scroll")
-        .size([w - 16.0, h - 92.0])
+        .size([w - 16.0 * cfg.ui_scale, h - 92.0 * cfg.ui_scale])
         .begin()
     else { return h };
     
-    let o_padding = 16.0_f32;
+    let o_padding = 16.0 * cfg.ui_scale;
     let o_block_w = w - o_padding * 2.0;
-    let o_gap = 8.0_f32;
+    let o_gap = 8.0 * cfg.ui_scale;
     let o_col_w = (o_block_w - o_gap) / 2.0;
-    let o_collapse_h = 44.0_f32;
-    let o_expanded_h = 160.0_f32;
+    let o_collapse_h = 44.0 * cfg.ui_scale;
+    let o_expanded_h = 160.0 * cfg.ui_scale;
 
     let origin_h = if state.origin_expanded { o_expanded_h } else { o_collapse_h };
     let background_h = if state.background_expanded { o_expanded_h } else { o_collapse_h };
-    let total_h = origin_h.max(background_h) + 16.0;
+    let total_h = origin_h.max(background_h) + 16.0 * cfg.ui_scale;
 
     ui.set_cursor_pos([o_padding, ui.cursor_pos()[1]]);
     ui.child_window("##ob_block")
@@ -143,6 +134,7 @@ pub fn render_character_sheet(
                 &mut state.origin_expanded,
                 &character.origin.as_ref().map(|o| o.name.as_str()).unwrap_or("no origin"),
                 character.origin.as_ref().map(|o| o.desc.as_str()),
+                cfg,
             );
             ui.same_line_with_spacing(0.0, o_gap);
             render_expandable_block(
@@ -153,6 +145,7 @@ pub fn render_character_sheet(
                 &mut state.background_expanded,
                 character.background.as_ref().map(|b| b.name.as_str()).unwrap_or("no background"),
                 character.background.as_ref().map(|b| b.desc.as_str()),
+                cfg,
             );
     });
     ui.separator();
@@ -220,12 +213,12 @@ pub fn render_character_sheet(
         ui.text(format!("{}  {:.<20} {}", if skill.is_tagged() {"*"} else {" "}, SKILLS[i], skill.total));
     }
 
-    let block_w = (w - 300.0) / 5.0;
-    let off_1 = skill_cursor[0] + 230.0_f32;
-    let off_2 = skill_cursor[0] + 230.0 + block_w + 8.0;
-    let off_3 = skill_cursor[0] + 230.0 + (block_w + 8.0) * 2.0;
-    let off_4 = skill_cursor[0] + 230.0 + (block_w + 8.0) * 3.0;
-    let off_5 = skill_cursor[0] + 230.0 + (block_w + 8.0) * 4.0;
+    let block_w = (w - 300.0 * cfg.ui_scale) / 5.0;
+    let off_1 = skill_cursor[0] + 230.0 * cfg.ui_scale;
+    let off_2 = skill_cursor[0] + 230.0 * cfg.ui_scale + block_w + 8.0 * cfg.ui_scale;
+    let off_3 = skill_cursor[0] + 230.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 2.0;
+    let off_4 = skill_cursor[0] + 230.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 3.0;
+    let off_5 = skill_cursor[0] + 230.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 4.0;
 
     let def_str = format!("Defense: {}", character.defense);
     let init_str = format!("Initiative: {}", character.initiative);
@@ -235,10 +228,10 @@ pub fn render_character_sheet(
     let poison_str = format!("Poison DR: {}", if character.poison_dr < 99 {character.poison_dr.to_string()} else {"Immune".to_string()});
     let def_size = ui.calc_text_size(def_str.clone());
     let init_size = ui.calc_text_size(init_str.clone());
-    let hp_size = ui.calc_text_size(hp_str1.clone())[0] + ui.calc_text_size(hp_str2.clone())[0] + 20.0;
+    let hp_size = ui.calc_text_size(hp_str1.clone())[0] + ui.calc_text_size(hp_str2.clone())[0] + 20.0 * cfg.ui_scale;
     let melee_size = ui.calc_text_size(melee_str.clone());
     let poison_size = ui.calc_text_size(poison_str.clone());
-    let new_line = def_size[1] + 8.0;
+    let new_line = def_size[1] + 8.0 * cfg.ui_scale;
     let pos_1 = [off_1 + (block_w - def_size[0]) / 2.0, skill_cursor[1] + new_line];
     let pos_3 = [off_3 + (block_w - init_size[0]) / 2.0, skill_cursor[1] + new_line];
     let pos_5 = [off_5 + (block_w - hp_size) / 2.0, skill_cursor[1] + new_line];
@@ -557,7 +550,7 @@ pub fn render_character_sheet(
     ui.separator();
     ui.spacing();
 
-    render_weapons(ui, character.weapons.clone(), character);
+    render_weapons(ui, character.weapons.clone(), character, cfg);
     if ui.button("Add/Remove Weapons##weapons_open") {
         state.weapons_open = true;
         state.weapon_selected = None;
@@ -574,10 +567,10 @@ pub fn render_character_sheet(
 
     ui.child_window("##inv_block")
         //not sure how we go about calculating this
-        .size([290.0, 400.0])
+        .size([290.0 * cfg.ui_scale, 400.0 * cfg.ui_scale])
         .border(false)
         .build(|| {
-            render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character, db);
+            render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character, db, cfg);
             if ui.button("Add/Remove Items##inv_open") {
                 state.inventory.open = true;
                 state.inventory.filter = String::new();
@@ -589,17 +582,17 @@ pub fn render_character_sheet(
             }
     });
 
-    let t_padding = 16.0_f32;
-    let t_block_w = w - t_padding * 2.0 - 300.0;
-    let t_gap = 8.0_f32;
+    let t_padding = 16.0 * cfg.ui_scale;
+    let t_block_w = w - t_padding * 2.0 - 300.0 * cfg.ui_scale;
+    let t_gap = 8.0 * cfg.ui_scale;
     let p_col_w = (t_block_w - t_gap) / 2.0;
     let t_col_w = if character.traits.len() > 1 { p_col_w } else { t_block_w };
-    let t_collapse_h = 44.0_f32;
-    let t_expanded_h = 160.0_f32;
+    let t_collapse_h = 44.0 * cfg.ui_scale;
+    let t_expanded_h = 160.0 * cfg.ui_scale;
 
     let trait_h = if state.traits_expanded { t_expanded_h } else { t_collapse_h };
 
-    ui.set_cursor_pos([inv_cursor[0] + t_padding + 300.0, inv_cursor[1]]);
+    ui.set_cursor_pos([inv_cursor[0] + t_padding + 300.0 * cfg.ui_scale, inv_cursor[1]]);
     if character.traits.len() < 1 {
         state.traits_expanded = false;
         ui.text_disabled("no traits");
@@ -616,6 +609,7 @@ pub fn render_character_sheet(
                     &mut state.traits_expanded,
                     &["Trait:".to_string(),character.traits[0].name.clone()].join(" "),
                     Some(&character.traits[0].desc),
+                    cfg,
                 );
                 if character.traits.len() > 1 {
                     ui.same_line_with_spacing(0.0, t_gap);
@@ -627,6 +621,7 @@ pub fn render_character_sheet(
                         &mut state.traits_expanded,
                         &["Trait:".to_string(),character.traits[1].name.clone()].join(" "),
                         Some(&character.traits[1].desc),
+                        cfg,
                     );
                 }
         });
@@ -647,7 +642,7 @@ pub fn render_character_sheet(
 
             match i {
                 0 => {
-                    ui.set_cursor_pos([inv_cursor[0] + 300.0 + t_padding, inv_cursor[1] + trait_h + t_padding]);
+                    ui.set_cursor_pos([inv_cursor[0] + 300.0 * cfg.ui_scale + t_padding, inv_cursor[1] + trait_h + t_padding]);
                     ui.child_window(format!("##p_block_{}", i))
                         .size([t_block_w, perk_h])
                         .border(false)
@@ -668,6 +663,7 @@ pub fn render_character_sheet(
                                 &mut state.perks_expanded[i*2],
                                 &character.perks[i*2].name,
                                 Some(&p1_desc.join("\n")),
+                                cfg,
                             );
                             if character.perks.len() - (i*2+1) > 0 {
                                 let mut p2_desc: Vec<String> = vec![];
@@ -687,6 +683,7 @@ pub fn render_character_sheet(
                                     &mut state.perks_expanded[i*2+1],
                                     &character.perks[i*2+1].name,
                                     Some(&p2_desc.join("\n")),
+                                    cfg,
                                 );
                             }
                     });
@@ -701,7 +698,7 @@ pub fn render_character_sheet(
                             curr_h += t_collapse_h;
                         }
                     }
-                    ui.set_cursor_pos([inv_cursor[0] + 300.0 + t_padding, curr_h]);
+                    ui.set_cursor_pos([inv_cursor[0] + 300.0 * cfg.ui_scale + t_padding, curr_h]);
                     ui.child_window(format!("##p_block_{}", i))
                         .size([t_block_w, perk_h])
                         .border(false)
@@ -722,6 +719,7 @@ pub fn render_character_sheet(
                                 &mut state.perks_expanded[i*2],
                                 &character.perks[i*2].name,
                                 Some(&p1_desc.join("\n")),
+                                cfg,
                             );
                             if character.perks.len() - (i*2+1) > 0 {
                                 let mut p2_desc: Vec<String> = vec![];
@@ -741,6 +739,7 @@ pub fn render_character_sheet(
                                     &mut state.perks_expanded[i*2+1],
                                     &character.perks[i*2+1].name,
                                     Some(&p2_desc.join("\n")),
+                                    cfg
                                 );
                             }
                     });
@@ -764,15 +763,15 @@ pub fn render_character_sheet(
             //.no_inputs()
             .build(|| {
                 //ui.invisible_button("##blocker_btn", [win_w as f32, win_h as f32]);
-                let nw = 500.0_f32;
-                let nh = 400.0_f32;
+                let nw = 500.0 * cfg.ui_scale;
+                let nh = 400.0 * cfg.ui_scale;
                 ui.set_cursor_pos([(win_w as f32 - nw) * 0.5, (win_h as f32 - nh) * 0.5]);
                 ui.child_window("##notes")
                     .size([nw, nh])
                     .border(true)
                     .build(|| {
                         ui.text("Notes");
-                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        let close_x = ui.content_region_avail()[0] - 20.0 * cfg.ui_scale;
                         ui.same_line_with_pos(close_x);
                         if ui.button("X##notes_close") {
                             state.notes_open = false;
@@ -780,7 +779,7 @@ pub fn render_character_sheet(
                         ui.separator();
                         ui.spacing();
 
-                        let text_h = nh - 96.0;
+                        let text_h = nh - 96.0 * cfg.ui_scale;
                         ui.input_text_multiline(
                             "##notes_input",
                             &mut state.notes_buf,
@@ -817,15 +816,15 @@ pub fn render_character_sheet(
             .position([0.0, 0.0], imgui::Condition::Always)
             .bg_alpha(0.6)
             .build(|| {
-                let xw = 280.0_f32;
-                let xh = 160.0_f32;
+                let xw = 280.0 * cfg.ui_scale;
+                let xh = 160.0 * cfg.ui_scale;
                 ui.set_cursor_pos( [(win_w as f32 - xw) * 0.5, (win_h as f32 - xh) * 0.5]);
                 ui.child_window("##xp")
                     .size([xw, xh])
                     .border(true)
                     .build(|| {
                         ui.text("Experience Points");
-                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        let close_x = ui.content_region_avail()[0] - 20.0 * cfg.ui_scale;
                         ui.same_line_with_pos(close_x);
                         if ui.button("X##xp_close") {
                             state.xp_open = false;
@@ -846,7 +845,7 @@ pub fn render_character_sheet(
                         // Add button
                         let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
-                        if ui.button_with_size("Add##xp_add", [80.0, 0.0]) {
+                        if ui.button_with_size("Add##xp_add", [80.0 * cfg.ui_scale, 0.0]) {
                             if state.xp_amount > 0 {
                                 character.xp += state.xp_amount;
                                 state.xp_open = false;
@@ -861,7 +860,7 @@ pub fn render_character_sheet(
                         // Remove button
                         let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
-                        if ui.button_with_size("Remove##xp_remove", [80.0, 0.0]) {
+                        if ui.button_with_size("Remove##xp_remove", [80.0 * cfg.ui_scale, 0.0]) {
                             if state.xp_amount > 0 {
                                 character.xp = (character.xp - state.xp_amount).max(0);
                                 state.xp_open = false;
@@ -873,7 +872,7 @@ pub fn render_character_sheet(
 
                         ui.same_line();
 
-                        if ui.button_with_size("Cancel##xp_cancel", [80.0, 0.0]) {
+                        if ui.button_with_size("Cancel##xp_cancel", [80.0 * cfg.ui_scale, 0.0]) {
                             state.xp_open = false;
                         }
                 });
@@ -890,8 +889,8 @@ pub fn render_character_sheet(
             .position([0.0,0.0], imgui::Condition::Always)
             .bg_alpha(0.6)
             .build(|| {
-                let lw = 750.0_f32;
-                let lh = 600.0_f32;
+                let lw = 750.0 * cfg.ui_scale;
+                let lh = 600.0 * cfg.ui_scale;
                 ui.set_cursor_pos([(win_w as f32 - lw) * 0.5, (win_h as f32 - lh) * 0.5]);
                 ui.child_window("##levelup")
                     .size([lw, lh])
@@ -906,11 +905,11 @@ pub fn render_character_sheet(
                         ui.separator();
                         ui.spacing();
 
-                        let skill_half = 300.0;
-                        let perk_half = lw - skill_half - 24.0;
+                        let skill_half = 300.0 * cfg.ui_scale;
+                        let perk_half = lw - skill_half - 24.0 * cfg.ui_scale;
                         // ── Left: Skill selection ─────────────────────────────────
                         ui.child_window("##lu_skills")
-                            .size([skill_half, lh - 80.0])
+                            .size([skill_half, lh - 80.0 * cfg.ui_scale])
                             .begin()
                             .map(|_child| {
                                 ui.text(if state.up { "Increase a Skill" } else { "Reduce a Skill" });
@@ -960,7 +959,7 @@ pub fn render_character_sheet(
 
                         // ── Right: Perk selection ─────────────────────────────────
                         ui.child_window("##lu_perks")
-                            .size([perk_half, lh - 80.0])
+                            .size([perk_half, lh - 80.0 * cfg.ui_scale])
                             .begin()
                             .map(|_child| {
                                 ui.text(if state.up { "Choose a Perk" } else { "Remove a Perk" });
@@ -1006,7 +1005,7 @@ pub fn render_character_sheet(
                                                     perk.description[0].clone()
                                                 };
                                                 let y = ui.cursor_pos()[1];
-                                                ui.set_cursor_pos([8.0, y]);
+                                                ui.set_cursor_pos([8.0 * cfg.ui_scale, y]);
                                                 let _d = ui.begin_disabled(true);
                                                 ui.text_wrapped(&desc);
                                                 drop(_d);
@@ -1063,7 +1062,7 @@ pub fn render_character_sheet(
                         let c = ui.push_style_color(imgui::StyleColor::Button, btn_color.0);
                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, btn_color.1);
 
-                        if ui.button_with_size(confirm_label, [160.0, 0.0]) {
+                        if ui.button_with_size(confirm_label, [160.0 * cfg.ui_scale, 0.0]) {
                             apply_level_change(character, state, db);
                             character.calculate_xp_next();
                             state.level = false;
@@ -1072,7 +1071,7 @@ pub fn render_character_sheet(
                         drop(_d);
 
                         ui.same_line();
-                        if ui.button_with_size("Cancel##lu_cancel", [80.0, 0.0]) {
+                        if ui.button_with_size("Cancel##lu_cancel", [80.0 * cfg.ui_scale, 0.0]) {
                             state.level = false;
                             state.skill_choice = i32::MAX;
                             state.perk_choice = i32::MAX;
@@ -1104,8 +1103,8 @@ pub fn render_character_sheet(
             .position([0.0, 0.0], imgui::Condition::Always)
             .bg_alpha(0.6)
             .build(|| {
-                let ww = 700.0_f32;
-                let wh = 600.0_f32;
+                let ww = 700.0 * cfg.ui_scale;
+                let wh = 600.0 * cfg.ui_scale;
                 ui.set_cursor_pos([(win_w as f32 - ww) * 0.5, (win_h as f32 - wh) * 0.5]);
                 ui.child_window("##weapons_modal")
                     .size([ww, wh])
@@ -1113,7 +1112,7 @@ pub fn render_character_sheet(
                     .build(|| {
                         // ── Header ───────────────────────────────────────────
                         ui.text("Weapons");
-                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        let close_x = ui.content_region_avail()[0] - 20.0 * cfg.ui_scale;
                         ui.same_line_with_pos(close_x);
                         if ui.button("X##weapons_close") {
                             state.weapons_open = false;
@@ -1121,8 +1120,8 @@ pub fn render_character_sheet(
                         ui.separator();
                         ui.spacing();
 
-                        let half = (ww - 16.0) / 2.0;
-                        let list_h = wh - 96.0;
+                        let half = (ww - 16.0 * cfg.ui_scale) / 2.0;
+                        let list_h = wh - 96.0 * cfg.ui_scale;
 
                         // ── Left: current inventory ───────────────────────────
                         ui.child_window("##weap_inv")
@@ -1145,10 +1144,10 @@ pub fn render_character_sheet(
                                         format!("{} ", w.prefix)
                                     };
                                     ui.text(format!("{}{}", prefix, w.name));
-                                    ui.same_line_with_pos(half - 96.0);
+                                    ui.same_line_with_pos(half - 96.0 * cfg.ui_scale);
                                     ui.text_disabled(&w.range);
 
-                                    ui.same_line_with_pos(half - 96.0 + 42.0);
+                                    ui.same_line_with_pos(half - 96.0 * cfg.ui_scale + 42.0 * cfg.ui_scale);
                                     let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
                                     let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
                                     if ui.button(format!("Rem##wrem_{}", i)) {
@@ -1163,7 +1162,7 @@ pub fn render_character_sheet(
                                     if !installed.is_empty() {
                                         for m in &installed {
                                             let y = ui.cursor_pos()[1];
-                                            ui.set_cursor_pos([12.0, y]);
+                                            ui.set_cursor_pos([12.0 * cfg.ui_scale, y]);
                                             ui.text_disabled(format!("↳ {}", m.name));
                                         }
                                     }
@@ -1188,7 +1187,7 @@ pub fn render_character_sheet(
                                 ui.spacing();
 
                                 // filter input
-                                ui.set_next_item_width(half - 16.0);
+                                ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                 ui.input_text("##wfilter", &mut state.weapon_filter).hint("Filter...").build();
                                 ui.spacing();
 
@@ -1244,7 +1243,7 @@ pub fn render_character_sheet(
                         let _d = state.weapon_selected.is_none().then(|| ui.begin_disabled(true));
                         let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
-                        if ui.button_with_size("Add Selected##weap_add", [140.0, 0.0]) {
+                        if ui.button_with_size("Add Selected##weap_add", [140.0 * cfg.ui_scale, 0.0]) {
                             if let Some(wid) = state.weapon_selected {
                                 match db.get_weapon_by_id(wid, character) {
                                     Ok(w) => {
@@ -1260,7 +1259,7 @@ pub fn render_character_sheet(
                         drop(_d);
 
                         ui.same_line();
-                        if ui.button_with_size("Done##weap_done", [80.0, 0.0]) {
+                        if ui.button_with_size("Done##weap_done", [80.0 * cfg.ui_scale, 0.0]) {
                             state.weapons_open = false;
                             match db.save_character(character) {
                                 Ok(_) => {},
@@ -1287,8 +1286,8 @@ pub fn render_character_sheet(
             .position([0.0, 0.0], imgui::Condition::Always)
             .bg_alpha(0.6)
             .build(|| {
-                let iw = 960.0_f32;
-                let ih = 600.0_f32;
+                let iw = 960.0 * cfg.ui_scale;
+                let ih = 600.0 * cfg.ui_scale;
                 let inv = &mut state.inventory;
                 ui.set_cursor_pos([(win_w as f32 - iw) * 0.5, (win_h as f32 - ih) * 0.5]);
                 ui.child_window("##inv_modal")
@@ -1297,7 +1296,7 @@ pub fn render_character_sheet(
                     .build(|| {
                         // ── Header ───────────────────────────────────────
                         ui.text("Inventory");
-                        let close_x = ui.content_region_avail()[0] - 20.0;
+                        let close_x = ui.content_region_avail()[0] - 20.0 * cfg.ui_scale;
                         ui.same_line_with_pos(close_x);
                         if ui.button("X##inv_close") { inv.open = false; }
                         ui.separator();
@@ -1331,8 +1330,8 @@ pub fn render_character_sheet(
                         ui.separator();
                         ui.spacing();
 
-                        let half = (iw - 16.0) / 2.0;
-                        let list_h = ih - 136.0;
+                        let half = (iw - 16.0 * cfg.ui_scale) / 2.0;
+                        let list_h = ih - 136.0 * cfg.ui_scale;
 
                         match inv.tab {
 
@@ -1345,7 +1344,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, a) in character.ammo.iter_mut().enumerate() {
                                         ui.text(format!("{}x {}", a.quantity, a.ammo.name));
-                                        ui.same_line_with_pos(half - 100.0);
+                                        ui.same_line_with_pos(half - 100.0 * cfg.ui_scale);
                                         if ui.button(format!("-##ammo_dec_{}", i)) {
                                             a.quantity -= 1;
                                         }
@@ -1366,10 +1365,10 @@ pub fn render_character_sheet(
                                 ui.child_window("##ammo_db").size([half, list_h]).begin().map(|_| {
                                     ui.text("Add Ammo");
                                     ui.separator(); ui.spacing();
-                                    ui.set_next_item_width(half - 16.0);
+                                    ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                     ui.input_text("##ammo_filter", &mut inv.filter).hint("Filter...").build();
                                     ui.text("Qty:"); ui.same_line();
-                                    ui.set_next_item_width(60.0);
+                                    ui.set_next_item_width(60.0 * cfg.ui_scale);
                                     ui.input_int("##ammo_qty", &mut inv.ammo_qty).build();
                                     inv.ammo_qty = inv.ammo_qty.max(1);
                                     ui.spacing();
@@ -1409,7 +1408,7 @@ pub fn render_character_sheet(
                                             ApparelType::RobotArmor => "Robot Armor",
                                         };
                                         ui.text(format!("[{}] {}", type_str, a.name));
-                                        ui.same_line_with_pos(half - 64.0);
+                                        ui.same_line_with_pos(half - 64.0 * cfg.ui_scale);
                                         let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
                                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
                                         if ui.button(format!("Remove##app_rem_{}", i)) { to_remove = Some(i); }
@@ -1422,7 +1421,7 @@ pub fn render_character_sheet(
                                 ui.child_window("##app_db").size([half, list_h]).begin().map(|_| {
                                     ui.text("Add Apparel");
                                     ui.separator(); ui.spacing();
-                                    ui.set_next_item_width(half - 16.0);
+                                    ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                     ui.input_text("##app_filter", &mut inv.filter).hint("Filter...").build();
                                     ui.spacing();
 
@@ -1494,7 +1493,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, c) in character.consumables.iter_mut().enumerate() {
                                         ui.text(format!("{}x {}", c.quantity, c.name));
-                                        ui.same_line_with_pos(half - 104.0);
+                                        ui.same_line_with_pos(half - 104.0 * cfg.ui_scale);
                                         if ui.button(format!("-##con_dec_{}", i)) { c.quantity = (c.quantity - 1).max(1); }
                                         ui.same_line();
                                         if ui.button(format!("+##con_inc_{}", i)) { c.quantity += 1; }
@@ -1511,7 +1510,7 @@ pub fn render_character_sheet(
                                 ui.child_window("##con_db").size([half, list_h]).begin().map(|_| {
                                     ui.text("Add Consumable");
                                     ui.separator(); ui.spacing();
-                                    ui.set_next_item_width(half - 16.0);
+                                    ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                     ui.input_text("##con_filter", &mut inv.filter).hint("Filter...").build();
                                     ui.spacing();
                                     let filter = inv.filter.to_lowercase();
@@ -1553,7 +1552,7 @@ pub fn render_character_sheet(
                                     for (i, m) in character.robot_modules.iter().enumerate() {
                                         let inst = if m.installed { " [installed]" } else { "" };
                                         ui.text(format!("{}{}", m.name, inst));
-                                        ui.same_line_with_pos(half - 64.0);
+                                        ui.same_line_with_pos(half - 64.0 * cfg.ui_scale);
                                         let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
                                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
                                         if ui.button(format!("Remove##mod_rem_{}", i)) { to_remove = Some(i); }
@@ -1566,7 +1565,7 @@ pub fn render_character_sheet(
                                 ui.child_window("##mod_db").size([half, list_h]).begin().map(|_| {
                                     ui.text("Add Module");
                                     ui.separator(); ui.spacing();
-                                    ui.set_next_item_width(half - 16.0);
+                                    ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                     ui.input_text("##mod_filter", &mut inv.filter).hint("Filter...").build();
                                     ui.spacing();
                                     let filter = inv.filter.to_lowercase();
@@ -1593,7 +1592,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, g) in character.gear.iter_mut().enumerate() {
                                         ui.text(format!("{}x {}", g.quantity, g.name));
-                                        ui.same_line_with_pos(half - 104.0);
+                                        ui.same_line_with_pos(half - 104.0 * cfg.ui_scale);
                                         if ui.button(format!("-##gear_dec_{}", i)) { g.quantity = (g.quantity - 1).max(1); }
                                         ui.same_line();
                                         if ui.button(format!("+##gear_inc_{}", i)) { g.quantity += 1; }
@@ -1610,7 +1609,7 @@ pub fn render_character_sheet(
                                 ui.child_window("##gear_db").size([half, list_h]).begin().map(|_| {
                                     ui.text("Add Gear");
                                     ui.separator(); ui.spacing();
-                                    ui.set_next_item_width(half - 16.0);
+                                    ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                     ui.input_text("##gear_filter", &mut inv.filter).hint("Filter...").build();
                                     ui.spacing();
                                     let filter = inv.filter.to_lowercase();
@@ -1637,7 +1636,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, m) in character.misc.iter().enumerate() {
                                         ui.text(m);
-                                        ui.same_line_with_pos(half - 64.0);
+                                        ui.same_line_with_pos(half - 64.0 * cfg.ui_scale);
                                         let c  = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
                                         let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
                                         if ui.button(format!("Remove##misc_rem_{}", i)) { to_remove = Some(i); }
@@ -1651,7 +1650,7 @@ pub fn render_character_sheet(
                                     ui.text("Add Item");
                                     ui.separator(); ui.spacing();
                                     ui.text("Item name:");
-                                    ui.set_next_item_width(half - 16.0);
+                                    ui.set_next_item_width(half - 16.0 * cfg.ui_scale);
                                     ui.input_text("##misc_buf", &mut inv.misc_buf).build();
                                     ui.spacing();
                                     let empty = inv.misc_buf.trim().is_empty();
@@ -1675,7 +1674,7 @@ pub fn render_character_sheet(
                         ui.spacing();
                         ui.separator();
                         ui.spacing();
-                        if ui.button_with_size("Done##inv_done", [80.0, 0.0]) {
+                        if ui.button_with_size("Done##inv_done", [80.0 * cfg.ui_scale, 0.0]) {
                             inv.open = false;
                             // db.save_character(character).ok();
                         }

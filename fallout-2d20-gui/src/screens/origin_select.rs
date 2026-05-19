@@ -3,20 +3,12 @@ use sdl2::video::Window;
 use crate::theme::{render_text_wrapped, render_window};
 
 use fallout_2d20_core::{
-    states::{
-        OriginState,
-        SpecialState,
-        SkillState,
-        PerkState,
-        BackgroundState,
-        EquipmentState,
-    },
-    db::Db,
     character::{
         Character,
         Trait,
-    },
-    structs::AppScreen,
+    }, db::Db, states::{
+        BackgroundState, EquipmentState, OriginState, PerkState, SkillState, SpecialState
+    }, structs::{AppConfig, AppScreen}
 };
 
 pub fn render_origin_select(
@@ -31,15 +23,16 @@ pub fn render_origin_select(
     background_state: &mut BackgroundState,
     equipment_state: &mut EquipmentState,
     screen: &mut AppScreen,
+    cfg: &AppConfig,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select", screen, state, special_state, skill_state, perk_state, background_state, equipment_state, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##origin_select", "Origin Select", screen, state, special_state, skill_state, perk_state, background_state, equipment_state, character, cfg)
         else { return 0.0 };
     ui.text("ORIGIN");
     ui.separator();
     ui.spacing();
 
-    let label_w = 140.0_f32;
-    let field_w = w - label_w - 32.0;
+    let label_w = 140.0 * cfg.ui_scale;
+    let field_w = w - label_w - 32.0 * cfg.ui_scale;
 
     ui.text("Character Name");
     ui.same_line_with_pos(label_w);
@@ -217,15 +210,15 @@ pub fn render_origin_select(
                         state.update_trait(character);
                     }
                 }
-                ui.same_line_with_pos(label_w + 24.0);
+                ui.same_line_with_pos(label_w + 24.0 * cfg.ui_scale);
                 if at_limit {
                     ui.text_disabled(&t.name);
                 } else {
                     ui.text(&t.name);
                 }
                 let y = ui.cursor_pos()[1];
-                ui.set_cursor_pos([label_w + 24.0, y]);
-                render_text_wrapped(at_limit, !at_limit, ui, &t.description, label_w + 24.0, label_w + field_w);
+                ui.set_cursor_pos([label_w + 24.0 * cfg.ui_scale, y]);
+                render_text_wrapped(at_limit, !at_limit, ui, &t.description, label_w + 24.0 * cfg.ui_scale, label_w + field_w);
 
                 ui.spacing();
             }

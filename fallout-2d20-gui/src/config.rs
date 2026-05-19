@@ -64,6 +64,7 @@ pub fn load_config() -> AppConfig {
             _ => continue,
         }
     }
+    cfg.set_ui_scale();
     cfg
 }
 

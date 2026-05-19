@@ -14,7 +14,7 @@ use fallout_2d20_core::{
         PartyChoice,
         PlayerChoice,
     },
-    structs::AppScreen,
+    structs::{AppConfig, AppScreen},
 };
 
 
@@ -29,10 +29,11 @@ pub fn render_new_character_setup(
     out_player_name: &mut Option<String>,
     out_party_name: &mut Option<String>,
     character: &mut Character,
+    cfg: &AppConfig,
 ) {
     let (win_w, win_h) = window.size();
-    let w = 480.0_f32;
-    let h = 360.0_f32;
+    let w = 480.0 * cfg.ui_scale;
+    let h = 360.0 * cfg.ui_scale;
 
     ui.window("##nc_setup")
         .title_bar(false)
@@ -82,9 +83,9 @@ pub fn render_new_character_setup(
                     } else {
                         ui.text("Existing players:");
                         ui.spacing();
-                        let list_h = (h - 180.0).max(80.0);
+                        let list_h = (h - 180.0 * cfg.ui_scale).max(80.0 * cfg.ui_scale);
                         ui.child_window("##player_list")
-                            .size([w - 32.0, list_h])
+                            .size([w - 32.0 * cfg.ui_scale, list_h])
                             .build(|| {
                                 for (id, name) in &state.players {
                                     let is_sel = state.player_choice == PlayerChoice::Existing(id.clone());
@@ -142,7 +143,7 @@ pub fn render_new_character_setup(
                     }
                     if state.party_choice == PartyChoice::New {
                         ui.same_line();
-                        ui.set_next_item_width(w - 160.0);
+                        ui.set_next_item_width(w - 160.0 * cfg.ui_scale);
                         ui.input_text("##party_name", &mut state.new_party_name).build();
                     }
                     ui.spacing();
@@ -151,9 +152,9 @@ pub fn render_new_character_setup(
                     if !state.parties.is_empty() {
                         ui.text("Existing parties:");
                         ui.spacing();
-                        let list_h = (h - 220.0).max(60.0);
+                        let list_h = (h - 220.0 * cfg.ui_scale).max(60.0 * cfg.ui_scale);
                         ui.child_window("##party_list")
-                            .size([w - 32.0, list_h])
+                            .size([w - 32.0 * cfg.ui_scale, list_h])
                             .build(|| {
                                 for (id, name) in &state.parties {
                                     let is_sel = state.party_choice == PartyChoice::Existing(id.clone());

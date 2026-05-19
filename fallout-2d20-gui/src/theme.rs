@@ -2,7 +2,7 @@ use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
 
 use fallout_2d20_core::{
-    character::Character, states::{BackgroundState, EquipmentState, OriginState, PerkState, SkillState, SpecialState}, structs::AppScreen
+    character::Character, states::{BackgroundState, EquipmentState, OriginState, PerkState, SkillState, SpecialState}, structs::{AppConfig, AppScreen}
 };
     
 use crate::{
@@ -200,6 +200,7 @@ pub fn render_window<'ui>(
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
     character: &mut Character,
+    cfg: &AppConfig,
 ) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
     let bar_h = BAR_HEIGHT;
@@ -214,12 +215,12 @@ pub fn render_window<'ui>(
         .movable(false)
         .size([w, h], imgui::Condition::Always)
         .position(
-            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + 22.0 + (content_h - h) * 0.5],
+            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + 22.0 * cfg.ui_scale + (content_h - h) * 0.5],
             imgui::Condition::Always,
         )
         .begin()?;
 
-    let close_x = w - 40.0;
+    let close_x = w - 40.0 * cfg.ui_scale;
     ui.text(title);
     ui.same_line_with_pos(close_x);
     if ui.button(format!("X##{}_close", title)) {
@@ -281,12 +282,13 @@ pub fn render_expandable_block(
     expanded: &mut bool,
     title: &str,
     contents: Option<&str>,
+    cfg: &AppConfig,
 ) {
     ui.child_window(id)
         .size([w,h])
         .border(true)
         .build(|| {
-            ui.set_cursor_pos([8.0, 8.0]);
+            ui.set_cursor_pos([8.0 * cfg.ui_scale, 8.0 * cfg.ui_scale]);
 
             let arrow = if *expanded { "v" } else { ">" };
             let header = format!("{} {}##hdr_{}", arrow, title, id);
@@ -302,7 +304,7 @@ pub fn render_expandable_block(
                 imgui::StyleColor::ButtonActive,
                 ui.style_color(imgui::StyleColor::FrameBgActive)
             );
-            if ui.button_with_size(&header, [w - 16.0, 28.0]) {
+            if ui.button_with_size(&header, [w - 16.0 * cfg.ui_scale, 28.0 * cfg.ui_scale]) {
                 *expanded = !*expanded;
             }
             drop(c1);
@@ -315,7 +317,7 @@ pub fn render_expandable_block(
                 ui.spacing();
 
                 let desc = contents.unwrap_or("no description");
-                let text_w = w - 24.0;
+                let text_w = w - 24.0 * cfg.ui_scale;
                 ui.set_next_item_width(text_w);
                 ui.text_wrapped(desc);
             }

@@ -99,10 +99,10 @@ pub fn screen_unlocked(
 }
 
 //build a placeholder window
-fn _render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen) {
+fn _render_placeholder(ui: &Ui, window: &Window, title: &str, screen: &mut AppScreen, cfg: &AppConfig) {
     let (win_w, win_h) = window.size();
-    let w = 500.0_f32;
-    let h = 200.0_f32;
+    let w = 500.0 * cfg.ui_scale;
+    let h = 200.0 * cfg.ui_scale;
 
     ui.window(&format!("##{title}_placeholder"))
         .title_bar(false)
@@ -178,7 +178,7 @@ fn main() -> Result<()> {
     } else { cfg.font_path.clone().unwrap() };
     imgui.fonts().add_font(&[imgui::FontSource::TtfData {
         data: &std::fs::read(&font_path).expect("Failed to load Monofonto.ttf"),
-        size_pixels: 20.0,
+        size_pixels: cfg.font_size,
         config: Some(imgui::FontConfig {
             oversample_h: 2,
             oversample_v: 2,
@@ -312,6 +312,7 @@ fn main() -> Result<()> {
         //function for rendering forward/back buttons
         pub fn render_nav_footer(
             ui: &Ui,
+            w: f32,
             h: f32,
             screen: &mut AppScreen,
             origin: &OriginState,
@@ -324,6 +325,7 @@ fn main() -> Result<()> {
             db: &Db,
             character: &mut Character,
             sheet: &mut SheetState,
+            cfg: &AppConfig,
         ) {
             let current = screen.clone();
             //figure out which tab/screen we're on
@@ -335,17 +337,18 @@ fn main() -> Result<()> {
 
             ui.separator();
             ui.spacing();
-            ui.set_cursor_pos([16.0, h - 36.0]);
 
             //if there's a previous screen, create a back button and point to it
             if let Some(prev_screen) = prev {
+                ui.set_cursor_pos([16.0, h - 36.0 * cfg.ui_scale]);
                 if ui.button("< Back") {
                     *screen = prev_screen.clone();
                 }
-                ui.same_line();
             }
 
             if let Some(next_screen) = next {
+                let next_w = ui.calc_text_size("Next >")[0];
+                ui.set_cursor_pos([w - 24.0 - next_w, h - 36.0 * cfg.ui_scale]);
                 let unlocked = screen_unlocked(next_screen, origin, special, skill, perk, background, equipment, review, db, &character);
                 //disable the next button if it's not unlocked
                 if !unlocked {
@@ -357,6 +360,8 @@ fn main() -> Result<()> {
                     *screen = next_screen.clone();
                 }
             } else if current == AppScreen::CharacterReview {
+                let final_w = ui.calc_text_size("Finalize Character >")[0];
+                ui.set_cursor_pos([w - 24.0 - final_w, h - 36.0 * cfg.ui_scale]);
                 if ui.button("Finalize Character >") {
                     character.weapons = equipment.weapons.clone();
                     character.ammo = equipment.ammo.clone();
@@ -418,7 +423,7 @@ fn main() -> Result<()> {
             .movable(false)
             .collapsible(false)
             .no_decoration()
-            .size([win_w as f32, BAR_HEIGHT], imgui::Condition::Always)
+            .size([win_w as f32, BAR_HEIGHT * cfg.ui_scale], imgui::Condition::Always)
             .position([0.0, 0.0], imgui::Condition::Always)
             .build(|| {
                 ui.set_cursor_pos([8.0, 7.0]);
@@ -431,12 +436,14 @@ fn main() -> Result<()> {
                         //sets the theme, then writes it to the config
                         current_theme = i;
                         pending_theme = Some(i);
+                        let ui_scale = {cfg.set_ui_scale();cfg.ui_scale};
                         
                         save_config(&AppConfig {
                             theme_index: i,
                             db_path: db_path.to_path_buf(),
                             font_path: Some(font_path.clone()),
                             font_size: cfg.font_size,
+                            ui_scale,
                             crt_distortion: cfg.crt_distortion,
                             crt_scanline_strength: cfg.crt_scanline_strength,
                             crt_vignette_multiplier: cfg.crt_vignette_multiplier,
@@ -454,12 +461,12 @@ fn main() -> Result<()> {
                 ui.same_line();
                 ui.text_disabled("|");
                 ui.same_line();
-                let robco = if win_w < 1040 {"ROBCO Industries(TM)##crt_toggle"} else {"ROBCO Industries (TM) Termlink##crt_toggle"};
+                let robco = if win_w as f32 / cfg.ui_scale >= 1040.0 {"ROBCO Industries (TM) Termlink##crt_toggle"} else if win_w as f32 / cfg.ui_scale >= 960.0 {"ROBCO Industries(TM)##crt_toggle"} else {"ROBCO##crt_toggle"};
                 ui.checkbox(robco, &mut crt.enabled);
                 // About button, right-aligned
-                let button_w = 60.0_f32;
+                let button_w = 60.0 * cfg.ui_scale;
                 let button_x = win_w as f32 - button_w - 8.0;
-                ui.set_cursor_pos([button_x, 4.0]);
+                ui.set_cursor_pos([button_x, 4.0 * cfg.ui_scale]);
                 //set the show_about flag if clicked
                 if ui.button("About") {
                     show_about = true; 
@@ -469,8 +476,8 @@ fn main() -> Result<()> {
         //render about window if the flag is set
         if show_about {
             let (win_w, win_h) = window.size();
-            let aw = 400.0_f32;
-            let ah = 220.0_f32;
+            let aw = 400.0 * cfg.ui_scale;
+            let ah = 220.0 * cfg.ui_scale;
             let center = [(win_w as f32 - aw) * 0.5, (win_h as f32 - ah) * 0.5];
 
             //center the about window when it's opened or the button is clicked again (not every frame)
@@ -491,7 +498,7 @@ fn main() -> Result<()> {
                 .bring_to_front_on_focus(true)
                 .build(|| {
                     //title with X
-                    let close_x = aw - 28.0;
+                    let close_x = aw - 28.0 * cfg.ui_scale;
                     ui.text("About");
                     ui.same_line_with_pos(close_x);
                     if ui.button("X##about_close") {
@@ -502,21 +509,21 @@ fn main() -> Result<()> {
 
                     ui.text("fallout 2d20 character manager");
                     ui.spacing();
-                    render_text_wrapped(true, false, ui, &format!("v{}, {}", VERSION.as_string(), DATE), 16.0, aw - 32.0);
+                    render_text_wrapped(true, false, ui, &format!("v{}, {}", VERSION.as_string(), DATE), 16.0 * cfg.ui_scale, aw - 32.0 * cfg.ui_scale);
                     ui.spacing();
                     ui.text_wrapped("a character creation and management tool for the 2d20 ttrpg system.");
                     ui.text_colored([0.90, 0.10, 0.50, 1.00], "by josh");
                     ui.spacing();
                     ui.separator();
                     ui.spacing();
-                    render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0, aw - 32.0);
+                    render_text_wrapped(true, false, ui, "built with rust//imgui//sdl2", 16.0 * cfg.ui_scale, aw - 32.0 * cfg.ui_scale);
                 });
         }
 
         let is_builder_screen = BUILD_SCREENS.iter().any(|(s, _)| s == &screen);
         if is_builder_screen {
             //tabs across the top
-            let tab_bar_h: f32 = 44.0;
+            let tab_bar_h: f32 = 44.0 * cfg.ui_scale;
             ui.window("##tab_bar")
                 .title_bar(false)
                 .resizable(false)
@@ -532,31 +539,31 @@ fn main() -> Result<()> {
 
         let _content_h: f32 = match screen {
 /*--------*/AppScreen::MainMenu => {
-                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup, &mut load_character_state, &mut import_state);
+                render_main_menu(&ui, &window, &mut screen, &mut selected_menu_item, &menu_items, &mut nc_setup, &mut load_character_state, &mut import_state, &cfg);
                 0.0
             }
             AppScreen::NewCharSetup => {
-                render_new_character_setup(&ui, &window,&mut nc_setup, &mut screen, &db, &mut pending_player_name, &mut pending_party_name, &mut character,
+                render_new_character_setup(&ui, &window,&mut nc_setup, &mut screen, &db, &mut pending_player_name, &mut pending_party_name, &mut character, &cfg
                 );
                 0.0
             }
 /*--------*/AppScreen::OriginSelect => {
                 let state = &mut origin;
-                render_origin_select(&ui, &window, state, &db, &mut character, &mut special, &mut skill, &mut perk, &mut background, &mut equipment, &mut screen,)
+                render_origin_select(&ui, &window, state, &db, &mut character, &mut special, &mut skill, &mut perk, &mut background, &mut equipment, &mut screen, &cfg)
             }
 /*--------*/AppScreen::SpecialAssignment => {
                 //let state = &mut special.update(&character);
                 let state = &mut special;
-                render_special_assignment(&ui, &window, state, &db, &mut character, &mut screen, &mut origin, &mut skill, &mut perk, &mut background, &mut equipment)
+                render_special_assignment(&ui, &window, state, &db, &mut character, &mut screen, &mut origin, &mut skill, &mut perk, &mut background, &mut equipment, &cfg)
             }
 /*--------*/AppScreen::SkillAssignment => {
                 skill.update(&character);
                 let state = &mut skill;
-                render_skill_assignment(&ui, &window, state, &db, &mut character, &mut screen, &mut origin, &mut special, &mut perk, &mut background, &mut equipment)
+                render_skill_assignment(&ui, &window, state, &db, &mut character, &mut screen, &mut origin, &mut special, &mut perk, &mut background, &mut equipment, &cfg)
             }
 /*--------*/AppScreen::PerkSelect => {
                 let state = &mut perk;
-                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character, perk_resolution.is_some(), &mut origin, &mut skill, &mut special, &mut background, &mut equipment);
+                let h = render_perk_select(&ui, &window, state, &mut screen, &db, &mut character, perk_resolution.is_some(), &mut origin, &mut skill, &mut special, &mut background, &mut equipment, &cfg);
                 //resolution popup
                 if let Some((p_id, add, name)) = state.pending_resolution.take() {
                     let perk = state.perks.iter().find(|p| p.id == p_id).unwrap();
@@ -572,7 +579,7 @@ fn main() -> Result<()> {
                 }
                 //render popup
                 if let Some(popup) = &mut perk_resolution {
-                    let result = render_perk_resolution(ui, &window, popup, state, &mut character);
+                    let result = render_perk_resolution(ui, &window, popup, state, &mut character, &cfg);
                     match result {
                         Some(false) => {
                             if popup.perk_add {
@@ -596,18 +603,18 @@ fn main() -> Result<()> {
                 h
             }
 /*--------*/AppScreen::StatCalculation => {
-                render_stat_calculation(&ui, &window, &mut special, &mut skill, &mut character, &mut screen, &mut origin, &mut perk, &mut background, &mut equipment)
+                render_stat_calculation(&ui, &window, &mut special, &mut skill, &mut character, &mut screen, &mut origin, &mut perk, &mut background, &mut equipment, &cfg)
             }
 /*--------*/AppScreen::BackgroundSelect => {
                 let state = &mut background;
-                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review, &mut screen, &mut origin, &mut special, &mut skill, &mut perk)
+                render_background_select(&ui, &window, state, &mut equipment, &db, &mut character, &mut review, &mut screen, &mut origin, &mut special, &mut skill, &mut perk, &cfg)
             }
 /*--------*/AppScreen::CharacterReview => {
                 let state = &mut review;
-                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen, &mut origin, &mut special, &mut skill, &mut perk)
+                render_character_review(&ui, &window, state, &mut background, &mut equipment, &db, &mut character, &mut screen, &mut origin, &mut special, &mut skill, &mut perk, &cfg)
             }
 /*--------*/AppScreen::CharacterSheet => {
-                render_character_sheet(&ui, &window, &db, &mut character, &mut screen, &mut sheet_state, &mut origin, &mut special, &mut skill, &mut perk, &mut background, &mut equipment);
+                render_character_sheet(&ui, &window, &db, &mut character, &mut screen, &mut sheet_state, &mut origin, &mut special, &mut skill, &mut perk, &mut background, &mut equipment, &cfg);
                 0.0
             }
 /*--------*/AppScreen::Settings => {
@@ -615,11 +622,11 @@ fn main() -> Result<()> {
                 0.0
             }
 /*--------*/AppScreen::LoadCharacter => {
-                render_load_character(&ui, &window,&mut load_character_state, &mut screen, &db, &mut character, &mut sheet_state);
+                render_load_character(&ui, &window,&mut load_character_state, &mut screen, &db, &mut character, &mut sheet_state, &cfg);
                 0.0
             }
 /*--------*/AppScreen::ImportCharacter => {
-                render_import_character(&ui, &window, &mut import_state, &mut screen, &db);
+                render_import_character(&ui, &window, &mut import_state, &mut screen, &db, &cfg);
                 0.0
             }
         };
@@ -627,7 +634,7 @@ fn main() -> Result<()> {
         if is_builder_screen {
             //footer on the bottom
             let (_, win_h) = window.size();
-            let footer_h: f32 = 48.0;
+            let footer_h: f32 = 48.0 * cfg.ui_scale;
             ui.window("##nav_footer")
                 .title_bar(false)
                 .resizable(false)
@@ -637,7 +644,7 @@ fn main() -> Result<()> {
                 .position([0.0, win_h as f32 - footer_h], imgui::Condition::Always)
                 .build(|| {
                     //render_nav_footer(ui, content_h, &mut screen, &origin, &special, &skill, &perk, &background, &character);
-                    render_nav_footer(ui, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character, &mut sheet_state);
+                    render_nav_footer(ui, win_w as f32, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character, &mut sheet_state, &cfg);
                 });
         }
 

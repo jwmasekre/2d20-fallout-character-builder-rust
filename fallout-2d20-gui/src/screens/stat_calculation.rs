@@ -13,7 +13,7 @@ use fallout_2d20_core::{
         SkillState,
         SpecialState
     },
-    structs::AppScreen
+    structs::{AppConfig, AppScreen}
 };
 use imgui::Ui;
 use sdl2::video::Window;
@@ -30,8 +30,9 @@ pub fn render_stat_calculation(
     perk: &mut PerkState,
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
+    cfg: &AppConfig,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen, origin, special, skill, perk, background, equipment, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen, origin, special, skill, perk, background, equipment, character, cfg)
         else { return 0.0 };
 
     let nocturnal = character.compute_stats();
@@ -47,19 +48,19 @@ pub fn render_stat_calculation(
     if !skill.is_complete(character) {issues.push("!! Skills need attention !!")}
     if !issues.is_empty() {
         for issue in issues {
-            render_text_wrapped(false, true, ui, issue, 36.0, w - 36.0);
+            render_text_wrapped(false, true, ui, issue, 36.0 * cfg.ui_scale, w - 36.0 * cfg.ui_scale);
         }
         ui.spacing();
         ui.separator();
         ui.spacing();
     }
 
-    let list_h = h - 80.0;
+    let list_h = h - 80.0 * cfg.ui_scale;
     let Some(_child) = ui.child_window("##stats_scroll")
-        .size([w - 16.0, list_h])
+        .size([w - 16.0 * cfg.ui_scale, list_h])
         .begin()
     else { return h };
-    let d_col_w = (w - 24.0) * 0.5;
+    let d_col_w = (w - 24.0 * cfg.ui_scale) * 0.5;
 
     ui.text("Derived");
     ui.separator();
@@ -154,11 +155,11 @@ pub fn render_stat_calculation(
         ui.text(&perk.name);
         if perk.desc.len() > 1 {
             for i in 0..(perk.ranks as usize) {
-                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0);
+                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0 * cfg.ui_scale);
             }
             ui.spacing();
         } else {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), 0.0, d_col_w - 6.0);
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), 0.0, d_col_w - 6.0 * cfg.ui_scale);
             ui.spacing();
         }
     }
@@ -167,11 +168,11 @@ pub fn render_stat_calculation(
         ui.text(&perk.name);
         if perk.desc.len() > 1 {
             for i in 0..(perk.ranks as usize) {
-                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0, w - 6.0);
+                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0 * cfg.ui_scale, w - 6.0 * cfg.ui_scale);
             }
             ui.spacing();
         } else {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), d_col_w + 6.0, w - 6.0);
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), d_col_w + 6.0 * cfg.ui_scale, w - 6.0 * cfg.ui_scale);
             ui.spacing();
         }
         ui.spacing();

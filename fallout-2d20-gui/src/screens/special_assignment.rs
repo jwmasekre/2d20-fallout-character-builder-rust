@@ -12,7 +12,7 @@ use fallout_2d20_core::{
         SkillState,
         SpecialArray,
         SpecialState,
-    },
+    }, structs::AppConfig,
 };
 use imgui::Ui;
 use sdl2::video::Window;
@@ -32,8 +32,9 @@ pub fn render_special_assignment(
     perk_state: &mut PerkState,
     background_state: &mut BackgroundState,
     equipment_state: &mut EquipmentState,
+    cfg: &AppConfig,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment", screen, origin_state, state, skill_state, perk_state, background_state, equipment_state, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##special_assignment", "Special Assignment", screen, origin_state, state, skill_state, perk_state, background_state, equipment_state, character, cfg)
         else { return 0.0 };
 
     ui.text("SPECIAL");
@@ -42,7 +43,7 @@ pub fn render_special_assignment(
 
     ui.text("Select Array:");
     ui.same_line();
-    ui.set_next_item_width(260.0);
+    ui.set_next_item_width(260.0 * cfg.ui_scale);
 
     if let Some(_cb) = ui.begin_combo("##array_select", state.selected_array.label()) {
         for array in [
@@ -81,13 +82,13 @@ pub fn render_special_assignment(
     ui.separator();
     ui.spacing();
 
-    let label_w = 110.0_f32;
-    let val_w = 60.0_f32;
+    let label_w = 110.0 * cfg.ui_scale;
+    let val_w = 60.0 * cfg.ui_scale;
 
     //we want different experiences if the player selects a preset array vs custom
     match state.selected_array {
-        SpecialArray::Custom => render_custom(ui, state, label_w, val_w, w, character),
-        SpecialArray::Balanced | SpecialArray::Focused | SpecialArray::Specialized => render_preset(ui, state, label_w, val_w, w, character),
+        SpecialArray::Custom => render_custom(ui, state, label_w, val_w, w, character, cfg),
+        SpecialArray::Balanced | SpecialArray::Focused | SpecialArray::Specialized => render_preset(ui, state, label_w, val_w, w, character, cfg),
         SpecialArray::None => {},
     }
     return h
@@ -101,6 +102,7 @@ fn render_custom(
     val_w: f32,
     _w: f32,
     character: &mut Character,
+    cfg: &AppConfig
 ) {
 
     for (i, special) in SPECIAL_LABELS.iter().enumerate() {
@@ -157,7 +159,7 @@ fn render_custom(
         let mutant = if mutant_stat && character.is_mutant() { 2 } else { 0 };
         let mod_val = if spec.gifted { 1 } else { 0 } + mutant + spec.trained;
         let mod_state = mod_val > 0;
-        render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + 900.0);
+        render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + 900.0 * cfg.ui_scale);
 
         if display >= max {
             ui.same_line();
@@ -174,6 +176,7 @@ fn render_preset(
     _w: f32,
     _val_w: f32,
     character: &mut Character,
+    cfg: &AppConfig,
 ) {
     let preset_values = match state.selected_array.values() {
         Some(v) => v,
@@ -220,7 +223,7 @@ fn render_preset(
         for _ in 0..*num {
             ui.same_line();
             instance += 1;
-            let wrap = 28.0 * (instance as f32);
+            let wrap = 28.0 * cfg.ui_scale * (instance as f32);
             let label_wrap = label_w + wrap;
             //draw_list.add_line(ui.cursor_screen_pos(), [ui.cursor_screen_pos()[0], ui.cursor_screen_pos()[1] + 16.0], debug_color[instance]).build();
             render_text_wrapped(false, true, ui, &format!("[{}]", val), label_w, label_wrap);
@@ -242,7 +245,7 @@ fn render_preset(
         let assigned = state.assignments[i];
         let max = character.special.special_block()[i].max.clone();
 
-        ui.set_next_item_width(80.0);
+        ui.set_next_item_width(80.0 * cfg.ui_scale);
         let combo_label = match assigned {
             Some(v) => format!("{}", v),
             None => "--".to_string(),
@@ -314,7 +317,7 @@ fn render_preset(
 
         if assigned.is_some() {
             let mod_state = mod_val > 0;
-            render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + 900.0);
+            render_text_wrapped(!mod_state, mod_state, ui, &format!(" -> {} (+{})", display, mod_val), label_w, label_w + 900.0 * cfg.ui_scale);
         } else {
             ui.text_disabled(" -> ?");
         }

@@ -19,7 +19,7 @@ use fallout_2d20_core::{
         ReviewState,
         SkillState,
         SpecialState
-    }
+    }, structs::AppConfig
 };
 use imgui::Ui;
 use sdl2::video::Window;
@@ -38,8 +38,9 @@ pub fn render_background_select(
     special: &mut SpecialState,
     skill: &mut SkillState,
     perk: &mut PerkState,
+    cfg: &AppConfig,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select", screen, origin, special, skill, perk, state, equipment, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##background_select", "Background Select", screen, origin, special, skill, perk, state, equipment, character, cfg)
         else { return 0.0 };
 
     ui.text("BACKGROUND");
@@ -48,7 +49,7 @@ pub fn render_background_select(
 
     ui.text("Background:");
     ui.same_line();
-    ui.set_next_item_width(280.0);
+    ui.set_next_item_width(280.0 * cfg.ui_scale);
     //grab all the available backgrounds for the selected origin
     let bg_names: Vec<(usize, String)> = state.origin_backgrounds(character.clone())
         .into_iter()
@@ -85,9 +86,9 @@ pub fn render_background_select(
     //avoids borrowing issues
     let bg = bg.clone();
     //creates a scrolling child window for the selection (not sure if we ever need this much space but who knows)
-    let list_h = h - 140.0;
+    let list_h = h - 140.0 * cfg.ui_scale;
     let Some(_child) = ui.child_window("##equip_scroll")
-        .size([w - 16.0, list_h])
+        .size([w - 16.0 * cfg.ui_scale, list_h])
         .begin()
     else { return h };
 
@@ -98,7 +99,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.weapon_slots.iter().enumerate() {
-            state.equipment_changed = render_weapon_slot(ui, i, slot, &mut state.weapon_selections[i], &bg.ammo);
+            state.equipment_changed = render_weapon_slot(ui, i, slot, &mut state.weapon_selections[i], &bg.ammo, cfg);
             ui.spacing();
         }
         ui.spacing();
@@ -109,7 +110,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.apparel_slots.iter().enumerate() {
-            state.equipment_changed = render_apparel_slot(ui, i, slot, &mut state.apparel_selections[i]);
+            state.equipment_changed = render_apparel_slot(ui, i, slot, &mut state.apparel_selections[i], cfg);
             ui.spacing();
         }
         ui.spacing();
@@ -120,7 +121,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.consumable_slots.iter().enumerate() {
-            state.equipment_changed = render_consumable_slot(ui, i, slot, &mut state.consumable_selections[i]);
+            state.equipment_changed = render_consumable_slot(ui, i, slot, &mut state.consumable_selections[i], cfg);
             ui.spacing();
         }
         ui.spacing();
@@ -131,7 +132,7 @@ pub fn render_background_select(
         ui.separator();
         ui.spacing();
         for (i, slot) in bg.robot_module_slots.iter().enumerate() {
-            state.equipment_changed = render_robot_module_slot(ui, i, slot, &mut state.robot_module_selections[i]);
+            state.equipment_changed = render_robot_module_slot(ui, i, slot, &mut state.robot_module_selections[i], cfg);
             ui.spacing();
         }
         ui.spacing();

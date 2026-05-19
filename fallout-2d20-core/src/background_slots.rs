@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use imgui::Ui;
 
-use crate::db::{AmmoRow, ApparelRow, ConsumableRow, GearRow, RobotModuleRow, WeaponRow};
+use crate::{db::{AmmoRow, ApparelRow, ConsumableRow, GearRow, RobotModuleRow, WeaponRow}, structs::AppConfig};
 
 //handling all the options and slots
 #[derive(Debug, Clone)]
@@ -286,7 +286,7 @@ pub fn render_ammo_for(ui: &Ui, bg_weapon_id: i32, ammo: &[AmmoRow]) {
     }
 }
 
-pub fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut SlotSelection, ammo: &[AmmoRow]) -> bool {
+pub fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut SlotSelection, ammo: &[AmmoRow], cfg: &AppConfig) -> bool {
     match slot {
         WeaponSelSlot::Fixed(opt) => {
             render_weapon_option_label(ui, opt);
@@ -299,7 +299,7 @@ pub fn render_weapon_slot(ui: &Ui, index: usize, slot: &WeaponSelSlot, sel: &mut
             } else {
                 format!("Weapon {} - choose...", index + 1)
             };
-            ui.set_next_item_width(300.0);
+            ui.set_next_item_width(300.0 * cfg.ui_scale);
             if let Some(_cb) = ui.begin_combo(format!("##wslot_{}", index), &preview) {
                 for (oi, opt) in opts.iter().enumerate() {
                     let s = chosen_index == oi;
@@ -494,7 +494,7 @@ pub fn resolve_apparel_slots(rows: Vec<ApparelRow>) -> Vec<ApparelSelSlot> {
     slots
 }
 
-pub fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut SlotSelection) -> bool {
+pub fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &mut SlotSelection, cfg: &AppConfig) -> bool {
     match slot {
         ApparelSelSlot::Fixed(opt) => {
             ui.text(format!("  {}", opt.name));
@@ -506,7 +506,7 @@ pub fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &m
             } else {
                 format!("Apparel {} - choose...", index + 1)
             };
-            ui.set_next_item_width(300.0);
+            ui.set_next_item_width(300.0 * cfg.ui_scale);
             if let Some(_cb) = ui.begin_combo(format!("##aslot_{}", index), &preview) {
                 for (oi, opt) in opts.iter().enumerate() {
                     let s = chosen_index == oi;
@@ -536,7 +536,7 @@ pub fn render_apparel_slot(ui: &Ui, index: usize, slot: &ApparelSelSlot, sel: &m
                     let preview = picked
                         .map(|i| choices[i].name.clone())
                         .unwrap_or_else(|| format!("Slot {} - choose...", di + 1));
-                    ui.set_next_item_width(280.0);
+                    ui.set_next_item_width(280.0 * cfg.ui_scale);
                     if let Some(_cb) = ui.begin_combo(format!("##adbl_{}_{}", index, di), &preview) {
                         for (oi, opt) in choices.iter().enumerate() {
                             let s = picked == Some(oi);
@@ -651,7 +651,7 @@ pub fn resolve_consumable_slots(rows: Vec<ConsumableRow>) -> Vec<ConsumableSelSl
     slots
 }
 
-pub fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: &mut SlotSelection) -> bool {
+pub fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, sel: &mut SlotSelection, cfg: &AppConfig) -> bool {
     match slot {
         ConsumableSelSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
         ConsumableSelSlot::Choice(opts) => {
@@ -661,7 +661,7 @@ pub fn render_consumable_slot(ui: &Ui, index: usize, slot: &ConsumableSelSlot, s
             } else {
                 format!("Consumable {} - choose...", index + 1)
             };
-            ui.set_next_item_width(280.0);
+            ui.set_next_item_width(280.0 * cfg.ui_scale);
             if let Some(_cb) = ui.begin_combo(format!("##cslot_{}", index), &preview) {
                 for (oi, opt) in opts.iter().enumerate() {
                     let s = chosen_index == oi;
@@ -747,7 +747,7 @@ pub fn resolve_robot_module_slots(rows: Vec<RobotModuleRow>) -> Vec<RobotModuleS
     slots
 }
 
-pub fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot, sel: &mut SlotSelection) -> bool {
+pub fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot, sel: &mut SlotSelection, cfg: &AppConfig) -> bool {
     match slot {
         RobotModuleSelSlot::Fixed(opt) => { ui.text(format!("  {}", opt.name)); }
         RobotModuleSelSlot::Choice(opts) => {
@@ -757,7 +757,7 @@ pub fn render_robot_module_slot(ui: &Ui, index: usize, slot: &RobotModuleSelSlot
             } else {
                 format!("Module {} - choose...", index + 1)
             };
-            ui.set_next_item_width(280.0);
+            ui.set_next_item_width(280.0 * cfg.ui_scale);
             if let Some(_cb) = ui.begin_combo(format!("##rmslot_{}", index), &preview) {
                 for (oi, opt) in opts.iter().enumerate() {
                     let s = chosen_index == oi;

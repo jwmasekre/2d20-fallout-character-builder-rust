@@ -12,7 +12,7 @@ use fallout_2d20_core::{
         PerkState,
         SkillState,
         SpecialState,
-    },
+    }, structs::AppConfig,
 };
 use imgui::Ui;
 use sdl2::video::Window;
@@ -33,8 +33,9 @@ pub fn render_skill_assignment(
     perk_state: &mut PerkState,
     background_state: &mut BackgroundState,
     equipment_state: &mut EquipmentState,
+    cfg: &AppConfig
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen, origin_state, special_state, state, perk_state, background_state, equipment_state, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen, origin_state, special_state, state, perk_state, background_state, equipment_state, character, cfg)
         else { return 0.0 };
 
     ui.text("SKILLS");
@@ -64,7 +65,7 @@ pub fn render_skill_assignment(
     let x_trait = state.x_extra_trait_options.len() > 0;
     if x_trait {
         //ui.text_wrapped(format!("state: {:?}", state));
-        let x_col = 330.0_f32;
+        let x_col = 330.0 * cfg.ui_scale;
         ui.text(format!("Educated ({}/1)", state.extra_tags.len()));
         ui.same_line_with_pos(x_col);
         ui.text(format!("Good Natured ({}/2)", state.x_extra_tags.len()));
@@ -188,10 +189,10 @@ pub fn render_skill_assignment(
     if tags_traits != state.extra_trait_count {
         ui.text_disabled("Select extra tags to continue...");
     } else {
-        let col_ranks  = 175.0_f32;
-        let col_tag    = 270.0_f32;
-        let col_total  = 330.0_f32;
-        let col_max    = 400.0_f32;
+        let col_ranks  = 175.0 * cfg.ui_scale;
+        let col_tag    = 270.0 * cfg.ui_scale;
+        let col_total  = 330.0 * cfg.ui_scale;
+        let col_max    = 400.0 * cfg.ui_scale;
         //let col_debug  = 450.0_f32;
 
         ui.text_disabled("Skill");

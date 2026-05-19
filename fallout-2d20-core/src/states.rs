@@ -49,6 +49,7 @@ use crate::{
 };
 use crate::constants::NULL_PARTY;
 
+//load character
 pub struct LoadCharacterState {
     pub characters: Vec<(String, String, String)>, // (id, name, player_name)
     pub loaded: bool,
@@ -91,6 +92,7 @@ impl LoadCharacterState {
     }
 }
 
+//import character
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportStep {
     Idle,
@@ -98,11 +100,9 @@ pub enum ImportStep {
     Done,
     Error(String),
 }
-
 pub struct ImportState {
     pub step: ImportStep,
 }
-
 impl ImportState {
     pub fn new() -> Self {
         Self { step: ImportStep::Idle }
@@ -130,13 +130,13 @@ impl ImportState {
     }
 }
 
+//create character
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerChoice {
     Unset,
     New,
     Existing(String), // uuid
 }
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum PartyChoice {
     Unset,
@@ -144,7 +144,6 @@ pub enum PartyChoice {
     New,
     Existing(String), // uuid
 }
-
 pub struct NewCharacterSetupState {
     // step 0 = player, step 1 = party
     pub step: usize,
@@ -220,6 +219,7 @@ impl NewCharacterSetupState {
     }
 }
 
+//origin
 #[derive(Debug)]
 pub struct OriginState {
     pub selected: bool,
@@ -368,7 +368,7 @@ impl OriginState {
     }
 }
 
-//list of our array options
+//special
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpecialArray {
     None,
@@ -377,7 +377,6 @@ pub enum SpecialArray {
     Specialized,// 9,8,5,5,5,4,4
     Custom,
 }
-
 impl SpecialArray {
     //functions that look up the drop-down label...
     pub fn label(&self) -> &'static str {
@@ -399,7 +398,6 @@ impl SpecialArray {
         }
     }
 }
-
 //track validity states (no array, )
 #[derive(Debug, PartialEq)]
 pub struct SpecialState {
@@ -414,7 +412,6 @@ pub struct SpecialState {
     pub trained_count: i32,
     pub total: i32,
 }
-
 impl SpecialState {
     pub fn new() -> Self {
         Self {
@@ -477,6 +474,7 @@ impl SpecialState {
     }
 }
 
+//skill
 #[derive(Debug)]
 pub struct SkillState {
     pub extra_trait_options: Vec<usize>,
@@ -491,7 +489,6 @@ pub struct SkillState {
     pub max_assignable: i32,
     pub total_points: i32,
 }
-
 impl SkillState {
     pub fn new(character: Character) -> Self {
         let total_points = character.total_skill();
@@ -585,6 +582,7 @@ impl SkillState {
     }
 }
 
+//perk
 #[derive(Debug)]
 pub struct PerkState {
     pub perks: Vec<PerkRow>,
@@ -739,7 +737,7 @@ impl PerkState {
     }
 }
 
-
+//background
 #[derive(Debug)]
 pub struct BackgroundState {
     pub all_backgrounds: Vec<BackgroundRow>,
@@ -751,7 +749,6 @@ pub struct BackgroundState {
     pub robot_module_selections: Vec<SlotSelection>,
     pub equipment_changed: bool,
 }
-
 impl BackgroundState {
     pub fn new(db: &Db) -> Self {
         Self {
@@ -814,7 +811,6 @@ impl BackgroundState {
         complete
     }
 }
-
 //using this to basically handle the inventory so we can pass it over to review
 //review will apply the inventory on acceptance
 #[derive(Debug)]
@@ -869,8 +865,6 @@ impl EquipmentState {
         }
     }
 }
-
-
 pub fn selections_complete(sels: &[SlotSelection]) -> bool {
     sels.iter().all(|s| match s {
         SlotSelection::Fixed => true,
@@ -881,6 +875,7 @@ pub fn selections_complete(sels: &[SlotSelection]) -> bool {
     })
 }
 
+//review
 //for this i think we want to build the state to be something we can apply directly to the character struct upon acceptance; applying to the character directly here would likely lead to weird issues with clearing stuff when changing backgrounds/origins
 pub struct ReviewState {
     pub loaded: bool,
@@ -895,6 +890,7 @@ impl ReviewState {
     }
 }
 
+//character sheet
 #[derive(Clone, PartialEq)]
 pub enum InventoryTab {
     Ammo,
@@ -904,7 +900,6 @@ pub enum InventoryTab {
     Gear,
     Misc,
 }
-
 pub struct InventoryState {
     pub open: bool,
     pub tab: InventoryTab,
@@ -918,7 +913,6 @@ pub struct InventoryState {
     pub misc_buf: String,
     pub ammo_qty: i32,
 }
-
 impl InventoryState {
     pub fn new() -> Self {
         Self {
@@ -936,7 +930,6 @@ impl InventoryState {
         }
     }
 }
-
 pub struct SheetState {
     pub origin_expanded: bool,
     pub background_expanded: bool,
@@ -957,7 +950,6 @@ pub struct SheetState {
     pub weapon_selected: Option<i32>,
     pub inventory: InventoryState,
 }
-
 impl SheetState {
     pub fn new() -> Self {
         Self {
@@ -985,4 +977,3 @@ impl SheetState {
         self.perks_expanded = character.perks.iter().map(|_| false).collect();
     }
 }
-

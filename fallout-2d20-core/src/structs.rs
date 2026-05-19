@@ -23,6 +23,7 @@ pub struct AppConfig {
     pub db_path: PathBuf,
     pub font_path: Option<PathBuf>,
     pub font_size: f32,
+    pub ui_scale: f32,
     pub crt_distortion: f32,
     pub crt_scanline_strength: f32,
     pub crt_vignette_multiplier: f32,
@@ -39,6 +40,7 @@ impl Default for AppConfig {
             db_path: std::env::current_exe().unwrap().parent().unwrap().join("fallout_2d20.db"),
             font_path: None,
             font_size: 20.0,
+            ui_scale: 1.0,
             crt_distortion: 0.04,
             crt_scanline_strength: 0.04,
             crt_vignette_multiplier: 16.0,
@@ -47,6 +49,12 @@ impl Default for AppConfig {
             crt_tint_strength: 0.05,
             crt_chromatic_aberration: 0.001,
         }
+    }
+}
+
+impl AppConfig {
+    pub fn set_ui_scale(&mut self) {
+        self.ui_scale = self.font_size / 20.0;
     }
 }
 

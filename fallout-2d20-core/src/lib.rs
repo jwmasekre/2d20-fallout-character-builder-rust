@@ -43,11 +43,7 @@ use crate::{
         SheetState
     },
     structs::{
-        ModEffect,
-        ModEffectList,
-        PreRelease,
-        WeaponEffect,
-        WeaponQuality
+        AppConfig, ModEffect, ModEffectList, PreRelease, WeaponEffect, WeaponQuality
     }
 };
 
@@ -777,15 +773,15 @@ pub fn equip_apparel(character: &mut Character) {
 }
 
 
-pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
+pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character, cfg: &AppConfig) {
     if weapons.is_empty() {
         ui.text_disabled("  No weapons.");
     } else {
         let table_w = ui.content_region_avail()[0];
-        let table_min = 800.0;
-        let table_max = 1080.0;
-        let col_widths_min = [150.0_f32, 50.0, 30.0, 35.0, 35.0, 90.0, 45.0, 40.0, 35.0, 120.0, 120.0, 35.0];
-        let col_widths_max = [220.0_f32, 55.0, 40.0, 45.0, 45.0, 132.0, 55.0, 50.0, 45.0, 176.0, 176.0, 45.0];
+        let table_min = 800.0 * cfg.ui_scale;
+        let table_max = 1080.0 * cfg.ui_scale;
+        let col_widths_min = [150.0 * cfg.ui_scale, 50.0 * cfg.ui_scale, 30.0 * cfg.ui_scale, 35.0 * cfg.ui_scale, 35.0 * cfg.ui_scale, 90.0 * cfg.ui_scale, 45.0 * cfg.ui_scale, 40.0 * cfg.ui_scale, 35.0 * cfg.ui_scale, 120.0 * cfg.ui_scale, 120.0 * cfg.ui_scale, 35.0 * cfg.ui_scale];
+        let col_widths_max = [220.0 * cfg.ui_scale, 55.0 * cfg.ui_scale, 40.0 * cfg.ui_scale, 45.0 * cfg.ui_scale, 45.0 * cfg.ui_scale, 132.0 * cfg.ui_scale, 55.0 * cfg.ui_scale, 50.0 * cfg.ui_scale, 45.0 * cfg.ui_scale, 176.0 * cfg.ui_scale, 176.0 * cfg.ui_scale, 45.0 * cfg.ui_scale];
         let col_widths: [f32; 12];
         if table_w < table_min { col_widths = col_widths_min; }
         else if table_w > table_max { col_widths = col_widths_max; }
@@ -970,11 +966,11 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character) {
     }
 }
 
-pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &mut Character, db: &Db) {
-    let name_w = 150.0_f32;
-    let wgt_w = 55.0_f32;
-    let quan_w = 75.0_f32;
-    let eq_w = 75.0_f32;
+pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &mut Character, db: &Db, cfg: &AppConfig) {
+    let name_w = 150.0 * cfg.ui_scale;
+    let wgt_w = 55.0 * cfg.ui_scale;
+    let quan_w = 75.0 * cfg.ui_scale;
+    let eq_w = 75.0 * cfg.ui_scale;
 
     let mut eq_wgt: i32 = character.weapons.iter().map(|w| w.wgt).sum();
 

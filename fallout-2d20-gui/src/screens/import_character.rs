@@ -3,7 +3,7 @@ use sdl2::video::Window;
 use uuid::Uuid;
 
 use fallout_2d20_core::{
-    db::Db, states::{ImportState, ImportStep}, structs::AppScreen
+    db::Db, states::{ImportState, ImportStep}, structs::{AppConfig, AppScreen}
 };
 
 pub fn render_import_character(
@@ -12,6 +12,7 @@ pub fn render_import_character(
     state: &mut ImportState,
     screen: &mut AppScreen,
     db: &Db,
+    cfg: &AppConfig,
 ) {
     let (win_w, win_h) = window.size();
 
@@ -51,8 +52,8 @@ pub fn render_import_character(
 
         // ── Overwrite confirmation ────────────────────────────────────
         ImportStep::Confirm(_) => {
-            let w = 440.0_f32;
-            let h = 160.0_f32;
+            let w = 440.0 * cfg.ui_scale;
+            let h = 160.0 * cfg.ui_scale;
 
             // clone name out before mutable borrow below
             let char_name = if let ImportStep::Confirm(c) = &state.step {
@@ -115,8 +116,8 @@ pub fn render_import_character(
 
         // ── Error display ─────────────────────────────────────────────
         ImportStep::Error(msg) => {
-            let w = 440.0_f32;
-            let h = 140.0_f32;
+            let w = 440.0 * cfg.ui_scale;
+            let h = 140.0 * cfg.ui_scale;
             let msg = msg.clone();
 
             ui.window("##import_error")

@@ -18,10 +18,7 @@ use fallout_2d20_core::{
         SpecialState
     },
     structs::{
-        BwLk,
-        MmCf,
-        PerkResolution,
-        PerkResolutionPopup
+        AppConfig, BwLk, MmCf, PerkResolution, PerkResolutionPopup
     },
 };
 use imgui::Ui;
@@ -45,8 +42,9 @@ pub fn render_perk_select(
     special_state: &mut SpecialState,
     background_state: &mut BackgroundState,
     equipment_state: &mut EquipmentState,
+    cfg: &AppConfig
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select", screen, origin_state, special_state, skill_state, state, background_state, equipment_state, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##perk_select", "Perk Select", screen, origin_state, special_state, skill_state, state, background_state, equipment_state, character, cfg)
         else { return 0.0 };
 
     ui.text("PERKS");
@@ -96,16 +94,16 @@ pub fn render_perk_select(
     ui.spacing();
 
     //perk list
-    let list_h = h - 156.0;
+    let list_h = h - 156.0 * cfg.ui_scale;
     let Some(_child) = ui.child_window("##perk_scroll")
-        .size([w - 16.0, list_h])
+        .size([w - 16.0 * cfg.ui_scale, list_h])
         .begin()
     else { return h; };
 
-    let col_name = 0.0_f32;
-    let col_reqs = 240.0_f32;
-    let col_ranks = 540.0_f32;
-    let col_btns = 620.0_f32;
+    let col_name = 0.0 * cfg.ui_scale;
+    let col_reqs = 240.0 * cfg.ui_scale;
+    let col_ranks = 540.0 * cfg.ui_scale;
+    let col_btns = 620.0 * cfg.ui_scale;
 
     //filtering perks
     let filtered: Vec<usize> = (0..state.perks.len())
@@ -158,8 +156,8 @@ pub fn render_perk_select(
         let rect_fill = imgui::ImColor32::from_rgba_f32s(tint[0], tint[1], tint[2], tint[3]);
         if tint[3] > 0.0 {
             draw_list.add_rect_filled_multicolor(
-                [abs_x - 4.0, abs_y - 4.0],
-                [abs_x + w - 24.0, abs_y + button_h + 4.0],
+                [abs_x - 4.0 * cfg.ui_scale, abs_y - 4.0 * cfg.ui_scale],
+                [abs_x + w - 24.0 * cfg.ui_scale, abs_y + button_h + 4.0 * cfg.ui_scale],
                 rect_fill, rect_fill, rect_fill, rect_fill
             );
         }
@@ -210,7 +208,7 @@ pub fn render_perk_select(
             drop(_g2);
             if adrenaline_rush {
                 ui.same_line();
-                ui.set_cursor_pos([ui.cursor_pos()[0], ui.cursor_pos()[1] - 7.0]);
+                ui.set_cursor_pos([ui.cursor_pos()[0], ui.cursor_pos()[1] - 7.0 * cfg.ui_scale]);
                 ui.text_wrapped("This perk will have no effect...");
             }
         } else if at_cap {
@@ -277,7 +275,7 @@ pub fn render_perk_select(
         }
         //description
         let y = ui.cursor_pos()[1];
-        ui.set_cursor_pos([col_name + 8.0, y]);
+        ui.set_cursor_pos([col_name + 8.0 * cfg.ui_scale, y]);
         let mut text_vec = vec![];
         if desc.clone().len() > 1 {
             for (i, rank) in desc.iter().enumerate() {
@@ -287,11 +285,11 @@ pub fn render_perk_select(
             text_vec.push(desc[0].clone());
         }
         let render_desc = text_vec.join(" ");
-        render_text_wrapped(true, false, ui, &render_desc, col_name + 8.0, w - 24.0);
+        render_text_wrapped(true, false, ui, &render_desc, col_name + 8.0 * cfg.ui_scale, w - 24.0 * cfg.ui_scale);
         //requirements and limits
         if !reqs.is_empty() || !lims.is_empty() {
             let y = ui.cursor_pos()[1];
-            ui.set_cursor_pos([col_name + 8.0, y]);
+            ui.set_cursor_pos([col_name + 8.0 * cfg.ui_scale, y]);
             let req_str = if reqs.is_empty() {
                 "none".to_string()
             } else {
@@ -302,7 +300,7 @@ pub fn render_perk_select(
             } else {
                 lims.join(", ")
             };
-            render_text_wrapped(true, false, ui, &format!("Req: {} | Limits: {}", req_str, lim_str), col_name + 8.0, w - 24.0);
+            render_text_wrapped(true, false, ui, &format!("Req: {} | Limits: {}", req_str, lim_str), col_name + 8.0 * cfg.ui_scale, w - 24.0 * cfg.ui_scale);
         }
         ui.separator();
         ui.spacing();
@@ -319,11 +317,12 @@ pub fn render_perk_resolution(
     popup: &mut PerkResolutionPopup,
     state: &mut PerkState,
     character: &mut Character,
+    cfg: &AppConfig,
 ) -> Option<bool> {
     //if the popup closes for whatever reason, return false
     if !popup.open { return Some(false); }
     let (win_w, win_h) = window.size();
-    let (pw, ph) = (380.0_f32, 220.0_f32);
+    let (pw, ph) = (380.0 * cfg.ui_scale, 220.0 * cfg.ui_scale);
 
     let Some(_token) = ui.window(format!("##resolve_{}", popup.perk_id))
         .title_bar(false)
@@ -336,7 +335,7 @@ pub fn render_perk_resolution(
 
     //title bar
     ui.text(format!("Resolve: {}", popup.perk_name));
-    ui.same_line_with_pos(pw - 32.0);
+    ui.same_line_with_pos(pw - 32.0 * cfg.ui_scale);
     if ui.button(format!("X##res_close_{}", popup.perk_id)) {
         popup.open = false;
         return Some(false);
@@ -350,7 +349,7 @@ pub fn render_perk_resolution(
             if inc {
                 ui.text("Select a \"Preference\"");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
 
                 let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Preference --".to_string());
 
@@ -376,7 +375,7 @@ pub fn render_perk_resolution(
             if inc {
                 ui.text("Increase one SPECIAL by 1:");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
 
                 let preview = selected_stat
                     .map(|i| SPECIAL_LABELS[i])
@@ -408,7 +407,7 @@ pub fn render_perk_resolution(
             } else {
                 ui.text("Select a trained SPECIAL to reduce:");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
                 let special = character.special.special_block();
 
                 let mut options: Vec<(usize,i32)> = vec![];
@@ -445,7 +444,7 @@ pub fn render_perk_resolution(
                 ui.spacing();
                 ui.text("Skill 1:");
                 ui.same_line();
-                ui.set_next_item_width(200.0);
+                ui.set_next_item_width(200.0 * cfg.ui_scale);
                 let preview_a = skill_a.map(|i| SKILLS[i]).unwrap_or("-- Select --");
                 let preview_b = skill_b.map(|i| SKILLS[i]).unwrap_or("-- Select --");
                 let mut at_max = [(false, false); 17];
@@ -474,7 +473,7 @@ pub fn render_perk_resolution(
                 }
                 ui.text("Skill 2:");
                 ui.same_line();
-                ui.set_next_item_width(200.0);
+                ui.set_next_item_width(200.0 * cfg.ui_scale);
                 if let Some(_cb) = ui.begin_combo("##sk_b", preview_b) {
                     for i in 0..17 {
                         let (at, exceed) = at_max[i];
@@ -498,7 +497,7 @@ pub fn render_perk_resolution(
             } else {
                 ui.text("Select a Skilled skill to reduce:");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
 
                 let options = character.skills.zip_skilled();
 
@@ -521,7 +520,7 @@ pub fn render_perk_resolution(
             if inc {
                 ui.text("Tag an additional skill:");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
 
                 let preview = selected_skill
                     .map(|i| SKILLS[i])
@@ -550,7 +549,7 @@ pub fn render_perk_resolution(
             } else {
                 ui.text("Select a tag to remove:");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
 
                 let options = character.skills.perk_tagged();
 
@@ -573,7 +572,7 @@ pub fn render_perk_resolution(
             if inc {
                 ui.text("Select a Type");
                 ui.spacing();
-                ui.set_next_item_width(220.0);
+                ui.set_next_item_width(220.0 * cfg.ui_scale);
 
                 let preview = version.clone().map(|s| s.to_perk_string().to_string()).unwrap_or("-- Select Type --".to_string());
 

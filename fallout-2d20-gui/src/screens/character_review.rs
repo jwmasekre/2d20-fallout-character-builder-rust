@@ -1,15 +1,8 @@
 use fallout_2d20_core::{
-    equip_bg_apparel,
-    get_melee_str,
-    render_inventory,
-    render_weapons,
-    character::Character,
-    constants::{
+    character::Character, constants::{
         SKILLS,
         SPECIAL_LABELS,
-    },
-    db::Db,
-    states::{
+    }, db::Db, equip_bg_apparel, get_melee_str, render_inventory, render_weapons, states::{
         BackgroundState,
         EquipmentState,
         OriginState,
@@ -17,7 +10,7 @@ use fallout_2d20_core::{
         ReviewState,
         SkillState,
         SpecialState,
-    },
+    }, structs::AppConfig
 };
 use imgui::Ui;
 use sdl2::video::Window;
@@ -39,8 +32,9 @@ pub fn render_character_review(
     special: &mut SpecialState,
     skill: &mut SkillState,
     perk: &mut PerkState,
+    cfg: &AppConfig,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##character_review", "Character Review", screen, origin, special, skill, perk, background, equipment, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##character_review", "Character Review", screen, origin, special, skill, perk, background, equipment, character, cfg)
         else { return 0.0 };
 
     ui.text("REVIEW");
@@ -52,11 +46,11 @@ pub fn render_character_review(
         state.loaded = true;
     }
     let Some(_scroll) = ui.child_window("##review_scroll")
-        .size([w - 16.0, h - 32.0 - 48.0])
+        .size([w - 16.0 * cfg.ui_scale, h - 32.0 * cfg.ui_scale - 48.0 * cfg.ui_scale])
         .begin()
     else { return h };
 
-    let col_w = (w - 48.0) / 2.0;
+    let col_w = (w - 48.0 * cfg.ui_scale) / 2.0;
 
     ui.text_disabled("IDENTITY");
     ui.separator();
@@ -168,7 +162,7 @@ pub fn render_character_review(
     ui.separator();
     ui.spacing();
 
-    render_weapons(ui, equipment.weapons.clone(), character);
+    render_weapons(ui, equipment.weapons.clone(), character, cfg);
 
     ui.spacing();
 
@@ -216,7 +210,7 @@ pub fn render_character_review(
     ui.separator();
     ui.spacing();
 
-    render_inventory(ui, equipment.ammo.clone(), equipment.apparel.clone(), equipment.consumables.clone(), equipment.robot_modules.clone(), equipment.gear.clone(), equipment.junk.clone(), equipment.misc.clone(), character, db);
+    render_inventory(ui, equipment.ammo.clone(), equipment.apparel.clone(), equipment.consumables.clone(), equipment.robot_modules.clone(), equipment.gear.clone(), equipment.junk.clone(), equipment.misc.clone(), character, db, cfg);
 
 
     ui.columns(1,"##end_eq", false);
