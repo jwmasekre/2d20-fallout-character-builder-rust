@@ -1,48 +1,23 @@
+use fallout_2d20_core::{
+    character::Character,
+    constants::{
+        SKILLS,
+        SPECIAL_LABELS
+    },
+    get_melee_str,
+    states::{
+        BackgroundState,
+        EquipmentState,
+        OriginState,
+        PerkState,
+        SkillState,
+        SpecialState
+    },
+    structs::AppScreen
+};
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, character::Character, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
-
-pub fn get_staggered_bonus(val: i32) -> i32 {
-    match val {
-        7..9 => 1,
-        9..11 => 2,
-        11.. => 3,
-        _ => 0,
-    }
-}
-
-pub fn get_melee_str(character: &Character) -> String {
-    let mut melee_string_vec: Vec<String> = vec![format!("+{}CD", character.melee_mod.melee)];
-    if character.melee_mod.unarmed > 0 {
-        melee_string_vec.push(format!("+{}CD unarmed", character.melee_mod.melee + character.melee_mod.unarmed))
-    }
-    if character.melee_mod.sneak > 0 {
-        melee_string_vec.push(format!("+{}CD sneak", character.melee_mod.melee + character.melee_mod.sneak))
-    }
-    if character.melee_mod.unarmed > 0 && character.melee_mod.sneak > 0 {
-        melee_string_vec.push(format!("+{}CD unarmed sneak", character.melee_mod.melee + character.melee_mod.sneak + character.melee_mod.unarmed))
-    }
-    melee_string_vec.join(", ")
-}
-
-pub fn compute_stats(character: &mut Character) -> bool {
-    //carry weight
-    character.calculate_carry_weight();
-    //poison dr
-    character.calculate_poison_dr();
-    //base dr
-    character.calculate_base_dr();
-    //combat stats
-    character.calculate_combat_stats();
-    let is_nocturnal = character.has_perk(111);
-    //melee damage
-    character.melee_mod.calculate(character.clone());
-    //max luck points
-    character.calculate_lp();
-    //companion
-    character.set_companion();
-    is_nocturnal
-}
+use crate::{ theme::{render_text_wrapped, render_window}};
 
 pub fn render_stat_calculation(
     ui: &Ui,
@@ -59,7 +34,7 @@ pub fn render_stat_calculation(
     let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen, origin, special, skill, perk, background, equipment, character)
         else { return 0.0 };
 
-    let nocturnal = compute_stats(character);
+    let nocturnal = character.compute_stats();
     let char_spec = character.special.special_block();
     let char_skills = character.skills.skill_block();
 

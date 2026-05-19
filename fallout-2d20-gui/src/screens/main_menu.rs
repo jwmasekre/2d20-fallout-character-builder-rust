@@ -1,9 +1,9 @@
+use fallout_2d20_core::states::ImportState;
+use fallout_2d20_core::states::LoadCharacterState;
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::AppScreen;
 use crate::NewCharacterSetupState;
-use crate::screens::load_character::LoadCharacterState;
-use crate::screens::import_character::ImportState;
 
 pub fn render_main_menu(
     ui: &Ui,

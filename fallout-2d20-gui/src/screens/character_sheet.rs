@@ -1,299 +1,45 @@
 
+use fallout_2d20_core::{
+    apply_level_change,
+    export_character,
+    get_melee_str,
+    render_inventory,
+    render_weapons,
+    sanitize_filename,
+    sync_derived_weapons,
+    character::{
+        AmmoInv,
+        ApparelType,
+        Character,
+        ConsumableType,
+        RobotType,
+        WeaponMods
+    },
+    constants::{
+        SKILLS,
+        SPECIAL_LABELS
+    },
+    db::{
+        Db,
+        load_perks
+    },
+    states::{
+        BackgroundState,
+        EquipmentState,
+        InventoryTab,
+        OriginState,
+        PerkState,
+        SheetState,
+        SkillState,
+        SpecialState
+    },
+};
 use imgui::Ui;
 use sdl2::video::Window;
-use std::path::Path;
-use anyhow::Result;
 use crate::{
     AppScreen,
-    character::{AmmoData, AmmoInv, Apparel, ApparelType, BodyLocation, Character, Consumable, ConsumableType, Gear, Perk, RobotModule, RobotType, WeaponMods},
-    db::Db,
-    //log_on_change,
-    screens::{
-        background_select::{BackgroundState, EquipmentState, sync_derived_weapons},
-        character_review::{equip_apparel, render_inventory, render_weapons},
-        origin_select::OriginState,
-        perk_select::{PerkRow, PerkState, load_perks},
-        skill_assignment::{SKILLS, SkillState},
-        special_assignment::{SPECIAL_LABELS, SpecialState},
-        stat_calculation::get_melee_str
-    },
-    theme::render_window
+    theme::{render_expandable_block, render_window},
 };
-
-#[derive(Clone, PartialEq)]
-pub enum InventoryTab {
-    Ammo,
-    Apparel,
-    Consumables,
-    RobotModules,
-    Gear,
-    Misc,
-}
-
-pub struct InventoryState {
-    pub open: bool,
-    pub tab: InventoryTab,
-    pub all_apparel: Vec<Apparel>,
-    pub all_ammo: Vec<AmmoData>,
-    pub all_consumables: Vec<Consumable>,
-    pub all_modules: Vec<RobotModule>,
-    pub all_gear: Vec<Gear>,
-    pub filter: String,
-    pub apparel_type_filter: Option<ApparelType>,
-    pub misc_buf: String,
-    pub ammo_qty: i32,
-}
-
-impl InventoryState {
-    pub fn new() -> Self {
-        Self {
-            open: false,
-            tab: InventoryTab::Apparel,
-            all_apparel: vec![],
-            all_ammo: vec![],
-            all_consumables: vec![],
-            all_modules: vec![],
-            all_gear: vec![],
-            filter: String::new(),
-            apparel_type_filter: None,
-            misc_buf: String::new(),
-            ammo_qty: 1,
-        }
-    }
-}
-
-pub struct SheetState {
-    origin_expanded: bool,
-    background_expanded: bool,
-    traits_expanded: bool,
-    perks_expanded: Vec<bool>,
-    notes_open: bool,
-    notes_buf: String,
-    xp_open: bool,
-    xp_amount: i32,
-    level: bool,
-    up: bool,
-    perks: Vec<PerkRow>,
-    skill_choice: i32,
-    perk_choice: i32,
-    pub weapons_open: bool,
-    pub weapon_list: Vec<(i32, String, String, String)>,
-    pub weapon_filter: String,
-    pub weapon_selected: Option<i32>,
-    pub inventory: InventoryState,
-}
-
-impl SheetState {
-    pub fn new() -> Self {
-        Self {
-            origin_expanded: false,
-            background_expanded: false,
-            traits_expanded: false,
-            perks_expanded: vec![],
-            notes_open: false,
-            notes_buf: String::new(),
-            xp_open: false,
-            xp_amount: 0,
-            level: false,
-            up: true,
-            perks: vec![],
-            skill_choice: i32::MAX,
-            perk_choice: i32::MAX,
-            weapons_open: false,
-            weapon_list: vec![],
-            weapon_filter: String::new(),
-            weapon_selected: None,
-            inventory: InventoryState::new(),
-        }
-    }
-    pub fn new_character(&mut self, character: &Character) {
-        self.perks_expanded = character.perks.iter().map(|_| false).collect();
-    }
-}
-
-pub fn export_character(character: &Character, path: &Path) -> Result<()> {
-    let json = serde_json::to_string_pretty(character)?;
-    std::fs::write(path, json)?;
-    Ok(())
-}
-
-pub fn sanitize_filename(name: &str) -> String {
-    let reserved_names = [
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    let sanitized: String = name.chars().map(|c| match c {
-        '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-        c if c.is_control() => '_',
-        ' ' => '_',
-        c => c,
-    }).collect();
-    let sanitized = sanitized.trim_matches('.').to_string();
-    let upper = sanitized.to_uppercase();
-    let base = upper.split('.').next().unwrap_or("");
-    if sanitized.is_empty() || reserved_names.contains(&base) {
-        "character".to_string()
-    } else {
-        sanitized
-    }
-}
-
-pub fn toggle_module(character: &mut Character, module_id: i32, _db_id: i64, db: &Db) {
-    let Some(index) = character.robot_modules.iter().position(|m| m.id == module_id) else { return };
-    let installed = character.robot_modules[index].installed;
-    character.robot_modules[index].installed = !installed;
-    equip_apparel(character);
-    match db.save_character(character) {
-        Ok(_) => {},
-        Err(e) => eprintln!("Failed to save character: {e}"),
-    }
-    //db.update_module(db_id, installed);
-}
-
-pub fn toggle_apparel(character: &mut Character, apparel_id: i32, _db_id: i64, db: &Db) {
-    let Some(index) = character.apparel.iter().position(|a| a.id == apparel_id) else { return };
-    let item = character.apparel[index].clone();
-    if item.equipped {
-        character.apparel[index].equipped = false;
-    } else {
-        match item.apparel_type {
-            ApparelType::RobotArmor => {
-                if !character.is_robot() { return; }
-            }
-            _ => {
-                if character.is_robot() { return; }
-            }
-        }
-        for loc in &item.covers {
-            if *loc == BodyLocation::None { continue; }
-            let currently_equipped: Vec<&Apparel> = character.apparel.iter()
-                .filter(|a| a.equipped && a.id != apparel_id && a.covers.contains(loc))
-                .collect();
-            //check if the action would be blocked
-            for blocking in &currently_equipped {
-                match (&item.apparel_type, &blocking.apparel_type) {
-                    (_, ApparelType::Outfit) => return,
-                    (ApparelType::Outfit, _) => {},
-                    (ApparelType::Clothing, ApparelType::Clothing) => return,
-                    (ApparelType::Armor, ApparelType::Armor) => return,
-                    (ApparelType::RobotArmor, ApparelType::RobotArmor) => return,
-                    _ => {}
-                }
-            }
-        }
-        if item.apparel_type == ApparelType::Outfit {
-            let covered = item.covers.clone();
-            for a in character.apparel.iter_mut() {
-                if a.id == apparel_id { continue }
-                if a.covers.iter().any(|loc| covered.contains(loc)) {
-                    a.equipped = false;
-                }
-            }
-        }
-        if item.apparel_type == ApparelType::Clothing {
-            for a in character.apparel.iter_mut() {
-                if a.id == apparel_id { continue; }
-                if ApparelType::Clothing == a.apparel_type || ApparelType::Outfit == a.apparel_type {
-                    a.equipped = false;
-                }
-            }
-        }
-        character.apparel[index].equipped = true;
-    }
-    for limb in character.limb_dr.mut_active_limbs().iter_mut() {
-        limb.0.equipped.clear();
-    }
-    equip_apparel(character);
-    match db.save_character(character) {
-        Ok(_) => {},
-        Err(e) => eprintln!("Failed to save character: {e}"),
-    }
-    //db.update_apparel(db_id, item.equipped);
-}
-
-#[derive(Debug)]
-pub enum EquipBlock {
-    Free,
-    WouldBlock(String)
-}
-pub fn can_equip(character: &Character, apparel_id: i32) -> EquipBlock {
-    let Some(item) = character.apparel.iter().find(|a| a.id == apparel_id) else {
-        return EquipBlock::WouldBlock("item not found".into());
-    };
-    if item.equipped { return EquipBlock::Free }
-    match item.apparel_type {
-        ApparelType::RobotArmor if !character.is_robot() => return EquipBlock::WouldBlock("only robots can wear robot armor".into()),
-        ApparelType::Clothing | ApparelType::Headgear | ApparelType::Outfit | ApparelType::Armor if character.is_robot() => return EquipBlock::WouldBlock("robots cannot wear clothing, outfits, or standard armor".into()),
-        _ => {}
-    }
-    for loc in &item.covers {
-        if *loc == BodyLocation::None { continue; }
-        for blocking in character.apparel.iter().filter(|a| a.equipped && a.id != apparel_id && a.covers.contains(loc)) {
-            match (&item.apparel_type, &blocking.apparel_type) {
-                (_, ApparelType::Outfit) =>
-                    return EquipBlock::WouldBlock(format!("{} covers that location", blocking.name)),
-                (ApparelType::Clothing, ApparelType::Clothing) =>
-                    return EquipBlock::WouldBlock(format!("{} already equipped", blocking.name)),
-                (ApparelType::Armor, ApparelType::Armor) =>
-                    return EquipBlock::WouldBlock(format!("{} already on that limb", blocking.name)),
-                (ApparelType::RobotArmor, ApparelType::RobotArmor) =>
-                    return EquipBlock::WouldBlock(format!("{} already on that limb", blocking.name)),
-                _ => {}
-            }
-        }
-    }
-    EquipBlock::Free
-}
-
-pub fn render_expandable_block(
-    ui: &Ui,
-    id: &str,
-    w: f32,
-    h: f32,
-    expanded: &mut bool,
-    title: &str,
-    contents: Option<&str>,
-) {
-    ui.child_window(id)
-        .size([w,h])
-        .border(true)
-        .build(|| {
-            ui.set_cursor_pos([8.0, 8.0]);
-
-            let arrow = if *expanded { "v" } else { ">" };
-            let header = format!("{} {}##hdr_{}", arrow, title, id);
-            let c1 = ui.push_style_color(
-                imgui::StyleColor::Button,
-                ui.style_color(imgui::StyleColor::ChildBg)
-            );
-            let c2 = ui.push_style_color(
-                imgui::StyleColor::ButtonHovered,
-                ui.style_color(imgui::StyleColor::FrameBgHovered)
-            );
-            let c3 = ui.push_style_color(
-                imgui::StyleColor::ButtonActive,
-                ui.style_color(imgui::StyleColor::FrameBgActive)
-            );
-            if ui.button_with_size(&header, [w - 16.0, 28.0]) {
-                *expanded = !*expanded;
-            }
-            drop(c1);
-            drop(c2);
-            drop(c3);
-
-            if *expanded {
-                ui.spacing();
-                ui.separator();
-                ui.spacing();
-
-                let desc = contents.unwrap_or("no description");
-                let text_w = w - 24.0;
-                ui.set_next_item_width(text_w);
-                ui.text_wrapped(desc);
-            }
-        });
-}
 
 pub fn render_character_sheet(
     ui: &Ui,
@@ -1938,62 +1684,4 @@ pub fn render_character_sheet(
     }
 
     h
-}
-
-fn apply_level_change(character: &mut Character, state: &mut SheetState, db: &Db) {
-    let idx = state.skill_choice as usize;
-
-    if state.up {
-        // ── Level up ──────────────────────────────────────────────
-        character.level += 1;
-
-        // increase chosen skill rank
-        let skills = character.skills.mut_skill_block();
-        skills[idx].ranks += 1;
-        skills[idx].update();
-
-        // add or rank up chosen perk
-        let perk_id = state.perk_choice;
-        if let Some(existing) = character.perks.iter_mut().find(|p| p.id == perk_id) {
-            existing.ranks += 1;
-        } else if let Some(prow) = state.perks.iter().find(|p| p.id == perk_id) {
-            character.perks.push(Perk {
-                id: prow.id,
-                name: prow.name.clone(),
-                desc: prow.description.clone(),
-                ranks: 1,
-            });
-        }
-    } else {
-        // ── Delevel ───────────────────────────────────────────────
-        character.level -= 1;
-
-        // reduce chosen skill rank
-        let skills = character.skills.mut_skill_block();
-        if skills[idx].ranks > 0 {
-            skills[idx].ranks -= 1;
-            skills[idx].update();
-        }
-
-        // remove or reduce chosen perk rank
-        let perk_id = state.perk_choice;
-        if let Some(pos) = character.perks.iter().position(|p| p.id == perk_id) {
-            if character.perks[pos].ranks > 1 {
-                character.perks[pos].ranks -= 1;
-            } else {
-                character.perks.remove(pos);
-            }
-        }
-    }
-
-    // reapply skill caps now that level changed
-    character.skills.apply_max(&character.clone());
-    match db.save_character(character) {
-        Ok(_) => {},
-        Err(e) => eprintln!("Failed to save character: {e}"),
-    }
-    state.new_character(character);
-
-    state.skill_choice = i32::MAX;
-    state.perk_choice = i32::MAX;
 }

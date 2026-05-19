@@ -1,6 +1,6 @@
 use glow::{Context, HasContext, NativeFramebuffer, NativeTexture, NativeProgram};
 
-use crate::config::AppConfig;
+use fallout_2d20_core::structs::AppConfig;
 
 pub struct CrtEffect {
     pub enabled: bool,

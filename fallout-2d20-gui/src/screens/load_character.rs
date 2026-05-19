@@ -1,52 +1,14 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, character::Character, db::Db, screens::character_sheet::SheetState};
-
-pub struct LoadCharacterState {
-    pub characters: Vec<(String, String, String)>, // (id, name, player_name)
-    pub loaded: bool,
-    pub selected: Option<usize>,
-    pub error: Option<String>,
-    pub confirm_delete: Option<usize>,
-}
-
-impl LoadCharacterState {
-    pub fn new() -> Self {
-        Self {
-            characters: vec![],
-            loaded: false,
-            selected: None,
-            error: None,
-            confirm_delete: None,
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.characters = vec![];
-        self.loaded = false;
-        self.selected = None;
-        self.error = None;
-    }
-
-    pub fn load_list(&mut self, db: &Db) {
-        if self.loaded { return; }
-        let rows = db.block_on(async {
-            sqlx::query!(
-                r#"SELECT c.id, c.character_name, p.username
-                   FROM characters c
-                   JOIN players p ON p.id = c.player_id
-                   ORDER BY p.username, c.character_name"#
-            ).fetch_all(&db.pool).await
-        }).unwrap_or_default();
-
-        self.characters = rows.into_iter().map(|r| (
-            r.id.unwrap_or_default(),
-            r.character_name.unwrap_or_else(|| "(unnamed)".to_string()),
-            r.username.unwrap_or_else(|| "(unknown player)".to_string()),
-        )).collect();
-        self.loaded = true;
-    }
-}
+use fallout_2d20_core::{
+    character::Character,
+    db::Db,
+    states::{
+        LoadCharacterState,
+        SheetState
+    },
+    structs::AppScreen
+};
 
 pub fn render_load_character(
     ui: &Ui,

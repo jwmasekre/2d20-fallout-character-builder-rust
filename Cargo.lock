@@ -605,18 +605,33 @@ dependencies = [
 
 [[package]]
 name = "fallout-2d20-core"
-version = "0.1.1"
+version = "0.6.1"
 dependencies = [
+ "anyhow",
+ "bytemuck",
  "dirs",
+ "dotenvy",
+ "fancy-regex",
+ "gl",
+ "glow",
+ "imgui",
+ "imgui-opengl-renderer",
+ "imgui-sdl2",
+ "rand 0.10.1",
+ "regex",
+ "rfd",
+ "sdl2",
  "serde",
  "serde_json",
  "sqlx",
+ "tokio",
  "toml",
+ "uuid",
 ]
 
 [[package]]
 name = "fallout-2d20-gui"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "bytemuck",

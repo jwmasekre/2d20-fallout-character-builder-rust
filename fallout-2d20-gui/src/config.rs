@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 use std::fs;
+use fallout_2d20_core::constants::CONFIG_FILE;
+use fallout_2d20_core::structs::AppConfig;
 
 pub fn db_path(config_path: PathBuf) -> PathBuf {
     if config_path.exists() { return config_path }
@@ -18,40 +20,6 @@ pub fn db_path(config_path: PathBuf) -> PathBuf {
     //if exe_path.exists() {
         return exe_path
     //}
-}
-
-const CONFIG_FILE: &str = "usr_config.toml";
-
-pub struct AppConfig {
-    pub theme_index: usize,
-    pub db_path: PathBuf,
-    pub font_path: Option<PathBuf>,
-    pub font_size: f32,
-    pub crt_distortion: f32,
-    pub crt_scanline_strength: f32,
-    pub crt_vignette_multiplier: f32,
-    pub crt_vignette_exponent: f32,
-    pub crt_roll_speed: f32,
-    pub crt_tint_strength: f32,
-    pub crt_chromatic_aberration: f32,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            theme_index: 0,
-            db_path: std::env::current_exe().unwrap().parent().unwrap().join("fallout_2d20.db"),
-            font_path: None,
-            font_size: 20.0,
-            crt_distortion: 0.04,
-            crt_scanline_strength: 0.04,
-            crt_vignette_multiplier: 16.0,
-            crt_vignette_exponent: 0.15,
-            crt_roll_speed: 0.08,
-            crt_tint_strength: 0.05,
-            crt_chromatic_aberration: 0.001,
-        }
-    }
 }
 
 fn config_path() -> PathBuf {

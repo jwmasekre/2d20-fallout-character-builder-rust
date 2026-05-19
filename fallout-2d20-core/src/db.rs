@@ -1,13 +1,67 @@
-// src/db.rs
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteConnectOptions};
 use anyhow::{Result};
 use uuid::Uuid;
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
-use crate::character::{AmmoInv, Character, Perk, Player, SkillBlock, SpecialBlock, TagType, WeaponMods, Party, Origin, Background, Special, Skills, Trait, Apparel, Weapon, AmmoData, Gear, Consumable, RobotModule, Version, resolve_prerelease, Skill, Limbs, MutantType, CompanionType, RobotType, MeleeModifiers, Junk, BaseDR};
-use crate::screens::perk_select::perk_description;
-use crate::screens::background_select::{resolve_apparel_type, resolve_consumable_type, resolve_apparel_covers, resolve_mod_effect, WeaponQuality, WeaponEffect, parse_damage_type, resolve_weapon_slot, load_mod_effect_async};
-use crate::screens::character_review::equip_apparel;
+use crate::{
+    equip_apparel,
+    parse_damage_type,
+    perk_description,
+    resolve_apparel_covers,
+    resolve_apparel_type,
+    resolve_consumable_type,
+    resolve_mod_effect,
+    resolve_prerelease,
+    resolve_weapon_slot,
+    roll_cd,
+    background_slots::{
+        ApparelSelSlot,
+        ConsumableSelSlot,
+        ResolvedBackground,
+        RobotModuleSelSlot,
+        SlotSelection,
+        WeaponSelSlot,
+        resolve_apparel_slots,
+        resolve_consumable_slots,
+        resolve_robot_module_slots,
+        resolve_weapon_slots,
+    },
+    character::{
+        AmmoData,
+        AmmoInv,
+        Apparel,
+        Background,
+        BaseDR,
+        Character,
+        CompanionType,
+        Consumable,
+        Gear,
+        Junk,
+        Limbs,
+        MeleeModifiers,
+        MutantType,
+        Origin,
+        Party,
+        Perk,
+        Player,
+        RobotModule,
+        RobotType,
+        Skill,
+        SkillBlock,
+        Skills,
+        Special,
+        SpecialBlock,
+        TagType,
+        Trait,
+        Weapon,
+        WeaponMods,
+    },
+    states::OriginState,
+    structs::{Version,
+        WeaponEffect,
+        WeaponQuality
+    },
+};
 
 pub struct Db {
     pub pool: SqlitePool,
@@ -1421,4 +1475,913 @@ impl Db {
             }).collect())
         })
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct OriginRow {
+    pub id: i32,
+    pub name: String,
+    pub sourcebook: String,
+    pub description: String,
+    pub can_ghoul: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitRow {
+    pub id: i32,
+    pub _origin_id: i32,
+    pub name: String,
+    pub description: String,
+    pub is_ghoul_trait: bool,
+}
+
+pub fn load_origins(db: &Db) -> Vec<OriginRow> {
+    let result = db.block_on(async {
+        sqlx::query!(
+            r#"
+            SELECT o.id, o.name, o.description, o.can_ghoul,
+                s.name AS sourcebook
+            FROM origins o
+            JOIN sourcebooks s ON s.id = o.sourcebook_id
+            ORDER BY s.id, o.name
+            "#
+        ).fetch_all(&db.pool).await
+    });
+
+    match result {
+        Ok(rows) => rows.into_iter().map(|r| OriginRow {
+            id: r.id as i32,
+            name: r.name.unwrap_or_default(),
+            sourcebook: r.sourcebook.unwrap_or_default(),
+            description: r.description.unwrap_or_default(),
+            can_ghoul: r.can_ghoul.unwrap_or(0) != 0,
+        }).collect(),
+        Err(e) => { eprintln!("Failed to load origins: {e}"); vec![] }
+    }
+}
+
+pub fn load_traits(db: &Db, origin_id: i32, state: &mut OriginState) -> Vec<TraitRow> {
+    //let origin_id = origin.id as i64;
+    let result =
+        db.block_on(async {
+            sqlx::query!(
+                r#"
+                SELECT t.id, ot.origin_id, t.name, t.description,
+                    ot.is_ghoul_trait
+                FROM origin_traits ot
+                JOIN traits t ON t.id = ot.trait_id
+                WHERE ot.origin_id = ?
+                ORDER BY ot.is_ghoul_trait, t.name
+                "#,
+                origin_id
+            ).fetch_all(&db.pool).await
+        });
+    
+    state.origin_trait_count = result.iter().count().min(2) as i32;
+    match result {
+        Ok(rows) => rows.into_iter().map(|r| TraitRow {
+            id: r.id as i32,
+            _origin_id: r.origin_id.unwrap_or_default() as i32,
+            name: r.name.unwrap_or_default(),
+            description: r.description.unwrap_or_default(),
+            is_ghoul_trait: r.is_ghoul_trait.unwrap_or(0) != 0,
+        }).collect(),
+        Err(e) => { eprintln!("Failed to load traits: {e}"); vec![] }
+    }
+}
+
+pub fn load_ghoul_traits(db: &Db, _state: &mut OriginState) -> Vec<TraitRow> {
+    let result =
+        db.block_on(async {
+            sqlx::query!(
+                r#"
+                SELECT t.id, ot.origin_id, t.name, t.description,
+                    ot.is_ghoul_trait
+                FROM origin_traits ot
+                JOIN traits t ON t.id = ot.trait_id
+                WHERE ot.origin_id = 2
+                ORDER BY ot.is_ghoul_trait, t.name
+                "#,
+            ).fetch_all(&db.pool).await
+        });
+    
+    //state.origin_trait_count = 1;
+    match result {
+        Ok(rows) => rows.into_iter().map(|r| TraitRow {
+            id: r.id as i32,
+            _origin_id: r.origin_id.unwrap_or_default() as i32,
+            name: r.name.unwrap_or_default(),
+            description: r.description.unwrap_or_default(),
+            is_ghoul_trait: r.is_ghoul_trait.unwrap_or(0) != 0,
+        }).collect(),
+        Err(e) => { eprintln!("Failed to load traits: {e}"); vec![] }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PerkRow {
+    pub id: i32,
+    pub name: String,
+    pub description: Vec<String>,
+    pub level_req: i32,
+    pub ranks: i32,
+    pub rank_range: i32,
+    pub reqs: Vec<String>,
+    pub limits: Vec<String>,
+    pub sourcebook: String,
+}
+
+pub fn load_perks(db: &Db) -> Vec<PerkRow> {
+    let result = db.block_on(async {
+        sqlx::query!(
+            r#"
+            SELECT p.id, p.name, p.description, p.ranks, p.rank_range, p.level_req, p.reqs, p.limits, s.name AS sourcebook
+            FROM perks p
+            JOIN sourcebooks s ON s.id = p.sourcebook_id
+            ORDER BY s.id, p.name
+            "#
+        ).fetch_all(&db.pool).await
+    });
+    match result {
+        Ok(rows) => rows.into_iter().map(|r| {
+            let reqs: Vec<String> = r.reqs
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default();
+            let limits: Vec<String> = r.limits
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default();
+            PerkRow {
+                id: r.id as i32,
+                name: r.name.unwrap_or_default(),
+                sourcebook: r.sourcebook.unwrap_or_default(),
+                description: perk_description(r.description.unwrap_or_default()),
+                level_req: r.level_req.unwrap_or_default() as i32,
+                ranks: r.ranks.unwrap_or_default() as i32,
+                rank_range: r.rank_range.unwrap_or_default() as i32,
+                limits,
+                reqs,
+            }
+        }).collect(),
+        Err(e) => { eprintln!("Failed to load perks: {e}"); vec![] }
+    }
+}
+
+//db structs
+#[derive(Debug, Clone)]
+pub struct BackgroundRow {
+    pub id: i32,
+    pub origin_id: i32,
+    pub name: String,
+    pub desc: String,
+    pub caps: i32,
+    pub misc: String,
+    pub trinket: i32,
+    pub food: i32,
+    pub forage: i32,
+    pub bev: i32,
+    pub chem: i32,
+    pub ammo: i32,
+    pub aid: i32,
+    pub odd: i32,
+    pub outcast: i32,
+    pub junk: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct WeaponRow {
+    pub id: i32,
+    pub _bg_id: i32,
+    pub weapon_id: i32,
+    pub weapon_name: String,
+    pub mod_id: Option<i32>,
+    pub mod_name: Option<String>,
+    pub alt_id: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApparelRow {
+    pub id: i32,
+    pub _bg_id: i32,
+    pub apparel_id: i32,
+    pub apparel_name: String,
+    pub alt_id: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsumableRow {
+    pub id: i32,
+    pub _bg_id: i32,
+    pub consumable_id: i32,
+    pub consumable_name: String,
+    pub alt_id: Option<i32>,
+    pub wgt: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RobotModuleRow {
+    pub id: i32,
+    pub _bg_id: i32,
+    pub module_id: i32,
+    pub module_name: String,
+    pub alt_id: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AmmoRow {
+    pub ammo_id: i32,
+    pub ammo_name: String,
+    pub quantity: String,
+    pub bg_weapon_id: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct GearRow {
+    pub gear_id: i32,
+    pub gear_name: String,
+    pub wgt: i32,
+}
+
+//loading all the background data from the db
+pub fn load_backgrounds(db: &Db) -> Vec<BackgroundRow> {
+    let result = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT id, origin_id, name, description, caps, misc, trinket, food, forage, bev, chem, ammo, aid, odd, outcast, junk
+               FROM backgrounds ORDER BY id"#
+        )
+        .fetch_all(&db.pool).await
+    });
+    match result {
+        Ok(rows) => rows.into_iter().map(|r| BackgroundRow {
+            id: r.id as i32,
+            name: r.name.unwrap_or_default(),
+            origin_id: r.origin_id.unwrap_or_default() as i32,
+            desc: r.description.unwrap_or_default(),
+            caps: r.caps.unwrap_or_default() as i32,
+            misc: r.misc.unwrap_or_default(),
+            trinket: r.trinket.unwrap_or_default() as i32,
+            food: r.food.unwrap_or_default() as i32,
+            forage: r.forage.unwrap_or_default() as i32,
+            bev: r.bev.unwrap_or_default() as i32,
+            chem: r.chem.unwrap_or_default() as i32,
+            ammo: r.ammo.unwrap_or_default() as i32,
+            aid: r.aid.unwrap_or_default() as i32,
+            odd: r.odd.unwrap_or_default() as i32,
+            outcast: r.outcast.unwrap_or_default() as i32,
+            junk: r.junk.unwrap_or_default() as i32,
+        }).collect(),
+        Err(e) => { eprintln!("load_backgrounds: {e}"); vec![] }
+    }
+}
+pub fn load_background_equipment(db: &Db, id: i32) -> ResolvedBackground {
+    let background = load_backgrounds(db).into_iter()
+        .find(|b| b.id == id)
+        .unwrap_or_else(|| BackgroundRow {
+            id,
+            name: String::new(),
+            desc: String::new(),
+            origin_id: 0,
+            caps: 0,
+            misc: String::new(),
+            trinket: 0,
+            food: 0,
+            forage: 0,
+            bev: 0,
+            chem: 0,
+            ammo: 0,
+            aid: 0,
+            odd: 0,
+            outcast: 0,
+            junk: 0,
+        });
+    //weapons
+    let weapon_rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT bw.id, bw.background_id, bw.weapon_id, bw.mod_id, bw.alt_id, w.name AS weapon_name, wm.name AS mod_name
+               FROM background_weapons bw
+               JOIN weapons w ON w.id = bw.weapon_id
+               LEFT JOIN weapon_mods wm ON wm.id = bw.mod_id
+               WHERE bw.background_id = ?"#,
+            id
+        ).fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let weapons: Vec<WeaponRow> = weapon_rows.into_iter().map(|r| WeaponRow {
+        id: r.id as i32,
+        _bg_id: r.id as i32,
+        weapon_id: r.weapon_id.unwrap_or_default() as i32,
+        weapon_name: r.weapon_name.unwrap_or_default(),
+        mod_id: r.mod_id.map(|i| i as i32),
+        mod_name: r.mod_name,
+        alt_id: r.alt_id.map(|i| i as i32),
+    }).collect();
+    //ammo
+    let ammo_rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT ba.ammo_id, ba.quantity, ba.bg_weapon_id, a.name AS ammo_name
+               FROM background_ammo ba
+               JOIN ammo a ON a.id = ba.ammo_id
+               WHERE ba.bg_weapon_id IN (
+                   SELECT id FROM background_weapons WHERE background_id = ?
+               )"#,
+            id
+        ).fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let ammo: Vec<AmmoRow> = ammo_rows.into_iter().map(|r| AmmoRow {
+        ammo_id: r.ammo_id.unwrap_or_default() as i32,
+        ammo_name: r.ammo_name.unwrap_or_default(),
+        quantity: r.quantity.unwrap_or_default(),
+        bg_weapon_id: r.bg_weapon_id.unwrap_or_default() as i32,
+    }).collect();
+    //apparel
+    let apparel_rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT ba.id, ba.background_id, ba.apparel_id, ba.alt_id,
+                      a.name AS apparel_name
+               FROM background_apparel ba
+               JOIN apparel a ON a.id = ba.apparel_id
+               WHERE ba.background_id = ?"#,
+            id
+        ).fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let apparel: Vec<ApparelRow> = apparel_rows.into_iter().map(|r| ApparelRow {
+        id: r.id as i32,
+        _bg_id: r.background_id.unwrap_or_default() as i32,
+        apparel_id: r.apparel_id.unwrap_or_default() as i32,
+        apparel_name: r.apparel_name.unwrap_or_default(),
+        alt_id: r.alt_id.map(|i| i as i32),
+    }).collect();
+    //consumables
+    let consumable_rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT bc.id, bc.background_id, bc.consumable_id, bc.alt_id, c.wgt, c.name AS consumable_name
+               FROM background_consumables bc
+               JOIN consumables c ON c.id = bc.consumable_id
+               WHERE bc.background_id = ?"#,
+            id
+        ).fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let consumables: Vec<ConsumableRow> = consumable_rows.into_iter().map(|r| ConsumableRow {
+        id: r.id as i32,
+        _bg_id: r.background_id.unwrap_or_default() as i32,
+        consumable_id: r.consumable_id.unwrap_or_default() as i32,
+        consumable_name: r.consumable_name.unwrap_or_default(),
+        alt_id: r.alt_id.map(|i| i as i32),
+        wgt: r.wgt.unwrap_or_default() as i32,
+    }).collect();
+    //robot mods
+    let module_rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT brm.id, brm.background_id, brm.robot_module_id, brm.alt_id, rm.name AS module_name
+               FROM background_robot_modules brm
+               JOIN robot_modules rm ON rm.id = brm.robot_module_id
+               WHERE brm.background_id = ?"#,
+            id
+        ).fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let robot_modules: Vec<RobotModuleRow> = module_rows.into_iter().map(|r| RobotModuleRow {
+        id: r.id as i32,
+        _bg_id: r.background_id.unwrap_or_default() as i32,
+        module_id: r.robot_module_id.unwrap_or_default() as i32,
+        module_name: r.module_name.unwrap_or_default(),
+        alt_id: r.alt_id.map(|i| i as i32),
+    }).collect();
+    //gear - no choices for gear
+    let gear_rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT bg.gear_id, g.name AS gear_name, g.wgt
+               FROM background_gear bg
+               JOIN gear g ON g.id = bg.gear_id
+               WHERE bg.background_id = ?"#,
+            id
+        ).fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let gear: Vec<GearRow> = gear_rows.into_iter().map(|r| GearRow {
+        gear_id: r.gear_id.unwrap_or_default() as i32,
+        gear_name: r.gear_name.unwrap_or_default(),
+        wgt: r.wgt.unwrap_or_default() as i32,
+    }).collect();
+    //include the miscellaneous stuff
+    let misc = serde_json::from_str::<Vec<String>>(&background.misc)
+        .unwrap_or_default()
+        .join(", ");
+
+    //put them all together
+    ResolvedBackground {
+        id: background.id,
+        name: background.name,
+        desc: background.desc,
+        weapon_slots: resolve_weapon_slots(weapons),
+        apparel_slots: resolve_apparel_slots(apparel),
+        consumable_slots: resolve_consumable_slots(consumables),
+        robot_module_slots: resolve_robot_module_slots(robot_modules),
+        ammo,
+        gear,
+        caps: background.caps,
+        misc,
+        trinket: background.trinket,
+        food: background.food,
+        forage: background.forage,
+        bev: background.bev,
+        chem: background.chem,
+        ammo_count: background.ammo,
+        aid: background.aid,
+        odd: background.odd,
+        outcast: background.outcast,
+        junk: background.junk,
+    }
+}
+
+
+//used to handle applying mod effects properly
+pub struct EffectNameSets {
+    pub effect_names: HashSet<String>,
+    pub quality_names: HashSet<String>,
+}
+
+impl EffectNameSets {
+    pub fn load(db: &Db) -> Self {
+        let effects = db.block_on(async {
+            sqlx::query!("SELECT name FROM dam_effects").fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        let qualities = db.block_on(async {
+            sqlx::query!("SELECT name FROM qualities").fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        //this needs to be adjusted to handle X effects/qualities
+        Self {
+            effect_names: effects.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+            quality_names: qualities.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+        }
+    }
+    pub async fn load_async(pool: &SqlitePool) -> Self {
+        let effects = sqlx::query!("SELECT name FROM dam_effects").fetch_all(pool).await.unwrap_or_default();
+        let qualities = sqlx::query!("SELECT name FROM qualities").fetch_all(pool).await.unwrap_or_default();
+        //this needs to be adjusted to handle X effects/qualities
+        Self {
+            effect_names: effects.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+            quality_names: qualities.into_iter()
+                .filter_map(|r| r.name)
+                .map(|n| n.to_lowercase())
+                .collect(),
+        }
+    }
+    pub fn qual_not_eff(&self, name: &str) -> Option<bool> {
+        let mut res = self.quality_names.contains(&name.to_lowercase());
+        if res { return Some(res) } else {
+            res = self.effect_names.contains(&name.to_lowercase());
+            if res { return Some(!res) } else { None }
+        }
+    }
+}
+
+
+pub fn resolve_weapons(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+    character: &Character
+) -> (Vec<Weapon>,Vec<AmmoInv>) {
+    //grab all the weapon ids that were selected
+    let selected_weapon_ids: Vec<i32> = background.weapon_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (WeaponSelSlot::Fixed(opt), _) => vec![opt.bg_weapon_id],
+            (WeaponSelSlot::Choice(opts), SlotSelection::Chosen(i)) if *i < opts.len() => vec![opts[*i].bg_weapon_id],
+            (WeaponSelSlot::ManyForOne(give_up,get_one ), SlotSelection::ManyForOneChosen(choice)) => if *choice == 0 {
+                vec![get_one.bg_weapon_id]
+            } else {
+                give_up.iter().map(|w| w.bg_weapon_id).collect()
+            },
+            _ => vec![],
+        })
+        .collect();
+    //if nothing is selected, send an empty vector
+    if selected_weapon_ids.is_empty() { return (vec![],vec![]) }
+
+    //grab the entire weapon's data for each selected weapon from the db
+    let id_json = serde_json::to_string(&selected_weapon_ids).unwrap_or_default();
+    let rows = db.block_on(async {
+        sqlx::query!(
+            r#"SELECT
+                bw.id        AS bg_weapon_id,
+                w.id         AS weapon_id,
+                w.name       AS weapon_name,
+                w.dam, w.dtype, w.rate, w.range, w.wgt,
+                s.name       AS skill_name,
+                a.name       AS ammo_name,
+                a.wgt        AS ammo_wgt,
+                a.id         AS ammo_id,
+                ba.quantity  AS ammo_quantity,
+                wm.id        AS mod_id,
+                wm.name      AS mod_name,
+                wm.prefix    AS mod_prefix,
+                wm.effects   AS mod_effects,
+                wm.wgt       AS mod_wgt,
+                wm.slot      AS mod_slot
+            FROM background_weapons bw
+            JOIN weapons w   ON w.id  = bw.weapon_id
+            JOIN skills  s   ON s.id  = w.type
+            LEFT JOIN weapon_mods wm ON wm.id = bw.mod_id
+            LEFT JOIN background_ammo ba ON ba.bg_weapon_id = bw.id
+            LEFT JOIN ammo a ON a.id = ba.ammo_id
+            WHERE bw.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+    let mut w_result: Vec<Weapon> = vec![];
+    let mut a_result: Vec<AmmoInv> = vec![];
+
+    for row in &rows {
+        let weapon_id = row.weapon_id;
+        //grab qualities
+        let qual_rows = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT q.name, wq.qual_val
+                   FROM weapon_quals wq
+                   JOIN qualities q ON q.id = wq.qual_id
+                   WHERE wq.weapon_id = ?"#,
+                weapon_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        let mut qualities: Vec<WeaponQuality> = qual_rows.iter().map(|q| WeaponQuality {
+            name: q.name.clone().unwrap_or_default(),
+            value: q.qual_val.map(|v| v as i32),
+        }).collect();
+
+        //grab effects
+        let eff_rows = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT de.name, we.effect_val
+                   FROM weapon_effects we
+                   JOIN dam_effects de ON de.id = we.effect_id
+                   WHERE we.weapon_id = ?"#,
+                weapon_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default();
+        let mut effects: Vec<WeaponEffect> = eff_rows.iter().map(|e| WeaponEffect {
+            name: e.name.clone().unwrap_or_default(),
+            value: e.effect_val.map(|v| v as i32),
+        }).collect();
+
+        let damage_str = row.dam.clone().unwrap_or_default();
+        let mut damage: i32 = damage_str.trim_end_matches(|c: char| c.is_alphabetic()).parse().unwrap_or(0);
+        let mut rate = row.rate.unwrap_or_default() as i32;
+        let mut range = row.range.clone().unwrap_or_default();
+        let damage_type_str = row.dtype.clone().unwrap_or("".to_string());
+        let mut dam_type = parse_damage_type(&damage_type_str);
+        let base_wgt = row.wgt.unwrap_or_default() as i32;
+        let mod_wgt = row.mod_wgt.unwrap_or_default() as i32;
+        let weight = base_wgt + mod_wgt;
+        let name = row.weapon_name.clone().unwrap_or_default();
+        let prefix = row.mod_prefix.clone().unwrap_or_default();
+        let ammo_name = row.ammo_name.clone().unwrap_or("".to_string());
+
+        //target number calcs
+        let skill_name = row.skill_name.clone().unwrap_or_default();
+        let special: Vec<i32> = character.special.special_block().iter().map(|s| s.value.clone()).collect();
+        let skills: Vec<i32>  = character.skills.skill_block().iter().map(|s| s.total.clone()).collect();
+        let tags: Vec<bool> = character.skills.skill_block().iter().map(|s| s.is_tagged()).collect();
+        let (spec_index, skill_index, skill) = match skill_name.as_str() {
+            "Melee Weapons" => (0,7,Skill::MeleeWeapons),
+            "Unarmed" => (0,16,Skill::Unarmed),
+            "Small Guns" => (5,11,Skill::SmallGuns),
+            "Throwing" => (5,15,Skill::Throwing),
+            "Energy Weapons" => (1,3,Skill::EnergyWeapons),
+            "Explosives" => (1,4,Skill::Explosives),
+            "Big Guns" => (2,2,Skill::BigGuns),
+            _  => (6,0,Skill::Athletics),
+        };
+        let spec_value = special[spec_index];
+        let skill_total = skills[skill_index];
+        let tag = tags[skill_index];
+        let target = skill_total + spec_value;
+
+        let name_set = load_mod_effect(db);
+        let weapon_mod_eff = resolve_mod_effect(name_set,row.mod_effects.clone(), &mut damage, &mut rate, &mut range, &mut effects, &mut qualities, &mut dam_type);
+
+        let mut weapon_mods: Vec<WeaponMods> = vec![];
+        weapon_mods.push(WeaponMods {
+            slot: resolve_weapon_slot(row.mod_slot.unwrap_or(0)),
+            installed: true,
+            id: row.mod_id.unwrap_or(0) as i32,
+            name: row.mod_name.clone().unwrap_or("".to_string()),
+            prefix: row.mod_prefix.clone().unwrap_or("".to_string()),
+            wgt: row.mod_wgt.unwrap_or(0) as i32,
+            damage_set: weapon_mod_eff.dam_set,
+            damage_chg: weapon_mod_eff.dam_add - weapon_mod_eff.dam_sub,
+            rate_set: weapon_mod_eff.rat_set,
+            rate_chg: weapon_mod_eff.rat_add - weapon_mod_eff.rat_sub,
+            ammo_set: weapon_mod_eff.ammo,
+            range_chg: weapon_mod_eff.rng_add - weapon_mod_eff.rng_sub,
+            effect_add: weapon_mod_eff.e_gain,
+            effect_rem: weapon_mod_eff.e_lose,
+            quality_add: weapon_mod_eff.q_gain,
+            quality_rem: weapon_mod_eff.q_lose,
+            slot_add: weapon_mod_eff.mods,
+            damage_type_set: Some(weapon_mod_eff.dam_type),
+            weapon_add: weapon_mod_eff.weap,
+            special_ability: weapon_mod_eff.unk,
+        });
+
+        let weap_eff_str: Vec<String> = effects.iter().map(|e| if e.value != Some(0) && e.value.is_some() { format!("{} {}", e.name, e.value.unwrap()) } else { e.name.clone() }).collect();
+        let weap_qual_str: Vec<String> = qualities.iter().map(|q| if q.value != Some(0) && q.value.is_some() { format!("{} {}", q.name, q.value.unwrap()) } else { q.name.clone() }).collect();
+
+        w_result.push(Weapon {
+            id: weapon_id.unwrap_or(0) as i32,
+            name,
+            prefix,
+            skill,
+            target,
+            tag,
+            damage,
+            effects: weap_eff_str,
+            dam_type,
+            rate,
+            range,
+            qualities: weap_qual_str,
+            ammo: ammo_name.clone(),
+            wgt: weight,
+            mods: weapon_mods,
+        });
+        a_result.push(AmmoInv {
+            ammo: AmmoData {
+                id: row.ammo_id.unwrap_or(0) as i32,
+                name: ammo_name.clone(),
+                wgt: row.ammo_wgt.unwrap_or(0) as i32,
+            },
+            quantity: roll_cd(&row.ammo_quantity.clone().unwrap_or("".to_string()))
+        })
+    }
+    (w_result,a_result)
+}
+
+pub fn load_mod_effect(db: &Db) -> EffectNameSets {
+    EffectNameSets::load(db)
+}
+
+pub async fn load_mod_effect_async(pool: &SqlitePool) -> EffectNameSets {
+    EffectNameSets::load_async(pool).await
+}
+
+
+pub fn resolve_apparel(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+) -> Vec<Apparel> {
+    let mut result: Vec<Apparel> = vec![];
+    let selected_apparel_ids: Vec<i32> = background.apparel_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (ApparelSelSlot::Fixed(opt), _) => vec![opt.bg_apparel_id],
+            (ApparelSelSlot::Choice(opts), SlotSelection::Chosen(i)) => vec![opts[*i].bg_apparel_id],
+            (ApparelSelSlot::SingleOrDouble(single, double_choices), SlotSelection::SingleOrDoubleChosen(take_single, double_picks)) => if *take_single {
+                vec![single.bg_apparel_id]
+            } else {
+                vec![double_choices[0][double_picks[0].unwrap()].bg_apparel_id, double_choices[1][double_picks[1].unwrap()].bg_apparel_id]
+            }
+            (ApparelSelSlot::SingleOrPack(single, pack), SlotSelection::SingleOrPackChosen(choice)) => if *choice {
+                vec![single.bg_apparel_id]
+            } else {
+                pack.iter().map(|a| a.bg_apparel_id).collect()
+            },
+            _ => vec![],
+        })
+        .collect();
+    if selected_apparel_ids.is_empty() { return vec![] } 
+
+    let id_json = serde_json::to_string(&selected_apparel_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                ba.id        AS bg_apparel_id,
+                a.id         AS id,
+                a.name       AS name,
+                a.phys_dr    AS ph_dr,
+                a.enrg_dr    AS en_dr,
+                a.rads_dr    AS rd_dr,
+                a.wgt        AS wgt,
+                a.eff        AS effs,
+                a.type       AS a_type
+            FROM background_apparel ba
+            JOIN apparel a   ON a.id  = ba.apparel_id
+            WHERE ba.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        let apparel_id = row.id.unwrap() as i32;
+        let cover_list: Vec<i64> = db.block_on(async {
+            sqlx::query!(
+                r#"SELECT
+                    ac.location_id AS cid
+                FROM apparel_covers ac
+                WHERE ac.apparel_id = ?
+                "#,
+                apparel_id
+            ).fetch_all(&db.pool).await
+        }).unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
+        let covers = resolve_apparel_covers(cover_list);
+        let effects = vec![row.effs.unwrap_or("".to_string())];
+
+        result.push(Apparel {
+            id: apparel_id,
+            name: row.name.clone().unwrap_or("".to_string()),
+            prefix: "".to_string(),
+            apparel_type: resolve_apparel_type(row.a_type.unwrap_or(0)),
+            ph_dr: row.ph_dr.unwrap_or(0) as i32,
+            en_dr: row.en_dr.unwrap_or(0) as i32,
+            rd_dr: row.rd_dr.unwrap_or(0) as i32,
+            wgt: row.wgt.unwrap_or(0) as i32,
+            effects,
+            covers,
+            equipped: false,
+            db_id: 0,
+        })
+    }
+    result
+}
+
+
+pub fn resolve_consumables(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+) -> Vec<Consumable> {
+    let mut result: Vec<Consumable> = vec![];
+    let selected_consumable_ids: Vec<i32> = background.consumable_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (ConsumableSelSlot::Fixed(opt), _) => vec![opt.bg_consumable_id],
+            (ConsumableSelSlot::Choice(opts), SlotSelection::Chosen(i)) => vec![opts[*i].bg_consumable_id],
+            (ConsumableSelSlot::ManyForOne(give_up,get_one ), SlotSelection::ManyForOneChosen(choice)) => if *choice == 0 {
+                vec![get_one.bg_consumable_id]
+            } else {
+                give_up.iter().map(|c| c.bg_consumable_id).collect()
+            },
+            _ => vec![],
+        })
+        .collect();
+    if selected_consumable_ids.is_empty() { return vec![] } 
+
+    let id_json = serde_json::to_string(&selected_consumable_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                bc.id        AS bg_consumable_id,
+                c.id         AS id,
+                c.name       AS name,
+                c.type       AS c_type, 
+                c.heals      AS health,
+                c.eff        AS effs,
+                c.rads       AS rads,
+                c.wgt        AS wgt,
+                c.duration   AS duration,
+                c.addiction  AS addiction
+            FROM background_consumables bc
+            JOIN consumables c ON c.id  = bc.consumable_id
+            JOIN consumable_types ct ON ct.id  = c.type
+            WHERE bc.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        if result.iter().any(|c| c.id == row.bg_consumable_id.unwrap_or(0) as i32) {
+            let c_loc = result.iter().position(|c| c.id == row.bg_consumable_id.unwrap_or(0) as i32);
+            result[c_loc.unwrap()].quantity += 1;
+        } else {
+            let addiction: i32 = row.addiction.unwrap_or(0) as i32;
+            result.push(Consumable {
+                id: row.id.unwrap_or(0) as i32,
+                name: row.name.unwrap_or("".to_string()),
+                consumable_type: resolve_consumable_type(row.c_type.unwrap_or(0)),
+                health: row.health.unwrap_or(0) as i32,
+                effects: vec![row.effs.unwrap_or("".to_string())],
+                rads: row.rads.unwrap_or(0) as i32,
+                wgt: row.wgt.unwrap_or(0) as i32,
+                duration: row.duration.unwrap_or("".to_string()),
+                addiction,
+                quantity: 1,
+            })
+        }
+    }
+    result
+}
+
+
+pub fn resolve_robot_modules(
+    db: &Db,
+    background: &ResolvedBackground,
+    selections: &[SlotSelection],
+) -> Vec<RobotModule> {
+    let mut result: Vec<RobotModule> = vec![];
+    let selected_rmod_ids: Vec<i32> = background.robot_module_slots.iter()
+        .zip(selections.iter())
+        .flat_map(|(slot, sel)| match (slot, sel) {
+            (RobotModuleSelSlot::Fixed(opt), _) => vec![opt.bg_module_id],
+            (RobotModuleSelSlot::Choice(opts), SlotSelection::Chosen(i)) => vec![opts[*i].bg_module_id],
+            _ => vec![],
+        })
+        .collect();
+    if selected_rmod_ids.is_empty() { return vec![] } 
+
+    let id_json = serde_json::to_string(&selected_rmod_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                br.id        AS bg_rmod_id,
+                r.id         AS id,
+                r.name       AS name,
+                r.eff        AS effs,
+                r.wgt        AS wgt,
+                r.id         AS db_id
+                FROM background_robot_modules br
+            JOIN robot_modules r ON r.id  = br.robot_module_id
+            WHERE br.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        result.push( RobotModule {
+            id: row.id.unwrap_or(0) as i32,
+            name: row.name.unwrap_or("".to_string()),
+            installed: false,
+            effect: vec![row.effs.unwrap_or("".to_string())],
+            wgt: row.wgt.unwrap_or(0) as i32,
+            db_id: row.db_id.unwrap_or(0),
+        })
+    }
+    result
+}
+
+pub fn resolve_remaining_eq(
+    db: &Db,
+    background: &ResolvedBackground,
+) -> (Vec<Gear>, Junk, Vec<String>) {
+    let mut g_result: Vec<Gear> = vec![];
+
+    let selected_gear_ids: Vec<i32> = background.gear.iter().map(|g| g.gear_id).collect();
+    let id_json = serde_json::to_string(&selected_gear_ids).unwrap_or_default();
+    let rows = db.block_on( async {
+        sqlx::query!(
+            r#"SELECT
+                bg.id        AS bg_gear_id,
+                g.id         AS id,
+                g.name       AS name,
+                g.eff        AS effs,
+                g.wgt        AS wgt
+            FROM background_gear bg
+            JOIN gear g ON g.id  = bg.gear_id
+            WHERE bg.id IN (
+                SELECT value FROM json_each(?1)
+            )"#,
+            id_json
+        )
+        .fetch_all(&db.pool).await
+    }).unwrap_or_default();
+
+    for row in rows {
+        if g_result.iter().any(|g| g.id == row.bg_gear_id.unwrap_or(0) as i32) {
+            let g_loc = g_result.iter().position(|g| g.id == row.bg_gear_id.unwrap_or(0) as i32);
+            g_result[g_loc.unwrap()].quantity += 1;
+        } else {
+            g_result.push(Gear {
+                id: row.id.unwrap_or(0) as i32,
+                name: row.name.unwrap_or("".to_string()),
+                effect: vec![row.effs.unwrap_or("".to_string())],
+                wgt: row.wgt.unwrap_or(0) as i32,
+                quantity: 1,
+            })
+        }
+    }
+    let junk = Junk {
+        common: roll_cd(&format!("{}CD",background.junk)),
+        uncommon: 0,
+        rare: 0,
+    };
+    (g_result, junk, vec![background.misc.clone()])
 }

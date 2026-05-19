@@ -1,1151 +1,1170 @@
+use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use crate::{
-    SpecialStats, SkillStats,
+    get_staggered_bonus,
+    states::SpecialState, structs::Version,
 };
-use crate::items::{
-    Weapon, DamageEffect, WeaponEffectRow, WeaponQualityRow, WeaponMod, WeaponSlot, WeaponLegendary, Ammo, ApparelSlot, ApparelType, BodyLocation, ArmorLegendary, ApparelCoverRow, RobotModule, Consumable, Gear,
-};
-//use crate::save::{RulesBundle, FullCharacterSave};
-use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Sourcebook {
-    pub id: i16,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Character {
+    pub id: Uuid,
+    pub version: Version,
+    pub name: String,
+    pub player: Player,
+    pub party: Party,
+    pub level: i32,
+    pub xp: i32,
+    pub xp_next: i32,
+    pub origin: Option<Origin>,
+    pub background: Option<Background>,
+    pub traits: Vec<Trait>,
+    pub ghoul: bool,
+    pub mutant: MutantType,
+    pub robot: RobotType,
+    pub companion: CompanionType,
+    pub robot_hat: Option<Apparel>,
+    pub special: Special,
+    pub luck_points: i32,
+    pub luck_points_max: i32,
+    pub rad_points: i32,
+    pub skills: Skills,
+    pub perks: Vec<Perk>,
+    pub flagged_perks: Vec<i32>,
+    pub melee_mod: MeleeModifiers,
+    pub defense: i32,
+    pub initiative: i32,
+    pub hp: i32,
+    pub hp_max: i32,
+    pub base_dr: BaseDR,
+    pub poison_dr: i32,
+    pub limb_dr: Limbs,
+    pub weapons: Vec<Weapon>,
+    pub ammo: Vec<AmmoInv>,
+    pub apparel: Vec<Apparel>,
+    pub robot_modules: Vec<RobotModule>,
+    pub consumables: Vec<Consumable>,
+    pub gear: Vec<Gear>,
+    pub junk: Junk,
+    pub misc: Vec<String>,
+    pub carry_wgt: i32,
+    pub carry_wgt_max: i32,
+    pub notes: String,
+}
+
+impl Character {
+    pub fn new(player: Player, party: Party, version: Version) -> Self {
+        Self {
+            id: (Uuid::now_v7()),
+            version,
+            name: String::new(),
+            player: player,
+            party: party,
+            level: 1,
+            xp: 0,
+            xp_next: 100,
+            origin: None,
+            background: None,
+            traits: vec![],
+            ghoul: false,
+            mutant: MutantType::None,
+            robot: RobotType::None,
+            companion: CompanionType::None,
+            robot_hat: None,
+            special: Special::new(),
+            luck_points: 5,
+            luck_points_max: 5,
+            rad_points: 0,
+            skills: Skills::new(),
+            perks: vec![],
+            flagged_perks: vec![],
+            melee_mod: MeleeModifiers::new(),
+            defense: 0,
+            initiative: 10,
+            hp: 10,
+            hp_max: 10,
+            base_dr: BaseDR::new(),
+            poison_dr: 0,
+            limb_dr: Limbs::new(),
+            weapons: vec![],
+            ammo: vec![],
+            apparel: vec![],
+            robot_modules: vec![],
+            consumables: vec![],
+            gear: vec![],
+            junk: Junk::new(),
+            misc: vec![],
+            carry_wgt: 0,
+            carry_wgt_max: 200,
+            notes: String::new(),
+        }
+    }
+    pub fn reset(&mut self){
+        self.id = Uuid::now_v7();
+        self.name = String::new();
+        self.level = 1;
+        self.xp = 0;
+        self.xp_next = 100;
+        self.origin = None;
+        self.background = None;
+        self.traits = vec![];
+        self.ghoul = false;
+        self.mutant = MutantType::None;
+        self.robot = RobotType::None;
+        self.companion = CompanionType::None;
+        self.robot_hat = None;
+        self.special = Special::new();
+        self.luck_points = 5;
+        self.luck_points_max = 5;
+        self.rad_points = 0;
+        self.skills = Skills::new();
+        self.perks = vec![];
+        self.flagged_perks = vec![];
+        self.melee_mod = MeleeModifiers::new();
+        self.defense = 0;
+        self.initiative = 10;
+        self.hp = 10;
+        self.hp_max = 10;
+        self.base_dr = BaseDR::new();
+        self.poison_dr = 0;
+        self.limb_dr = Limbs::new();
+        self.weapons = vec![];
+        self.ammo = vec![];
+        self.apparel = vec![];
+        self.robot_modules = vec![];
+        self.consumables = vec![];
+        self.gear = vec![];
+        self.junk = Junk::new();
+        self.misc = vec![];
+        self.carry_wgt = 0;
+        self.carry_wgt_max = 200;
+        self.notes = String::new();
+    }
+    pub fn is_gifted(&self) -> bool {
+        self.has_trait(7)
+    }
+    pub fn is_mutant(&self) -> bool {
+        self.mutant != MutantType::None
+    }
+    pub fn is_robot(&self) -> bool {
+        self.robot != RobotType::None
+    }
+    pub fn total_skill(&self) -> i32 {
+        self.skills.skill_block().iter().map(|s| s.total).sum()
+    }
+    pub fn total_skill_ranks(&self) -> i32 {
+        self.skills.skill_block().iter().map(|s| s.ranks).sum()
+    }
+    pub fn has_trait(&self, id: i32) -> bool {
+        self.traits.iter().any(|t| t.id == id)
+    }
+    pub fn has_any_trait(&self, id: Vec<i32>) -> bool {
+        self.traits.iter().any(|t| id.contains(&t.id))
+    }
+    pub fn has_perk(&self, id: i32) -> bool {
+        self.perks.iter().any(|p| p.id == id)
+    }
+    pub fn perk_ranks(&self, id: i32) -> i32 {
+        self.perks.iter().find(|p| p.id == id).map(|p| p.ranks).unwrap_or(0)
+    }
+    pub fn update_type(&mut self) {
+        if self.origin.is_some() {
+            //set mutant status
+            self.mutant = match self.origin.clone().unwrap().id {
+                3 => MutantType::SuperMutant,
+                16 => MutantType::Nightkin,
+                _ => MutantType::None,
+            };
+            //set robot status
+            self.robot = match self.origin.clone().unwrap().id {
+                4 => RobotType::Handy,
+                9 => RobotType::Protectron,
+                10 => RobotType::Robobrain,
+                11 => RobotType::Securitron,
+                12 => RobotType::Synth,
+                14 => RobotType::Assaultron,
+                _ => RobotType::None,
+            };
+        }
+    }
+    pub fn calculate_xp(&mut self) {
+        self.xp = self.level * (self.level - 1) * 50;
+    }
+    pub fn calculate_level(&mut self) {
+        self.level = (0.5 + ((25.0 + (2.0 * self.xp as f32)).sqrt() / 10.0)).floor() as i32;
+    }
+    pub fn calculate_xp_next(&mut self) {
+        self.xp_next = (self.level + 1) * self.level * 50 - self.xp;
+    }
+    pub fn calculate_carry_weight(&mut self) {
+        let strong_back = (self.perk_ranks(91)) * 25;
+        self.carry_wgt_max = if self.has_any_trait(vec![4,19,20,23]) {
+            150
+        } else if self.has_trait(18) {
+            225
+        } else if self.has_trait(9) {
+            150 + (5 * self.special.strength.value) + strong_back
+        } else {
+            150 + (10 * self.special.strength.value) + strong_back
+        };
+        let mut total_weight = 0;
+        for w in self.weapons.clone() {
+            total_weight += w.wgt;
+        }
+        for a in self.ammo.clone() {
+            total_weight += a.ammo.wgt * a.quantity;
+        }
+        for a in self.apparel.clone() {
+            total_weight += a.wgt;
+        }
+        for c in self.consumables.clone() {
+            total_weight += c.wgt * c.quantity;
+        }
+        for m in self.robot_modules.clone() {
+            total_weight += m.wgt;
+        }
+        for g in self.gear.clone() {
+            total_weight += g.wgt * g.quantity;
+        }
+        total_weight += (self.junk.common + self.junk.uncommon + self.junk.rare) * 2;
+        self.carry_wgt = total_weight;
+    }
+    pub fn calculate_poison_dr(&mut self) {
+        self.poison_dr = if self.is_mutant() || self.is_robot() {
+            99
+        } else if self.has_perk(87) {
+            2
+        } else {
+            0
+        };
+    }
+    pub fn calculate_base_dr(&mut self) {
+        let rd_dr = if self.is_mutant() || self.is_robot() {
+            99
+        } else {
+            let atom = if self.origin.clone().unwrap().id == 13 { 1 } else { 0 };
+            let rad_res = self.perk_ranks(73);
+            atom + rad_res
+        };
+        let barbarian = if self.has_perk(8) {
+            get_staggered_bonus(self.special.strength.value)
+        } else { 0 };
+        let toughness = self.perk_ranks(94);
+        let evasive = if self.has_perk(167) {
+            get_staggered_bonus(self.special.agility.value)
+        } else { 0 };
+        let ph_dr = barbarian + toughness + evasive;
+        //energy dr
+        let refractor = self.perk_ranks(74);
+        let en_dr = evasive + refractor;
+
+        self.base_dr = BaseDR {
+            ph_dr,
+            en_dr,
+            rd_dr,
+        };
+    }
+    pub fn calculate_combat_stats(&mut self) {
+        let agi = self.special.agility.value;
+        let per = self.special.perception.value;
+        let end = self.special.endurance.value;
+        let lck = self.special.luck.value;
+        //defense
+        self.defense = if agi >= 9 { 2 } else { 1 };
+        //initiative
+        self.initiative = per + agi;
+        //max hp
+        self.hp_max = end + lck + self.perk_ranks(51) * end;
+    }
+    pub fn calculate_lp(&mut self) {
+        self.luck_points_max = if self.is_gifted() { self.special.luck.value - 1 } else { self.special.luck.value };
+    }
+    pub fn set_companion(&mut self) {
+        self.companion = if self.has_perk(28) {
+            CompanionType::Dogmeat
+        } else if self.has_perk(105) {
+            CompanionType::Human
+        } else if self.has_perk(118) {
+            CompanionType::Robot
+        } else {
+            CompanionType::None
+        };
+    }
+    pub fn full_update(&mut self) {
+        self.calculate_level();
+        self.calculate_xp_next();
+        self.update_type();
+        self.limb_dr.update_active(self.robot.clone());
+        self.special.apply_max(&self.clone());
+        self.skills.apply_max(&self.clone());
+        self.calculate_carry_weight();
+        self.calculate_base_dr();
+        self.calculate_poison_dr();
+        self.calculate_combat_stats();
+        self.melee_mod.calculate(self.clone());
+        self.calculate_lp();
+        self.set_companion();
+    }
+    pub fn compute_stats(&mut self) -> bool {
+        //carry weight
+        self.calculate_carry_weight();
+        //poison dr
+        self.calculate_poison_dr();
+        //base dr
+        self.calculate_base_dr();
+        //combat stats
+        self.calculate_combat_stats();
+        let is_nocturnal = self.has_perk(111);
+        //melee damage
+        self.melee_mod.calculate(self.clone());
+        //max luck points
+        self.calculate_lp();
+        //companion
+        self.set_companion();
+        is_nocturnal
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Player {
+    pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Disease {
-    pub id: i16,
+impl Player {
+    pub fn new() -> Self {
+        Self {
+            id: (Uuid::now_v7()),
+            name: String::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Party {
+    pub id: Uuid,
     pub name: String,
-    pub eff: String,
-    pub duration: String,
-    pub sourcebook_id: i16,
+    pub ap_players: i32,
+    pub ap_gm: i32,
+    pub max_ap: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharAddiction {
-    pub id: i16,
-    pub character_id: i16,
-    pub consumable_id: i16,
+impl Party {
+    pub fn new() -> Self {
+        Self {
+            id: (Uuid::now_v7()),
+            name: String::new(),
+            ap_players: 0,
+            ap_gm: 0,
+            max_ap: 6,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Origin {
-    pub id: i16,
+    pub id: i32,
     pub name: String,
-    pub description: String,
+    pub desc: String,
     pub can_ghoul: bool,
-    pub sourcebook_id: i16,
 }
 
-pub struct OriginWithTraits {
-    pub origin: Origin,
-    pub traits: Vec<CharTrait>,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Background {
+    pub id: i32,
+    pub name: String,
+    pub desc: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BodyPartStats {
-    pub hp: i16,
-    pub inj: i16,
-    pub ph_dr: i16,
-    pub en_dr: i16,
-    pub rd_dr: i16,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Trait {
+    pub id: i32,
+    pub name: String,
+    pub desc: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BodyPart {
-    pub active: bool,
-    pub stats: Option<BodyPartStats>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharPerk {
-    pub perk: i16,
-    pub perk_name: String,
-    pub perk_description: Vec<String>,
-    pub ranks: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharTrait {
-    pub trait_id: i16,
-    pub trait_name: String,
-    pub trait_description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CharRecipeItemType {
-    Apparel,
-    Chems,
-    Cooking,
-    PArmor,
-    RArmor,
-    RMods,
-    Weapon,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharRecipe {
-    pub item: i16,
-    pub item_name: String,
-    pub item_type: CharRecipeItemType,
-    pub complexity: i16,
-    pub common: i16,
-    pub uncommon: i16,
-    pub rare: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharBook {
-    pub book: i16,
-    pub book_name: String,
-    pub book_perk: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MeleeModifiers {
-    pub base: i8,
-    pub unarmed: MeleeModifierDetail,
-    pub sneak: MeleeModifierDetail,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MeleeModifierDetail {
-    pub active: bool,
-    pub modifier: i8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BaseDr {
-    pub ph_dr: i16,
-    pub en_dr: i16,
-    pub rd_dr: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct JunkCounts {
-    pub common: i16,
-    pub uncommon: i16,
-    pub rare: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SuperMutantKind {
-    #[serde(rename = "super mutant")]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub enum MutantType {
+    None,
     SuperMutant,
-    #[serde(rename = "nightkin")]
     Nightkin,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterRow {
-    pub id: i16,
-    pub player_id: i16,
-    pub character_name: String,
-    pub xp: i32,
-    pub origin_id: i16,
-    pub luck_points: i16,
-    pub current_health: i16,
-    pub rad_points: i16,
-    pub head_hp: i16,
-    pub head_inj: i16,
-    pub la_hp: i16,
-    pub la_inj: i16,
-    pub ra_hp: i16,
-    pub ra_inj: i16,
-    pub torso_hp: i16,
-    pub torso_inj: i16,
-    pub ll_hp: i16,
-    pub ll_inj: i16,
-    pub rl_hp: i16,
-    pub rl_inj: i16,
-    pub caps: i16,
-    pub hunger: i16,
-    pub thirst: i16,
-    pub sleep: i16,
-    pub exposure: i16,
-    pub party: i16,
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub enum RobotType {
+    None,
+    Handy,
+    Protectron,
+    Robobrain,
+    Securitron,
+    Synth,
+    Assaultron,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterSpecialRow {
-    pub id: i16,
-    pub character_id: i16,
-    pub strength: i16,
-    pub perception: i16,
-    pub endurance: i16,
-    pub charisma: i16,
-    pub intelligence: i16,
-    pub agility: i16,
-    pub luck: i16,
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub enum CompanionType {
+    None,
+    Dogmeat,
+    Human,
+    Robot,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterSkillsRow {
-    pub id: i16,
-    pub character_id: i16,
-    pub athletics: i16,
-    pub barter: i16,
-    pub big_guns: i16,
-    pub energy_weapons: i16,
-    pub explosives: i16,
-    pub lockpick: i16,
-    pub medicine: i16,
-    pub melee_weapons: i16,
-    pub pilot: i16,
-    pub repair: i16,
-    pub science: i16,
-    pub small_guns: i16,
-    pub sneak: i16,
-    pub speech: i16,
-    pub survival: i16,
-    pub throwing: i16,
-    pub unarmed: i16,
+/*
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum SpecialAttr {
+    Strength,
+    Perception,
+    Endurance,
+    Charisma,
+    Intelligence,
+    Agility,
+    Luck,
+}
+*/
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Special {
+    pub strength: SpecialBlock,
+    pub perception: SpecialBlock,
+    pub endurance: SpecialBlock,
+    pub charisma: SpecialBlock,
+    pub intelligence: SpecialBlock,
+    pub agility: SpecialBlock,
+    pub luck: SpecialBlock,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterTagsRow {
-    pub id: i16,
-    pub character_id: i16,
-    pub athletics: bool,
-    pub barter: bool,
-    pub big_guns: bool,
-    pub energy_weapons: bool,
-    pub explosives: bool,
-    pub lockpick: bool,
-    pub medicine: bool,
-    pub melee_weapons: bool,
-    pub pilot: bool,
-    pub repair: bool,
-    pub science: bool,
-    pub small_guns: bool,
-    pub sneak: bool,
-    pub speech: bool,
-    pub survival: bool,
-    pub throwing: bool,
-    pub unarmed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FullCharacter {
-    pub core: CharacterRow,
-    pub level: i16,
-    pub origin_name: String,
-    pub origin_desc: String,
-    pub ghoul: bool,
-    pub super_mutant: Option<crate::SuperMutantKind>,
-    pub robot: bool,
-    pub special: SpecialStats,      // from character_special
-    pub skills: SkillStats,       // from character_skills
-    pub tags: CharacterTagsRow,           // from character_tags
-    pub perks: Vec<CharPerk>,             // join character_perks + perks
-    pub traits: Vec<CharTrait>,               // join character_traits + traits
-    pub body: BodyState,
-    pub max_hp: i16,
-    pub max_rad_points: i16,
-    pub luck_pts: i16,
-    pub max_luck_pts: i16,
-    pub base_dr: BaseDr,
-    pub poison_dr: i16,
-    pub defense: i16,
-    pub initiative: i16,
-    pub carry_weight: i16,
-    pub max_carry_weight: i16,
-    pub caps: i16,
-    pub hunger: i16,
-    pub thirst: i16,
-    pub sleep: i16,
-    pub exposure: i16,
-    pub addictions: Vec<CharAddiction>,
-    pub diseases: Vec<Disease>,
-    pub weapons: Vec<CharWeapon>,
-    pub apparel: Vec<CharApparel>,
-    pub power_armor_frames: Vec<CharPAFrame>,
-    pub robot_modules: Vec<CharRobotModule>,
-    pub ammo: Vec<CharAmmoOwned>,
-    pub consumables: Vec<CharConsumable>,
-    pub gear: Vec<CharGear>,
-    pub junk_common: i16,
-    pub junk_uncommon: i16,
-    pub junk_rare: i16,
-    pub misc_stuff: Vec<String>,
-    pub notes: Vec<String>,
-}
-
-impl FullCharacter {
-    pub fn from_rows(
-        core: CharacterRow,
-        special_row: CharacterSpecialRow,
-        skills_row: CharacterSkillsRow,
-        tags_row: CharacterTagsRow,
-        perks: Vec<CharPerk>,
-        traits: Vec<CharTrait>,
-        addictions: Vec<CharAddiction>,
-        diseases: Vec<Disease>,
-        weapons: Vec<CharWeapon>,
-        apparel: Vec<CharApparel>,
-        pa_frames: Vec<CharPAFrame>,
-        robot_modules: Vec<CharRobotModule>,
-        ammo: Vec<CharAmmoOwned>,
-        consumables: Vec<CharConsumable>,
-        gear: Vec<CharGear>,
-    ) -> Self {
-        let special = SpecialStats {
-            strength: special_row.strength as i16,
-            perception: special_row.perception as i16,
-            endurance: special_row.endurance as i16,
-            charisma: special_row.charisma as i16,
-            intelligence: special_row.intelligence as i16,
-            agility: special_row.agility as i16,
-            luck: special_row.luck as i16,
-        };
-
-        let skills = SkillStats {
-            athletics: crate::SkillStatBlock {
-                ranks: skills_row.athletics as i16,
-                tagged: tags_row.athletics,
-                total: 0,
-                max: 0,
-            },
-            barter: crate::SkillStatBlock {
-                ranks: skills_row.barter as i16,
-                tagged: tags_row.barter,
-                total: 0,
-                max: 0,
-            },
-            big_guns: crate::SkillStatBlock {
-                ranks: skills_row.big_guns as i16,
-                tagged: tags_row.big_guns,
-                total: 0,
-                max: 0,
-            },
-            energy_weapons: crate::SkillStatBlock {
-                ranks: skills_row.energy_weapons as i16,
-                tagged: tags_row.energy_weapons,
-                total: 0,
-                max: 0,
-            },
-            explosives: crate::SkillStatBlock {
-                ranks: skills_row.explosives as i16,
-                tagged: tags_row.explosives,
-                total: 0,
-                max: 0,
-            },
-            lockpick: crate::SkillStatBlock {
-                ranks: skills_row.lockpick as i16,
-                tagged: tags_row.lockpick,
-                total: 0,
-                max: 0,
-            },
-            medicine: crate::SkillStatBlock {
-                ranks: skills_row.medicine as i16,
-                tagged: tags_row.medicine,
-                total: 0,
-                max: 0,
-            },
-            melee_weapons: crate::SkillStatBlock {
-                ranks: skills_row.melee_weapons as i16,
-                tagged: tags_row.melee_weapons,
-                total: 0,
-                max: 0,
-            },
-            pilot: crate::SkillStatBlock {
-                ranks: skills_row.pilot as i16,
-                tagged: tags_row.pilot,
-                total: 0,
-                max: 0,
-            },
-            repair: crate::SkillStatBlock {
-                ranks: skills_row.repair as i16,
-                tagged: tags_row.repair,
-                total: 0,
-                max: 0,
-            },
-            science: crate::SkillStatBlock {
-                ranks: skills_row.science as i16,
-                tagged: tags_row.science,
-                total: 0,
-                max: 0,
-            },
-            small_guns: crate::SkillStatBlock {
-                ranks: skills_row.small_guns as i16,
-                tagged: tags_row.small_guns,
-                total: 0,
-                max: 0,
-            },
-            sneak: crate::SkillStatBlock {
-                ranks: skills_row.sneak as i16,
-                tagged: tags_row.sneak,
-                total: 0,
-                max: 0,
-            },
-            speech: crate::SkillStatBlock {
-                ranks: skills_row.speech as i16,
-                tagged: tags_row.speech,
-                total: 0,
-                max: 0,
-            },
-            survival: crate::SkillStatBlock {
-                ranks: skills_row.survival as i16,
-                tagged: tags_row.survival,
-                total: 0,
-                max: 0,
-            },
-            throwing: crate::SkillStatBlock {
-                ranks: skills_row.throwing as i16,
-                tagged: tags_row.throwing,
-                total: 0,
-                max: 0,
-            },
-            unarmed: crate::SkillStatBlock {
-                ranks: skills_row.unarmed as i16,
-                tagged: tags_row.unarmed,
-                total: 0,
-                max: 0,
-            },
-            ..Default::default()
-        };
-
-        let body = BodyState {
-            head: BodyPart {
-                active: true,
-                stats: Some(BodyPartStats {
-                    hp: core.head_hp,
-                    inj: core.head_inj,
-                    ph_dr: 0,
-                    en_dr: 0,
-                    rd_dr: 0,
-                }),
-            },
-            l_arm: BodyPart {
-                active: true,
-                stats: Some(BodyPartStats {
-                    hp: core.la_hp,
-                    inj: core.la_inj,
-                    ph_dr: 0,
-                    en_dr: 0,
-                    rd_dr: 0,
-                }),
-            },
-            r_arm: BodyPart {
-                active: true,
-                stats: Some(BodyPartStats {
-                    hp: core.ra_hp,
-                    inj: core.ra_inj,
-                    ph_dr: 0,
-                    en_dr: 0,
-                    rd_dr: 0,
-                }),
-            },
-            torso: BodyPart {
-                active: true,
-                stats: Some(BodyPartStats {
-                    hp: core.torso_hp,
-                    inj: core.torso_inj,
-                    ph_dr: 0,
-                    en_dr: 0,
-                    rd_dr: 0,
-                }),
-            },
-            l_leg: BodyPart {
-                active: true,
-                stats: Some(BodyPartStats {
-                    hp: core.ll_hp,
-                    inj: core.ll_inj,
-                    ph_dr: 0,
-                    en_dr: 0,
-                    rd_dr: 0,
-                }),
-            },
-            r_leg: BodyPart {
-                active: true,
-                stats: Some(BodyPartStats {
-                    hp: core.rl_hp,
-                    inj: core.rl_inj,
-                    ph_dr: 0,
-                    en_dr: 0,
-                    rd_dr: 0,
-                }),
-            },
-            // robot bits defaulted for now
-            optics: BodyPart { active: false, stats: None },
-            arm1: BodyPart { active: false, stats: None },
-            arm2: BodyPart { active: false, stats: None },
-            arm3: BodyPart { active: false, stats: None },
-            thruster: BodyPart { active: false, stats: None },
-            wheel: BodyPart { active: false, stats: None },
-        };
-
-        FullCharacter {
-            core: core.clone(),
-            level: 1, // compute later from XP
-            origin_name: String::new(),
-            origin_desc: String::new(),
-
-            special,
-            skills,
-            tags: tags_row,
-
-            body,
-            max_hp: 0,
-            max_rad_points: 0,
-
-            caps: 0,
-            hunger: 0,
-            thirst: 0,
-            sleep: 0,
-            exposure: 0,
-
-            base_dr: BaseDr { ph_dr: 0, en_dr: 0, rd_dr: 0 },
-            poison_dr: 0,
-            defense: 0,
-            initiative: 0,
-
-            luck_pts: core.luck_points,
-            max_luck_pts: core.luck_points,
-
-            carry_weight: 0,
-            max_carry_weight: 0,
-
-            ghoul: false,
-            super_mutant: None,
-            robot: false,
-
-            perks,
-            traits,
-            addictions,
-            diseases,
-
-            weapons,
-            apparel,
-            power_armor_frames: pa_frames,
-            robot_modules,
-            ammo,
-            consumables,
-            gear,
-
-            junk_common: 0,
-            junk_uncommon: 0,
-            junk_rare: 0,
-            misc_stuff: Vec::new(),
-            notes: Vec::new(),
+impl Special {
+    fn new() -> Self {
+        Self {
+            strength: SpecialBlock::new(),
+            perception: SpecialBlock::new(),
+            endurance: SpecialBlock::new(),
+            charisma: SpecialBlock::new(),
+            intelligence: SpecialBlock::new(),
+            agility: SpecialBlock::new(),
+            luck: SpecialBlock::new(),
         }
+    }
+    pub fn apply_max(&mut self, character: &Character) {
+        match character.mutant {
+            MutantType::None => {
+                self.intelligence.max = 10;
+                self.charisma.max = 10;
+                self.strength.max = 10;
+                self.endurance.max = 10;
+                return
+            },
+            MutantType::SuperMutant => {
+                self.intelligence.max = 6;
+                self.charisma.max = 6;
+            },
+            MutantType::Nightkin => {
+                self.intelligence.max = 8;
+                self.charisma.max = 8;
+            }
+        }
+        self.strength.max = 12;
+        self.endurance.max = 12;
+    }
+    pub fn mut_special_block(&mut self) -> [&mut SpecialBlock; 7] {
+        [
+            &mut self.strength,
+            &mut self.perception,
+            &mut self.endurance,
+            &mut self.charisma,
+            &mut self.intelligence,
+            &mut self.agility,
+            &mut self.luck,
+        ]
+    }
+    pub fn special_block(&self) -> [SpecialBlock; 7] {
+        [
+            self.strength.clone(),
+            self.perception.clone(),
+            self.endurance.clone(),
+            self.charisma.clone(),
+            self.intelligence.clone(),
+            self.agility.clone(),
+            self.luck.clone(),
+        ]
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BodyState {
-    pub head: BodyPart,
-    pub l_arm: BodyPart,
-    pub r_arm: BodyPart,
-    pub l_leg: BodyPart,
-    pub r_leg: BodyPart,
-    pub torso: BodyPart,
-    pub optics: BodyPart,
-    pub arm1: BodyPart,
-    pub arm2: BodyPart,
-    pub arm3: BodyPart,
-    pub thruster: BodyPart,
-    pub wheel: BodyPart,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SpecialBlock {
+    pub value: i32,
+    pub gifted: bool,
+    pub trained: i32,
+    pub max: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterWeaponRow {
-    pub id: i16,
-    pub weapon_id: i16,
-    pub character_id: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterWeaponModRow {
-    pub id: i16,
-    pub character_weapon_id: i16,
-    pub mod_id: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterWeaponLegendaryRow {
-    pub id: i16,
-    pub character_weapon_id: i16,
-    pub legendary_id: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterAmmoRow {
-    pub id: i16,
-    pub ammo_id: i16,
-    pub quantity: i16,
-    pub character_id: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharAmmoOwned {
-    pub ammo: Ammo,
-    pub quantity: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharWeaponModApplied {
-    pub r#mod: WeaponMod,
-    pub slot: WeaponSlot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharWeapon {
-    pub id: i16,                 // character_weapons.id
-    pub base: Weapon,            // rules weapon
-    pub skill_name: String,      // resolved from skills table if you want
-    pub effects: Vec<DamageEffect>,
-    pub qualities: Vec<WeaponQualityRow>,
-    pub mods: Vec<CharWeaponModApplied>,
-    pub legendary: Option<WeaponLegendary>,
-    pub ammo: Vec<CharAmmoOwned>,
-}
-
-pub fn build_char_weapons(
-    char_weapon_rows: Vec<CharacterWeaponRow>,
-    char_weapon_mod_rows: Vec<CharacterWeaponModRow>,
-    _char_weapon_legendary_rows: Vec<CharacterWeaponLegendaryRow>,
-    weapon_rows: Vec<Weapon>,
-    weapon_effect_rows: Vec<WeaponEffectRow>,
-    damage_effect_rows: Vec<DamageEffect>,
-    weapon_qual_rows: Vec<WeaponQualityRow>,
-    quality_rows: Vec<WeaponQualityRow>,
-    weapon_mod_rows: Vec<WeaponMod>,
-    weapon_slot_rows: Vec<WeaponSlot>,
-    ammo_rows: Vec<Ammo>,
-    char_ammo_rows: Vec<CharacterAmmoRow>,
-) -> Vec<CharWeapon> {
-    // 1. Index rules data by id for fast lookup
-    let weapons: HashMap<i16, Weapon> =
-        weapon_rows.into_iter().map(|w| (w.id, w)).collect();
-
-    let damage_effects: HashMap<i16, DamageEffect> =
-        damage_effect_rows.into_iter().map(|e| (e.id, e)).collect();
-
-    let qualities: HashMap<i16, WeaponQualityRow> =
-        quality_rows.into_iter().map(|q| (q.id, q)).collect();
-
-    let weapon_mods: HashMap<i16, WeaponMod> =
-        weapon_mod_rows.into_iter().map(|m| (m.id, m)).collect();
-
-    let weapon_slots: HashMap<i16, WeaponSlot> =
-        weapon_slot_rows.into_iter().map(|s| (s.id, s)).collect();
-
-    let ammo_map: HashMap<i16, Ammo> =
-        ammo_rows.into_iter().map(|a| (a.id, a)).collect();
-
-    // 2. Group per-weapon/per-character data
-
-    // effects by weapon_id
-    let mut effects_by_weapon: HashMap<i16, Vec<DamageEffect>> = HashMap::new();
-    for row in weapon_effect_rows {
-        if let Some(effect) = damage_effects.get(&row.effect_id) {
-            effects_by_weapon
-                .entry(row.weapon_id)
-                .or_default()
-                .push(effect.clone());
+impl SpecialBlock {
+    fn new() -> Self {
+        Self {
+            value: 5,
+            gifted: false,
+            trained: 0,
+            max: 10,
         }
     }
+    pub fn can_increase(&self, state: &SpecialState, character: &Character) -> bool {
+        self.value < self.max && state.remaining_points(character) > 0
+    }
+    pub fn can_decrease(&self, character: &Character) -> bool {
+        self.value > 4 + if character.is_mutant() { 2 } else { 0 }
+    }
+}
 
-    // qualities by weapon_id
-    let mut qualities_by_weapon: HashMap<i16, Vec<WeaponQualityRow>> = HashMap::new();
-    for row in weapon_qual_rows {
-        if let Some(qual) = qualities.get(&row.qual_id) {
-            qualities_by_weapon
-                .entry(row.weapon_id)
-                .or_default()
-                .push(qual.clone());
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Skill {
+    Athletics,
+	Barter,
+	BigGuns,
+	EnergyWeapons,
+	Explosives,
+    Lockpick,
+	Medicine,
+	MeleeWeapons,
+	Pilot,
+	Repair,
+    Science,
+	SmallGuns,
+	Sneak,
+	Speech,
+	Survival,
+    Throwing,
+	Unarmed,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Skills {
+    pub athletics: SkillBlock,
+	pub barter: SkillBlock,
+	pub big_guns: SkillBlock,
+	pub energy_weapons: SkillBlock,
+	pub explosives: SkillBlock,
+    pub lockpick: SkillBlock,
+	pub medicine: SkillBlock,
+	pub melee_weapons: SkillBlock,
+	pub pilot: SkillBlock,
+	pub repair: SkillBlock,
+    pub science: SkillBlock,
+	pub small_guns: SkillBlock,
+	pub sneak: SkillBlock,
+	pub speech: SkillBlock,
+	pub survival: SkillBlock,
+    pub throwing: SkillBlock,
+	pub unarmed: SkillBlock,
+}
+
+impl Skills {
+    fn new() -> Self {
+        Self {
+            athletics: SkillBlock::new(),
+            barter: SkillBlock::new(),
+            big_guns: SkillBlock::new(),
+            energy_weapons: SkillBlock::new(),
+            explosives: SkillBlock::new(),
+            lockpick: SkillBlock::new(),
+            medicine: SkillBlock::new(),
+            melee_weapons: SkillBlock::new(),
+            pilot: SkillBlock::new(),
+            repair: SkillBlock::new(),
+            science: SkillBlock::new(),
+            small_guns: SkillBlock::new(),
+            sneak: SkillBlock::new(),
+            speech: SkillBlock::new(),
+            survival: SkillBlock::new(),
+            throwing: SkillBlock::new(),
+            unarmed: SkillBlock::new(),
         }
     }
-
-    // mods by character_weapon_id
-    let mut mods_by_char_weapon: HashMap<i16, Vec<CharWeaponModApplied>> =
-        HashMap::new();
-    for row in char_weapon_mod_rows {
-        if let Some(m) = weapon_mods.get(&row.mod_id) {
-            if let Some(slot) = weapon_slots.get(&m.slot_id) {
-                mods_by_char_weapon
-                    .entry(row.character_weapon_id)
-                    .or_default()
-                    .push(CharWeaponModApplied {
-                        r#mod: m.clone(),
-                        slot: slot.clone(),
-                    });
+    pub fn skill_block(&self) -> [SkillBlock; 17] {
+        [
+            self.athletics.clone(),
+            self.barter.clone(),
+            self.big_guns.clone(),
+            self.energy_weapons.clone(),
+            self.explosives.clone(),
+            self.lockpick.clone(),
+            self.medicine.clone(),
+            self.melee_weapons.clone(),
+            self.pilot.clone(),
+            self.repair.clone(),
+            self.science.clone(),
+            self.small_guns.clone(),
+            self.sneak.clone(),
+            self.speech.clone(),
+            self.survival.clone(),
+            self.throwing.clone(),
+            self.unarmed.clone(),
+        ]
+    }
+    pub fn mut_skill_block(&mut self) -> [&mut SkillBlock; 17] {
+        [
+            &mut self.athletics,
+            &mut self.barter,
+            &mut self.big_guns,
+            &mut self.energy_weapons,
+            &mut self.explosives,
+            &mut self.lockpick,
+            &mut self.medicine,
+            &mut self.melee_weapons,
+            &mut self.pilot,
+            &mut self.repair,
+            &mut self.science,
+            &mut self.small_guns,
+            &mut self.sneak,
+            &mut self.speech,
+            &mut self.survival,
+            &mut self.throwing,
+            &mut self.unarmed,
+        ]
+    }
+    pub fn standard_tags(&self) -> i32 {
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Standard).count() as i32
+    }
+    pub fn trait_tags(&self) -> i32 {
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Trait).count() as i32
+    }
+    pub fn perk_tags(&self) -> i32 {
+        self.skill_block().iter().filter(|t| t.tagged == TagType::Perk).count() as i32
+    }
+    pub fn total_tags(&self) -> i32 {
+        self.standard_tags() + self.trait_tags() + self.perk_tags()
+    }
+    pub fn zip_skilled(&self) -> Vec<(usize,usize)> {
+        let mut zipped = vec![];
+        let skilled_count = self.athletics.skilled.len();
+        for rank in 0..skilled_count {
+            let mut sk_a: usize = 17;
+            for (i, skill) in self.skill_block().iter().enumerate() {
+                match skill.is_skilled(rank) {
+                    1 => {if sk_a == 17 {sk_a = i} else {zipped.push((sk_a,i)); continue}},
+                    2 => {zipped.push((i,i)); continue},
+                    _ => {},
+                }
+            }
+        }
+        zipped
+    }
+    pub fn available_tags(&self, character: &Character) -> Vec<usize> {
+        let mut available = vec![];
+        for (i,skill) in self.skill_block().iter().enumerate() {
+            if !skill.is_tagged() && !(i == 10 && character.has_trait(27)) { available.push(i) }
+        }
+        available
+    }
+    pub fn perk_tagged(&self) -> Vec<usize> {
+        let mut tagged = vec![];
+        for (i,skill) in self.skill_block().iter().enumerate() {
+            if skill.tagged == TagType::Perk {tagged.push(i)}
+        }
+        tagged
+    }
+    pub fn apply_max(&mut self, character: &Character) {
+        let skill_max = character.level.clamp(3,6);
+        let mutant = character.is_mutant();
+        let good = character.has_trait(13);
+        let skills = self.mut_skill_block();
+        for i in 0..17 {
+            if mutant {
+                skills[i].max = 4.min(skill_max);
+            } else {
+                skills[i].max = skill_max;
+            }
+            if good && [0,2,3,4,5,7,8,11,12,14,15,16].contains(&i) {
+                skills[i].max = 4.min(skill_max);
             }
         }
     }
+}
 
-    // legendary by character_weapon_id
-    let /*mut*/ legendary_by_char_weapon: HashMap<i16, WeaponLegendary> =
-        HashMap::new();
-    // assume you already indexed legendary by id
-    // let legendary_map: HashMap<i16, WeaponLegendary> = ...;
-    // for row in char_weapon_legendary_rows { ... }
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SkillBlock {
+    pub ranks: i32,
+    pub tagged: TagType,
+    //skilled will create a new entry in every skill, either 0, 1 or 2. this aligns the skill selections with each rank of the perk
+    pub skilled: Vec<i32>,
+    pub total: i32,
+    pub max: i32,
+}
 
-    // ammo owned by character_id, grouped by ammo_id
-    let mut ammo_owned: HashMap<i16, Vec<CharAmmoOwned>> = HashMap::new();
-    // group by character_id if you want global, or by weapon later; for now, per character
-    for row in char_ammo_rows {
-        if let Some(a) = ammo_map.get(&row.ammo_id) {
-            ammo_owned
-                .entry(row.character_id)
-                .or_default()
-                .push(CharAmmoOwned {
-                    ammo: a.clone(),
-                    quantity: row.quantity,
-                });
+impl SkillBlock {
+    fn new() -> Self {
+        Self {
+            ranks: 0,
+            tagged: TagType::None,
+            skilled: vec![],
+            total: 0,
+            max: 3,
         }
     }
+    pub fn is_tagged(&self) -> bool {
+        self.tagged != TagType::None
+    }
+    pub fn update(&mut self) {
+        self.total = self.ranks + if self.is_tagged() { 2 } else { 0 };
+    }
+    pub fn is_skilled(&self, rank: usize) -> i32 {
+        self.skilled[rank]
+    }
+}
 
-    // 3. Build CharWeapon list
-    let mut result = Vec::new();
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub enum TagType {
+    None,
+    Trait,
+    Perk,
+    Standard,
+}
 
-    for cw in char_weapon_rows {
-        if let Some(base_weapon) = weapons.get(&cw.weapon_id) {
-            let effects = effects_by_weapon
-                .get(&cw.weapon_id)
-                .cloned()
-                .unwrap_or_default();
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Perk {
+    pub id: i32,
+    pub name: String,
+    pub desc: Vec<String>,
+    pub ranks: i32,
+}
 
-            let qualities = qualities_by_weapon
-                .get(&cw.weapon_id)
-                .cloned()
-                .unwrap_or_default();
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct MeleeModifiers {
+    pub melee: i32,
+    pub unarmed: i32,
+    pub sneak: i32,
+}
 
-            let mods = mods_by_char_weapon
-                .get(&cw.id)
-                .cloned()
-                .unwrap_or_default();
-
-            let legendary = legendary_by_char_weapon.get(&cw.id).cloned();
-
-            let ammo_for_char = ammo_owned
-                .get(&cw.character_id)
-                .cloned()
-                .unwrap_or_default();
-
-            result.push(CharWeapon {
-                id: cw.id,
-                base: base_weapon.clone(),
-                skill_name: String::new(), // you can resolve from skills table separately
-                effects,
-                qualities,
-                mods,
-                legendary,
-                ammo: ammo_for_char,
-            });
+impl MeleeModifiers {
+    pub fn new() -> Self {
+        Self {
+            melee: 0,
+            unarmed: 0,
+            sneak: 0,
         }
     }
-
-    result
+    pub fn calculate(&mut self, character: Character) {
+        let brutal = if character.has_trait(8) { 1 } else { 0 };
+        let built = if character.has_trait(23) { 1 } else { 0 };
+        self.melee = get_staggered_bonus(character.special.strength.value) + brutal + built;
+        self.unarmed = if character.has_perk(46) { 1 } else { 0 };
+        self.sneak = if character.has_perk(61) { 2 } else { 0 };
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterApparelRow {
-    pub id: i16,
-    pub apparel_id: i16,
-    pub character_id: i16,
-    pub equipped: bool,
-    pub legendary: bool,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct BaseDR {
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterApparelModRow {
-    pub id: i16,
-    pub character_apparel_id: i16,
-    pub mod_id: i16,
+impl BaseDR {
+    pub fn new() -> Self {
+        Self {
+            ph_dr: 0,
+            en_dr: 0,
+            rd_dr: 0,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterArmorLegendaryRow {
-    pub id: i16,
-    pub character_apparel_id: i16,
-    pub legendary_id: i16,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Limbs {
+    pub head: Limb,
+    pub torso: Limb,
+    pub body: Limb,
+    pub arm_left: Limb,
+    pub arm_right: Limb,
+    pub leg_left: Limb,
+    pub leg_right: Limb,
+    pub optics: Limb,
+    pub arm_1: Limb,
+    pub arm_2: Limb,
+    pub arm_3: Limb,
+    pub thruster: Limb,
+    pub wheel: Limb,
+    pub track_left: Limb,
+    pub track_right: Limb,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharApparelModApplied {
-    pub r#mod: ApparelMod,
-    pub slot: ApparelSlot,
+impl Limbs {
+    pub fn new() -> Self {
+        Self {
+            head: Limb::new_active(),
+            torso: Limb::new_active(),
+            body: Limb::new_inactive(),
+            arm_left: Limb::new_active(),
+            arm_right: Limb::new_active(),
+            leg_left: Limb::new_active(),
+            leg_right: Limb::new_active(),
+            optics: Limb::new_inactive(),
+            arm_1: Limb::new_inactive(),
+            arm_2: Limb::new_inactive(),
+            arm_3: Limb::new_inactive(),
+            thruster: Limb::new_inactive(),
+            wheel: Limb::new_inactive(),
+            track_left: Limb::new_inactive(),
+            track_right: Limb::new_inactive(),
+        }
+    }
+    pub fn update_active(&mut self, robot_type: RobotType) {
+        match robot_type {
+            RobotType::Handy => {
+                self.head = Limb::new_inactive();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_inactive();
+                self.arm_right = Limb::new_inactive();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_active();
+                self.arm_1 = Limb::new_active();
+                self.arm_2 = Limb::new_active();
+                self.arm_3 = Limb::new_active();
+                self.thruster = Limb::new_active();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            },
+            RobotType::Robobrain => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_active();
+                self.track_right = Limb::new_active();
+            },
+            RobotType::Securitron => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_inactive();
+                self.leg_right = Limb::new_inactive();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_active();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            },
+            RobotType::None => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_active();
+                self.body = Limb::new_inactive();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_active();
+                self.leg_right = Limb::new_active();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            }
+            _ => {
+                self.head = Limb::new_active();
+                self.torso = Limb::new_inactive();
+                self.body = Limb::new_active();
+                self.arm_left = Limb::new_active();
+                self.arm_right = Limb::new_active();
+                self.leg_left = Limb::new_active();
+                self.leg_right = Limb::new_active();
+                self.optics = Limb::new_inactive();
+                self.arm_1 = Limb::new_inactive();
+                self.arm_2 = Limb::new_inactive();
+                self.arm_3 = Limb::new_inactive();
+                self.thruster = Limb::new_inactive();
+                self.wheel = Limb::new_inactive();
+                self.track_left = Limb::new_inactive();
+                self.track_right = Limb::new_inactive();
+            }
+        }
+    }
+    pub fn mut_active_limbs(&mut self) -> Vec<(&mut Limb,String)> {
+        let mut active: Vec<(&mut Limb, String)> = vec![];
+        if self.head.active { active.push((&mut self.head, "head".to_string())) };
+        if self.torso.active { active.push((&mut self.torso, "torso".to_string())) };
+        if self.body.active { active.push((&mut self.body, "body".to_string())) };
+        if self.arm_left.active { active.push((&mut self.arm_left, "arm_left".to_string())) };
+        if self.arm_right.active { active.push((&mut self.arm_right, "arm_right".to_string())) };
+        if self.leg_left.active { active.push((&mut self.leg_left, "leg_left".to_string())) };
+        if self.leg_right.active { active.push((&mut self.leg_right, "leg_right".to_string())) };
+        if self.optics.active { active.push((&mut self.optics, "optics".to_string())) };
+        if self.arm_1.active { active.push((&mut self.arm_1, "arm_1".to_string())) };
+        if self.arm_2.active { active.push((&mut self.arm_2, "arm_2".to_string())) };
+        if self.arm_3.active { active.push((&mut self.arm_3, "arm_3".to_string())) };
+        if self.thruster.active { active.push((&mut self.thruster, "thruster".to_string())) };
+        if self.wheel.active { active.push((&mut self.wheel, "wheel".to_string())) };
+        if self.track_left.active { active.push((&mut self.track_left, "track_left".to_string())) };
+        if self.track_right.active { active.push((&mut self.track_right, "track_right".to_string())) };
+        active
+    }
+    pub fn update_dr(&mut self, base_dr: BaseDR, ironclad_ranks: i32, junk: i32, junk_ranks: i32) {
+        for (loc,_) in self.mut_active_limbs() {
+            let mut equip_dr = BaseDR::new();
+                let junk_dr = (junk / 5).min(junk_ranks);
+            for item in loc.equipped.clone() {
+                equip_dr.ph_dr += item.ph_dr + if item.apparel_type == ApparelType::Armor {ironclad_ranks} else { 0 };
+                equip_dr.en_dr += item.en_dr + if item.apparel_type == ApparelType::Armor {ironclad_ranks} else { 0 };
+                equip_dr.rd_dr += item.rd_dr;
+            }
+            loc.ph_dr = base_dr.ph_dr + equip_dr.ph_dr + junk_dr;
+            loc.en_dr = base_dr.en_dr + equip_dr.en_dr + junk_dr;
+            if base_dr.rd_dr < 99 {
+                loc.rd_dr = base_dr.rd_dr + equip_dr.rd_dr;
+            } else {
+                loc.rd_dr = 99;
+            }
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharApparel {
-    pub id: i16,                 // character_apparel.id
-    pub base: Apparel,           // rules apparel row
-    pub r#type: ApparelType,     // resolved from apparel_types
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Limb {
+    pub active: bool,
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
+    pub injuries: i32,
+    pub equipped: Vec<Apparel>,
+}
+
+impl Limb {
+    fn new_active() -> Self {
+        Self {
+            active: true,
+            ph_dr: 0,
+            en_dr: 0,
+            rd_dr: 0,
+            injuries: 0,
+            equipped: vec![],
+        }
+    }
+    fn new_inactive() -> Self {
+        Self {
+            active: false,
+            ph_dr: 0,
+            en_dr: 0,
+            rd_dr: 0,
+            injuries: 0,
+            equipped: vec![],
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Weapon {
+    pub id: i32,
+    pub name: String,
+    pub prefix: String,
+    pub skill: Skill,
+    pub target: i32,
+    pub tag: bool,
+    pub damage: i32,
+    pub effects: Vec<String>, // new struct?
+    pub dam_type: DamageType,
+    pub rate: i32,
+    pub range: String,
+    pub qualities: Vec<String>, // new struct?
+    pub ammo: String,
+    pub wgt: i32,
+    pub mods: Vec<WeaponMods>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum DamageType {
+    Ph,
+    En,
+    PhEn,
+    Rad,
+    EnRad,
+    Poi,
+    All,
+    None,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct WeaponMods {
+    pub slot: WeaponSlot,
+    pub installed: bool,
+    pub id: i32,
+    pub name: String,
+    pub prefix: String,
+    pub wgt: i32,
+    pub damage_set: i32,
+    pub damage_chg: i32,
+    pub rate_set: i32,
+    pub rate_chg: i32,
+    pub range_chg: i32,
+    //pub ammo_set: Option<AmmoData>,
+    pub ammo_set: Option<String>,
+    pub effect_add:  Vec<(String, Option<i32>)>,
+    pub effect_rem:  Vec<(String, Option<i32>)>,
+    pub quality_add: Vec<(String, Option<i32>)>,
+    pub quality_rem: Vec<(String, Option<i32>)>,
+    //pub slot_add: Option<WeaponSlot>,
+    pub slot_add: String,
+    pub damage_type_set: Option<DamageType>,
+    //pub weapon_add: Option<Weapon>,
+    pub weapon_add: String,
+    pub special_ability: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum WeaponSlot {
+    None,
+    Receiver,
+    Barrel,
+    Stock,
+    Grip,
+    Magazine,
+    Sights,
+    Muzzle,
+    Capacitors,
+    Dish,
+    Fuel,
+    Tank,
+    Nozzle,
+    Blade,
+    Blunt,
+    Frame,
+}
+
+/*
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Ammo {
+    pub ammo: AmmoData,
+    pub variants: Vec<AmmoData>,
+}
+*/
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct AmmoData {
+    pub id: i32,
+    pub name: String,
+    pub wgt: i32
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct AmmoInv {
+    pub ammo: AmmoData,
+    pub quantity: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Apparel {
+    pub id: i32,
+    pub name: String,
+    pub prefix: String,
+    pub apparel_type: ApparelType,
+    pub ph_dr: i32,
+    pub en_dr: i32,
+    pub rd_dr: i32,
+    pub wgt: i32,
+    pub effects: Vec<String>,
     pub covers: Vec<BodyLocation>,
     pub equipped: bool,
-    pub legendary_flag: bool,    // raw boolean flag
-    pub legendary: Option<ArmorLegendary>,
-    pub mods: Vec<CharApparelModApplied>,
+    pub db_id: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PowerArmorRecipe {
-    pub id: i16,
-    pub apparel_mod_id: i16,   // apparel_mod
-    pub complexity: i16,       // FK -> recipe_materials.complexity
-    pub rarity: i16,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ApparelType {
+    Clothing,
+    Outfit,
+    Headgear,
+    Armor,
+    PowerArmor,
+    RobotArmor,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterPowerArmorFrameRow {
-    pub id: i16,
-    pub head: i16,
-    pub la: i16,
-    pub ra: i16,
-    pub torso: i16,
-    pub ll: i16,
-    pub rl: i16,
-    pub character_id: i16,
-    pub equipped: bool,
-    pub location: String,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum BodyLocation {
+    None,
+    Head,
+    ArmLeft,
+    ArmRight,
+    Torso,
+    LegLeft,
+    LegRight,
+    Optics,
+    Arm1,
+    Arm2,
+    Arm3,
+    Body,
+    Thruster,
+    Wheel,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterPowerArmorPieceRow {
-    pub id: i16,
-    pub piece_id: i16,        // FK -> apparel.id
-    pub mods_applied: Vec<i16>,
-    pub character_id: i16,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RobotModule {
+    pub id: i32,
+    pub name: String,
+    pub installed: bool,
+    pub effect: Vec<String>,
+    pub wgt: i32,
+    pub db_id: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterPowerArmorPieceModRow {
-    pub id: i16,
-    pub piece_id: i16,        // FK -> character_powerarmor_pieces.id
-    pub mod_id: i16,          // FK -> apparel_mods.id
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Consumable {
+    pub id: i32,
+    pub name: String,
+    pub consumable_type: ConsumableType,
+    pub health: i32,
+    pub effects: Vec<String>,
+    pub rads: i32,
+    pub wgt: i32,
+    pub duration: String,
+    pub addiction: i32,
+    pub quantity: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharPAPieceModApplied {
-    pub r#mod: crate::ApparelMod,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ConsumableType {
+    Chem,
+    Food,
+    Beverage,
+    Other,
+    Publication,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharPAPiece {
-    pub id: i16,                 // character_powerarmor_pieces.id
-    pub base: crate::Apparel,    // the armor piece
-    pub mods: Vec<CharPAPieceModApplied>,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Gear {
+    pub id: i32,
+    pub name: String,
+    pub effect: Vec<String>,
+    pub wgt: i32,
+    pub quantity: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharPAFrameSlots {
-    pub head: Option<CharPAPiece>,
-    pub left_arm: Option<CharPAPiece>,
-    pub right_arm: Option<CharPAPiece>,
-    pub torso: Option<CharPAPiece>,
-    pub left_leg: Option<CharPAPiece>,
-    pub right_leg: Option<CharPAPiece>,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Junk {
+    pub common: i32,
+    pub uncommon: i32,
+    pub rare: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharPAFrame {
-    pub id: i16,                 // character_powerarmor_frames.id
-    pub character_id: i16,
-    pub equipped: bool,
-    pub location: String,
-    pub slots: CharPAFrameSlots,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterRobotModuleRow {
-    pub id: i16,
-    pub module_id: i16,     // FK -> robot_modules.id
-    pub character_id: i16,
-    pub equipped: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharRobotModule {
-    pub id: i16,                 // character_robot_modules.id
-    pub base: RobotModule,       // rules data
-    pub equipped: bool,
-    // Optionally:
-    // pub perks: Vec<RobotModulePerk>,
-}
-
-pub fn build_char_apparel(
-    char_apparel_rows: Vec<CharacterApparelRow>,
-    char_apparel_mod_rows: Vec<CharacterApparelModRow>,
-    char_armor_legendary_rows: Vec<CharacterArmorLegendaryRow>,
-
-    apparel_rows: Vec<Apparel>,
-    apparel_type_rows: Vec<ApparelType>,
-    apparel_cover_rows: Vec<ApparelCoverRow>,
-    body_location_rows: Vec<BodyLocation>,
-
-    apparel_mod_rows: Vec<ApparelMod>,
-    apparel_slot_rows: Vec<ApparelSlot>,
-    armor_legendary_rows: Vec<ArmorLegendary>,
-) -> Vec<CharApparel> {
-    // Index rules
-    let apparel_map: HashMap<i16, Apparel> =
-        apparel_rows.into_iter().map(|a| (a.id, a)).collect();
-
-    let type_map: HashMap<i16, ApparelType> =
-        apparel_type_rows.into_iter().map(|t| (t.id, t)).collect();
-
-    let body_loc_map: HashMap<i16, BodyLocation> =
-        body_location_rows.into_iter().map(|b| (b.id, b)).collect();
-
-    let apparel_mod_map: HashMap<i16, ApparelMod> =
-        apparel_mod_rows.into_iter().map(|m| (m.id, m)).collect();
-
-    let apparel_slot_map: HashMap<i16, ApparelSlot> =
-        apparel_slot_rows.into_iter().map(|s| (s.id, s)).collect();
-
-    let legendary_map: HashMap<i16, ArmorLegendary> =
-        armor_legendary_rows.into_iter().map(|l| (l.id, l)).collect();
-
-    // Covers grouped by apparel_id
-    let mut covers_by_apparel: HashMap<i16, Vec<BodyLocation>> = HashMap::new();
-    for row in apparel_cover_rows {
-        if let Some(loc) = body_loc_map.get(&row.location_id) {
-            covers_by_apparel
-                .entry(row.apparel_id)
-                .or_default()
-                .push(loc.clone());
+impl Junk {
+    fn new() -> Self {
+        Self {
+            common: 0,
+            uncommon: 0,
+            rare: 0,
         }
     }
-
-    // Mods grouped by character_apparel_id
-    let mut mods_by_char_apparel: HashMap<i16, Vec<CharApparelModApplied>> =
-        HashMap::new();
-    for row in char_apparel_mod_rows {
-        if let Some(m) = apparel_mod_map.get(&row.mod_id) {
-            if let Some(slot) = apparel_slot_map.get(&m.slot_id) {
-                mods_by_char_apparel
-                    .entry(row.character_apparel_id)
-                    .or_default()
-                    .push(CharApparelModApplied {
-                        r#mod: m.clone(),
-                        slot: slot.clone(),
-                    });
-            }
-        }
-    }
-
-    // Legendary grouped by character_apparel_id
-    let mut legendary_by_char_apparel: HashMap<i16, ArmorLegendary> =
-        HashMap::new();
-    for row in char_armor_legendary_rows {
-        if let Some(leg) = legendary_map.get(&row.legendary_id) {
-            legendary_by_char_apparel.insert(row.character_apparel_id, leg.clone());
-        }
-    }
-
-    // Build CharApparel list
-    let mut result = Vec::new();
-
-    for ca in char_apparel_rows {
-        if let Some(base) = apparel_map.get(&ca.apparel_id) {
-            let covers = covers_by_apparel
-                .get(&base.id)
-                .cloned()
-                .unwrap_or_default();
-
-            let r#type = type_map
-                .get(&base.type_id)
-                .cloned()
-                .unwrap_or(ApparelType { id: 0, name: "Unknown".to_string() });
-
-            let mods = mods_by_char_apparel
-                .get(&ca.id)
-                .cloned()
-                .unwrap_or_default();
-
-            let legendary = legendary_by_char_apparel.get(&ca.id).cloned();
-
-            result.push(CharApparel {
-                id: ca.id,
-                base: base.clone(),
-                r#type,
-                covers,
-                equipped: ca.equipped,
-                legendary_flag: ca.legendary,
-                legendary,
-                mods,
-            });
-        }
-    }
-
-    result
-}
-
-use crate::{Apparel, ApparelMod};
-
-pub fn build_char_power_armor(
-    frame_rows: Vec<CharacterPowerArmorFrameRow>,
-    piece_rows: Vec<CharacterPowerArmorPieceRow>,
-    piece_mod_rows: Vec<CharacterPowerArmorPieceModRow>,
-
-    apparel_rows: Vec<Apparel>,
-    apparel_mod_rows: Vec<ApparelMod>,
-) -> Vec<CharPAFrame> {
-    // Index base rules
-    let apparel_map: HashMap<i16, Apparel> =
-        apparel_rows.into_iter().map(|a| (a.id, a)).collect();
-
-    let mod_map: HashMap<i16, ApparelMod> =
-        apparel_mod_rows.into_iter().map(|m| (m.id, m)).collect();
-
-    // Index pieces by id
-    let piece_map: HashMap<i16, CharacterPowerArmorPieceRow> =
-        piece_rows.into_iter().map(|p| (p.id, p)).collect();
-
-    // Group mods by character_piece_id
-    let mut mods_by_piece: HashMap<i16, Vec<CharPAPieceModApplied>> =
-        HashMap::new();
-    for row in piece_mod_rows {
-        if let Some(m) = mod_map.get(&row.mod_id) {
-            mods_by_piece
-                .entry(row.piece_id)
-                .or_default()
-                .push(CharPAPieceModApplied { r#mod: m.clone() });
-        }
-    }
-
-    // Helper to build an Option<CharPAPiece> from a piece_id
-    let make_piece = |piece_id: i16,
-                      piece_map: &HashMap<i16, CharacterPowerArmorPieceRow>,
-                      apparel_map: &HashMap<i16, Apparel>,
-                      mods_by_piece: &HashMap<i16, Vec<CharPAPieceModApplied>>|
-     -> Option<CharPAPiece> {
-        let row = piece_map.get(&piece_id)?;
-        let base = apparel_map.get(&row.piece_id)?.clone();
-        let mods = mods_by_piece.get(&row.id).cloned().unwrap_or_default();
-        Some(CharPAPiece {
-            id: row.id,
-            base,
-            mods,
-        })
-    };
-
-    // Build frames
-    let mut frames = Vec::new();
-
-    for fr in frame_rows {
-        let slots = CharPAFrameSlots {
-            head: make_piece(fr.head, &piece_map, &apparel_map, &mods_by_piece),
-            left_arm: make_piece(fr.la, &piece_map, &apparel_map, &mods_by_piece),
-            right_arm: make_piece(fr.ra, &piece_map, &apparel_map, &mods_by_piece),
-            torso: make_piece(fr.torso, &piece_map, &apparel_map, &mods_by_piece),
-            left_leg: make_piece(fr.ll, &piece_map, &apparel_map, &mods_by_piece),
-            right_leg: make_piece(fr.rl, &piece_map, &apparel_map, &mods_by_piece),
-        };
-
-        frames.push(CharPAFrame {
-            id: fr.id,
-            character_id: fr.character_id,
-            equipped: fr.equipped,
-            location: fr.location,
-            slots,
-        });
-    }
-
-    frames
-}
-
-pub fn build_char_robot_modules(
-    char_rows: Vec<CharacterRobotModuleRow>,
-    module_rows: Vec<RobotModule>,
-) -> Vec<CharRobotModule> {
-    let module_map: HashMap<i16, RobotModule> =
-        module_rows.into_iter().map(|m| (m.id, m)).collect();
-
-    let mut result = Vec::new();
-
-    for row in char_rows {
-        if let Some(base) = module_map.get(&row.module_id) {
-            result.push(CharRobotModule {
-                id: row.id,
-                base: base.clone(),
-                equipped: row.equipped,
-            });
-        }
-    }
-
-    result
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterConsumableRow {
-    pub id: i16,
-    pub consumable_id: i16,
-    pub quantity: i16,
-    pub character_id: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterGearRow {
-    pub id: i16,
-    pub gear_id: i16,
-    pub quantity: i16,
-    pub character_id: i16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharConsumable {
-    pub id: i16,                // character_consumables.id
-    pub base: Consumable,       // rules data
-    pub quantity: i16,
-    // Optional: resolved type name if you want it handy
-    // pub type_name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharGear {
-    pub id: i16,                // character_gear.id
-    pub base: Gear,             // rules data
-    pub quantity: i16,
-}
-
-pub fn build_char_consumables(
-    char_rows: Vec<CharacterConsumableRow>,
-    consumable_rows: Vec<Consumable>,
-) -> Vec<CharConsumable> {
-    let consumable_map: HashMap<i16, Consumable> =
-        consumable_rows.into_iter().map(|c| (c.id, c)).collect();
-
-    let mut result = Vec::new();
-
-    for row in char_rows {
-        if let Some(base) = consumable_map.get(&row.consumable_id) {
-            result.push(CharConsumable {
-                id: row.id,
-                base: base.clone(),
-                quantity: row.quantity,
-            });
-        }
-    }
-
-    result
-}
-
-pub fn build_char_gear(
-    char_rows: Vec<CharacterGearRow>,
-    gear_rows: Vec<Gear>,
-) -> Vec<CharGear> {
-    let gear_map: HashMap<i16, Gear> =
-        gear_rows.into_iter().map(|g| (g.id, g)).collect();
-
-    let mut result = Vec::new();
-
-    for row in char_rows {
-        if let Some(base) = gear_map.get(&row.gear_id) {
-            result.push(CharGear {
-                id: row.id,
-                base: base.clone(),
-                quantity: row.quantity,
-            });
-        }
-    }
-
-    result
 }

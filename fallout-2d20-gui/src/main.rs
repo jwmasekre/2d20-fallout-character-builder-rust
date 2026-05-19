@@ -1,7 +1,5 @@
-mod db;
 mod config;
 mod screens;
-mod character;
 mod theme;
 mod crt;
 #[macro_use]
@@ -15,50 +13,66 @@ use imgui_opengl_renderer::Renderer;
 use imgui::Ui;
 use anyhow::Result;
 
+use fallout_2d20_core::constants::{
+    VERSION,
+    DATE,
+    BUILD_SCREENS
+};
+
+use fallout_2d20_core::{
+    sync_derived_weapons,
+    character::{
+        Character,
+        Party,
+        Player,
+    },
+    db::Db,
+    states::{
+        BackgroundState,
+        EquipmentState,
+        ImportState,
+        LoadCharacterState,
+        NewCharacterSetupState,
+        OriginState,
+        PerkState,
+        ReviewState,
+        SheetState,
+        SkillState,
+        SpecialState
+    },
+    structs::{
+        AppConfig,
+        AppScreen,
+        PerkResolutionPopup
+    },
+};
+use crate::screens::background_select::render_background_select;
+use crate::screens::character_review::render_character_review;
+use crate::screens::character_sheet::render_character_sheet;
+use crate::screens::import_character::render_import_character;
+use crate::screens::load_character::render_load_character;
+use crate::screens::main_menu::render_main_menu;
+use crate::screens::new_char_setup::render_new_character_setup;
+use crate::screens::origin_select::render_origin_select;
+use crate::screens::perk_select::{render_perk_resolution, render_perk_select};
+use crate::screens::settings::render_settings;
+use crate::screens::skill_assignment::render_skill_assignment;
+use crate::screens::special_assignment::render_special_assignment;
+use crate::screens::stat_calculation::render_stat_calculation;
 use crate::{
-    character::{Character, Party, Player, PreRelease, Version},
-    config::{AppConfig, db_path, load_config, save_config}, crt::CrtEffect, db::Db,
-    screens::{
-        background_select::{BackgroundState, EquipmentState, render_background_select, sync_derived_weapons}, character_review::{ReviewState, render_character_review}, character_sheet::{SheetState, render_character_sheet}, import_character::{ImportState, render_import_character}, load_character::{LoadCharacterState, render_load_character}, main_menu::render_main_menu, new_char_setup::{NewCharacterSetupState, render_new_character_setup}, origin_select::{OriginState, render_origin_select}, perk_select::{PerkResolutionPopup, PerkState, render_perk_resolution, render_perk_select}, settings::render_settings, skill_assignment::{SkillState, render_skill_assignment}, special_assignment::{SpecialState, render_special_assignment}, stat_calculation::render_stat_calculation
-    }, theme::{BAR_HEIGHT, THEMES, apply_theme, render_text_wrapped}
+    config::{
+        db_path,
+        load_config,
+        save_config
+    },
+    crt::CrtEffect,
+    theme::{
+        BAR_HEIGHT,
+        THEMES,
+        apply_theme,
+        render_text_wrapped
+    }
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AppScreen {
-    MainMenu,
-    NewCharSetup,
-    Settings,
-    LoadCharacter,
-    ImportCharacter,
-    OriginSelect,
-    SpecialAssignment,
-    SkillAssignment,
-    PerkSelect,
-    StatCalculation,
-    BackgroundSelect,
-    CharacterReview,
-    CharacterSheet,
-}
-
-pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
-    (AppScreen::OriginSelect, "Origin"),
-    (AppScreen::SpecialAssignment, "SPECIAL"),
-    (AppScreen::SkillAssignment, "Skills"),
-    (AppScreen::PerkSelect, "Perks"),
-    (AppScreen::StatCalculation, "Stats"),
-    (AppScreen::BackgroundSelect, "Background"),
-    (AppScreen::CharacterReview, "Review"),
-];
-
-const VERSION: Version = Version {
-    major: 0,
-    minor: 6,
-    patch: 0,
-    prerelease: PreRelease::Alpha,
-    prerelease_ver: 0,
-};
-
-const DATE: &str = "20260518";
 
 pub fn screen_unlocked(
     screen: &AppScreen,

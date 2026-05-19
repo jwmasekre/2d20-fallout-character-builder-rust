@@ -1,11 +1,32 @@
 [package]
 name = "fallout-2d20-core"
-version = "0.1.1"
+version = "0.6.1"
 edition = "2024"
 
 [dependencies]
-sqlx = { version = "0.8.6", feature = ["sqlite"], optional = true }
+toml = "0.8"
+
+sdl2 = { version = "0.36.0", features = ["bundled"] }
+imgui = "0.11.0"
+imgui-sdl2 = "0.15.3"
+imgui-opengl-renderer = "0.12.1"
+glow = "0.13.0"
+gl = "0.10.0"
+bytemuck = "1"
+
+tokio = { version = "1.50.0", features = ["full"] }
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "macros", "uuid"] }
+dotenvy = "0.15.7"
+uuid = { version = "1", features = ["v7", "serde"] }
+
+dirs = "5"
+rfd = "0.15"
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-dirs = "5.0"
-toml = "0.8"
+anyhow = "1.0"
+
+regex = "1.12.3"
+fancy-regex = "0.18.0"
+
+rand = "0.10.1"

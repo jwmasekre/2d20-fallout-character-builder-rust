@@ -1,8 +1,8 @@
+use fallout_2d20_core::structs::{AppConfig, AppScreen};
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::{
-    AppScreen,
-    config::{AppConfig, save_config},
+    config::{save_config},
     crt::CrtEffect,
     //theme::THEMES,
 };

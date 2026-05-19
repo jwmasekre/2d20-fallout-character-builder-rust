@@ -1,7 +1,13 @@
 use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
 
-use crate::{AppScreen, character::Character, crt::CrtEffect, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::SkillState, special_assignment::SpecialState}};
+use fallout_2d20_core::{
+    character::Character, states::{BackgroundState, EquipmentState, OriginState, PerkState, SkillState, SpecialState}, structs::AppScreen
+};
+    
+use crate::{
+    crt::CrtEffect
+};
 
 pub struct Theme {
     pub name: &'static str,
@@ -264,4 +270,54 @@ pub fn render_text_wrapped(disabled: bool, colored: bool, ui: &Ui, text: &str, i
             ui.text_wrapped(trimmed);
         }
     }
+}
+
+
+pub fn render_expandable_block(
+    ui: &Ui,
+    id: &str,
+    w: f32,
+    h: f32,
+    expanded: &mut bool,
+    title: &str,
+    contents: Option<&str>,
+) {
+    ui.child_window(id)
+        .size([w,h])
+        .border(true)
+        .build(|| {
+            ui.set_cursor_pos([8.0, 8.0]);
+
+            let arrow = if *expanded { "v" } else { ">" };
+            let header = format!("{} {}##hdr_{}", arrow, title, id);
+            let c1 = ui.push_style_color(
+                imgui::StyleColor::Button,
+                ui.style_color(imgui::StyleColor::ChildBg)
+            );
+            let c2 = ui.push_style_color(
+                imgui::StyleColor::ButtonHovered,
+                ui.style_color(imgui::StyleColor::FrameBgHovered)
+            );
+            let c3 = ui.push_style_color(
+                imgui::StyleColor::ButtonActive,
+                ui.style_color(imgui::StyleColor::FrameBgActive)
+            );
+            if ui.button_with_size(&header, [w - 16.0, 28.0]) {
+                *expanded = !*expanded;
+            }
+            drop(c1);
+            drop(c2);
+            drop(c3);
+
+            if *expanded {
+                ui.spacing();
+                ui.separator();
+                ui.spacing();
+
+                let desc = contents.unwrap_or("no description");
+                let text_w = w - 24.0;
+                ui.set_next_item_width(text_w);
+                ui.text_wrapped(desc);
+            }
+        });
 }

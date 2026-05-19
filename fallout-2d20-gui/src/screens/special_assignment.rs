@@ -1,127 +1,24 @@
 use std::collections::HashMap;
 
+use fallout_2d20_core::{
+    character::Character,
+    constants::SPECIAL_LABELS,
+    db::Db,
+    states::{
+        BackgroundState,
+        EquipmentState,
+        OriginState,
+        PerkState,
+        SkillState,
+        SpecialArray,
+        SpecialState,
+    },
+};
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::AppScreen;
-use crate::db::Db;
-use crate::character::Character;
-use crate::screens::background_select::{BackgroundState, EquipmentState};
-use crate::screens::origin_select::OriginState;
-use crate::screens::perk_select::PerkState;
-use crate::screens::skill_assignment::SkillState;
 use crate::theme::{render_text_wrapped, render_window};
 //use crate::log_on_change;
-
-//list of our array options
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SpecialArray {
-    None,
-    Balanced,   // 6,6,6,6,6,5,5
-    Focused,    // 8,7,6,6,5,4,4
-    Specialized,// 9,8,5,5,5,4,4
-    Custom,
-}
-
-impl SpecialArray {
-    //functions that look up the drop-down label...
-    fn label(&self) -> &'static str {
-        match self {
-            Self::None        => "Select SPECIAL array...",
-            Self::Balanced    => "Balanced    (6,6,6,6,6,5,5)",
-            Self::Focused     => "Focused     (8,7,6,6,5,4,4)",
-            Self::Specialized => "Specialized (9,8,5,5,5,4,4)",
-            Self::Custom      => "Custom",
-        }
-    }
-    //...and actual values of each array
-    fn values(&self) -> Option<[i32; 7]> {
-        match self {
-            Self::Balanced    => Some([6,6,6,6,6,5,5]),
-            Self::Focused     => Some([8,7,6,6,5,4,4]),
-            Self::Specialized => Some([9,8,5,5,5,4,4]),
-            _ => None,
-        }
-    }
-}
-//have a reference for stats to refer to (there's an enum in character.rs?)
-pub const SPECIAL_LABELS: [&str; 7] = ["Strength", "Perception", "Endurance", "Charisma", "Intelligence", "Agility", "Luck"];
-
-//track validity states (no array, )
-#[derive(Debug, PartialEq)]
-pub struct SpecialState {
-    selected_array: SpecialArray,
-    assignments: [Option<i32>; 7],
-    values: [i32; 7],
-    can_inc: [bool; 7],
-    can_dec: [bool; 7],
-    gifted: bool,
-    gifted_count: i32,
-    trained: i32,
-    trained_count: i32,
-    total: i32,
-}
-
-impl SpecialState {
-    pub fn new() -> Self {
-        Self {
-            selected_array: SpecialArray::None,
-            assignments: [None; 7],
-            values: [5; 7],
-            can_inc: [true; 7],
-            can_dec: [true; 7],
-            gifted: false,
-            gifted_count: 0,
-            trained: 0,
-            trained_count: 0,
-            total: 35,
-        }
-    }
-    pub fn reset(&mut self) {
-        self.selected_array = SpecialArray::None;
-        self.assignments = [None; 7];
-        self.values = [5; 7];
-        self.can_inc = [true; 7];
-        self.can_dec = [true; 7];
-        self.gifted = false;
-        self.gifted_count = 0;
-        self.trained = 0;
-        self.trained_count = 0;
-        self.total = 35;
-    }
-    pub fn update(&mut self, character: &Character) {
-        self.total = character.special.special_block().iter().map(|s| s.value).sum();
-        self.selected_array = self.selected_array;
-        self.assignments = self.assignments;
-        //self.values = self.values;
-        //check if the character is gifted
-        self.gifted = character.is_gifted();
-        //count number of gifted selections
-        self.gifted_count = character.special.special_block().iter().map(|s| s.gifted).filter(|&b| b).count() as i32;
-        //check how much intense training the character has
-        self.trained = match character.perks.iter().find(|p| p.id == 45) {
-            Some(perk) => perk.ranks,
-            None => 0,
-        };
-        //check how many times intense training has been applied
-        self.trained_count = character.special.special_block().iter().map(|s| s.trained).sum();
-        for (i, spec) in character.special.special_block().iter().enumerate() {
-            let mut_stat = i == 0 || i == 2;
-            self.can_inc[i] = spec.value < spec.max && self.remaining_points(character) > 0;
-            self.can_dec[i] = spec.value > 4 + if character.is_mutant() && mut_stat { 2 } else { 0 };
-        }
-        //log_on_change!(self);
-    }
-    pub fn is_complete(&self, character: &Character) -> bool {
-        (if self.gifted { self.gifted_count == 2 } else { self.gifted_count == 0 }) &&
-            self.trained == self.trained_count && self.total == 40 + self.trained_count + self.gifted_count + if character.is_mutant() { 4 } else { 0 } &&
-            ( self.selected_array == SpecialArray::Custom ||
-                !self.assignments.iter().any(|a| a.is_none())
-            )
-    }
-    pub fn remaining_points(&self, character: &Character) -> i32 {
-        40 + if self.gifted { 2 } else { 0 } + self.trained + if character.is_mutant() { 4 } else { 0 } - self.total
-    }
-}
 
 pub fn render_special_assignment(
     ui: &Ui,

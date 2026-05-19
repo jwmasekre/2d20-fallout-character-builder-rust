@@ -1,105 +1,23 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use uuid::Uuid;
-use crate::{AppScreen, character::{Character, Party, Player}, db::Db};
+use fallout_2d20_core::{
+    character::{
+        Character,
+        Party,
+        Player,
+    },
+    constants::NULL_PARTY,
+    db::Db,
+    states::{
+        NewCharacterSetupState,
+        PartyChoice,
+        PlayerChoice,
+    },
+    structs::AppScreen,
+};
 
-const NULL_PARTY: &str = "00000000-0000-0000-0000-000000000000";
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum PlayerChoice {
-    Unset,
-    New,
-    Existing(String), // uuid
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum PartyChoice {
-    Unset,
-    None,             // joins null party
-    New,
-    Existing(String), // uuid
-}
-
-pub struct NewCharacterSetupState {
-    // step 0 = player, step 1 = party
-    pub step: usize,
-
-    // player
-    pub player_choice: PlayerChoice,
-    pub new_player_name: String,
-    pub players: Vec<(String, String)>, // (id, username)
-    pub player_list_loaded: bool,
-
-    // party
-    pub party_choice: PartyChoice,
-    pub new_party_name: String,
-    pub parties: Vec<(String, String)>, // (id, name)
-    pub party_list_loaded: bool,
-}
-
-impl NewCharacterSetupState {
-    pub fn new() -> Self {
-        Self {
-            step: 0,
-            player_choice: PlayerChoice::Unset,
-            new_player_name: String::new(),
-            players: vec![],
-            player_list_loaded: false,
-            party_choice: PartyChoice::Unset,
-            new_party_name: String::new(),
-            parties: vec![],
-            party_list_loaded: false,
-        }
-    }
-    pub fn reset(&mut self) {
-        self.step = 0;
-        self.player_choice = PlayerChoice::Unset;
-        self.new_player_name = String::new();
-        self.players = vec![];
-        self.player_list_loaded = false;
-        self.party_choice = PartyChoice::Unset;
-        self.new_party_name = String::new();
-        self.parties = vec![];
-        self.party_list_loaded = false;
-    }
-
-    pub fn load_players(&mut self, db: &Db) {
-        if self.player_list_loaded { return; }
-        let rows = db.block_on(async {
-            sqlx::query!("SELECT id, username FROM players ORDER BY username")
-                .fetch_all(&db.pool).await
-        }).unwrap_or_default();
-        self.players = rows.into_iter()
-            .map(|r| (
-                r.id.unwrap_or_default(),
-                r.username.unwrap_or_else(|| "(unnamed)".to_string()),
-            ))
-            .collect();
-        self.player_list_loaded = true;
-    }
-
-    pub fn load_parties(&mut self, db: &Db) {
-        if self.party_list_loaded { return; }
-        let rows = db.block_on(async {
-            sqlx::query!(
-                r#"SELECT id, name
-                FROM parties
-                WHERE id != ?
-                ORDER BY name
-                "#,
-                NULL_PARTY
-            ).fetch_all(&db.pool).await
-        }).unwrap_or_default();
-        self.parties = rows.into_iter()
-            .map(|r| (
-                r.id.unwrap_or_default(),
-                r.name.unwrap_or_else(|| "(unnamed)".to_string()),
-            ))
-            .collect();
-        self.party_list_loaded = true;
-    }
-
-}
 
 pub fn render_new_character_setup(
     ui: &Ui,
