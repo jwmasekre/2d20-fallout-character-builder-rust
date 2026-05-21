@@ -59,6 +59,7 @@ use crate::screens::settings::render_settings;
 use crate::screens::skill_assignment::render_skill_assignment;
 use crate::screens::special_assignment::render_special_assignment;
 use crate::screens::stat_calculation::render_stat_calculation;
+use crate::theme::Theme;
 use crate::{
     config::{
         db_path,
@@ -245,6 +246,9 @@ fn main() -> Result<()> {
     let mut import_state = ImportState::new();
     let mut sheet_state = SheetState::new();
 
+    //we hide the os cursor so that we can apply the crt shader to a custom one
+    sdl_context.mouse().show_cursor(false);
+
     //start the render loop
     'main: loop {
         //function for handling the tabbed windows for the builder:
@@ -409,10 +413,13 @@ fn main() -> Result<()> {
             apply_theme(&mut imgui, THEMES[t], &mut crt);
         }
 
+        //we tell imgui not to manipulate the cursor. without this it would just redraw the os cursor
+        imgui.io_mut()
+            .config_flags
+            .insert(imgui::ConfigFlags::NO_MOUSE_CURSOR_CHANGE);
         //create the frame for rendering stuff
         imgui_sdl2.prepare_frame(imgui.io_mut(), &window, &event_pump.mouse_state());
         let ui = imgui.frame();
-
         //get the window size
         let (win_w, _win_h) = window.size();
 
@@ -647,6 +654,8 @@ fn main() -> Result<()> {
                     render_nav_footer(ui, win_w as f32, footer_h, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &mut character, &mut sheet_state, &cfg);
                 });
         }
+        //draw our custom cursor
+        render_cursor(&ui, THEMES[current_theme]);
 
         if crt.enabled {
             crt.begin_capture(&gl);
@@ -668,4 +677,33 @@ fn main() -> Result<()> {
         window.gl_swap_window();
     }
     Ok(())
+}
+
+pub fn render_cursor(ui: &imgui::Ui, theme: &Theme) {
+    let [mx, my] = ui.io().mouse_pos;
+    if mx < 0.0 || my < 0.0 { return; }
+
+    let draw = ui.get_foreground_draw_list();
+
+    // arrow pointer — tip at (mx, my)
+    //let fill    = imgui::ImColor32::from_rgba(210, 210, 185, 255);
+    let mut fill = theme.text_dim;
+    fill[3] = 128.0;
+    //let outline = imgui::ImColor32::from_rgba(20,  20,  20,  200);
+    let outline = theme.text;
+
+    // main triangle
+    draw.add_triangle(
+        [mx,        my       ],
+        [mx + 10.0, my + 14.0],
+        [mx,        my + 18.0],
+        fill,
+    ).build();
+    // outline
+    draw.add_triangle(
+        [mx,        my       ],
+        [mx + 10.0, my + 14.0],
+        [mx,        my + 18.0],
+        outline,
+    ).thickness(1.0).build();
 }

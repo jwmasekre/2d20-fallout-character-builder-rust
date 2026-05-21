@@ -1475,6 +1475,11 @@ impl Db {
             }).collect())
         })
     }
+    /*
+    pub fn roll_ammo(&self) -> AmmoInv {
+
+    }
+     */
 }
 
 #[derive(Debug, Clone)]

@@ -541,6 +541,28 @@ pub fn roll_cd(roll_str: &str) -> i32 {
     result
 }
 
+pub fn _roll_d20(num: u32) -> i32 {
+    let mut result = 0;
+    for _ in 0..num {
+        result += rand::random_range(0..20);
+    }
+    result
+}
+
+pub fn _roll_location() -> String {
+    let roll = rand::random_range(0..20);
+    let target = match roll {
+        0..2 => "Head/Optics",
+        2..8 => "Torso/Body",
+        8..11 => "Left Arm/Arm 1/Securitron Body/Left Foreleg/Left Wing",
+        11..14 => "Right Arm/Arm 2/Securitron Left Arm/Right Foreleg/Right Wing",
+        14..17 => "Left Leg/Arm 3/Securitron Right Arm/Left Hindleg/Left Track/Legs",
+        17..20 => "Right Leg/Thruster/Wheel/Right Hindleg/Right Track/Legs",
+        _ => "",
+    };
+    format!("{} - {}", roll, target)
+}
+
 pub fn equip_bg_apparel(
     character: &mut Character,
     equipment: &mut EquipmentState,
