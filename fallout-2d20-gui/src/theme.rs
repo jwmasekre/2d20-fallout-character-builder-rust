@@ -203,8 +203,8 @@ pub fn render_window<'ui>(
     cfg: &AppConfig,
 ) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
-    let bar_h = BAR_HEIGHT;
-    let foot_h = FOOT_HEIGHT;
+    let bar_h = BAR_HEIGHT * cfg.ui_scale;
+    let foot_h = FOOT_HEIGHT * cfg.ui_scale;
     let content_h = win_h as f32 - bar_h - foot_h;
     let w = (win_w as f32 * 0.95).min(1200.0);
     let h = content_h * 0.95;

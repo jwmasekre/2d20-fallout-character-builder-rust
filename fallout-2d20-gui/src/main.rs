@@ -618,7 +618,7 @@ fn main() -> Result<()> {
                 .collapsible(false)
                 .no_decoration()
                 .size([win_w as f32, tab_bar_h], imgui::Condition::Always)
-                .position([0.0, BAR_HEIGHT], imgui::Condition::Always)
+                .position([0.0, BAR_HEIGHT * cfg.ui_scale], imgui::Condition::Always)
                 .build(|| {
                     render_tab_bar(ui, &mut screen, &origin, &special, &skill, &perk, &mut background, &mut equipment, &mut review, &db, &character);
                 });
