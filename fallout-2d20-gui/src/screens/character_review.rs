@@ -50,17 +50,19 @@ pub fn render_character_review(
         .begin()
     else { return h };
 
-    let col_w = (w - 48.0 * cfg.ui_scale) / 2.0;
+    //let col_w = (w - 48.0 * cfg.ui_scale) / 2.0;
+    let col_w_l = (w - 48.0 * cfg.ui_scale) / 2.0 - 60.0 * cfg.ui_scale;
+    let col_w_r = (w - 48.0 * cfg.ui_scale) / 2.0 + 60.0 * cfg.ui_scale;
 
     ui.text_disabled("IDENTITY");
     ui.separator();
     ui.spacing();
 
     ui.columns(2, "##id_cols", false);
-    ui.set_column_width(0, col_w);
-    ui.set_column_width(1, col_w);
+    ui.set_column_width(0, col_w_l);
+    ui.set_column_width(1, col_w_r);
 
-    let origin_name = character.origin.clone().unwrap().name;
+    let origin_name = if character.origin.is_some() {character.origin.clone().unwrap().name} else { String::new() };
     
     ui.text_disabled(format!("{:14}", "Name"));
     ui.same_line();
@@ -101,7 +103,7 @@ pub fn render_character_review(
     ui.text(format!("{}/{}",character.hp,character.hp_max));
     ui.text_disabled(format!("{:14}", "Melee"));
     ui.same_line();
-    ui.text(format!("{}",melee_str));
+    ui.text_wrapped(format!("{}",melee_str));
 
     ui.columns(1, "##id_cols_end", false);
     ui.spacing();
@@ -117,7 +119,7 @@ pub fn render_character_review(
         }
     }
     let spacer = "             ";
-    ui.text_disabled(format!("{}{}{}{}{}    Luck Points:",spacer,spacer,spacer,spacer,spacer,));
+    ui.text_disabled(format!("{}{}{}{}{}  Luck Points:",spacer,spacer,spacer,spacer,spacer,));
     ui.same_line();
     ui.text(format!("{:2}/{:2}",character.luck_points,character.luck_points_max));
 
@@ -134,12 +136,12 @@ pub fn render_character_review(
     let rows = ((active_skills.len() - 1) / 3) + 1;
 
     for i in 0..rows {
-        ui.text(format!("  {:20} {} {}  ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
+        ui.text(format!("  {:16} {} {}    ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
         ui.same_line();
-        ui.text(format!("  {:20} {} {}  ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
+        ui.text(format!("  {:16} {} {}    ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
         if active_skills.len() > i + rows * 2 {
             ui.same_line();
-            ui.text(format!("  {:20} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
+            ui.text(format!("  {:16} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
         }
     }
 

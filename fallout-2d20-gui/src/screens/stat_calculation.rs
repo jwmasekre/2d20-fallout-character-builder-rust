@@ -61,14 +61,16 @@ pub fn render_stat_calculation(
         .begin()
     else { return h };
     let d_col_w = (w - 24.0 * cfg.ui_scale) * 0.5;
+    let d_col_w_l = (w - 24.0 * cfg.ui_scale) * 0.5 + 50.0 * cfg.ui_scale;
+    let d_col_w_r = (w - 24.0 * cfg.ui_scale) * 0.5 - 50.0 * cfg.ui_scale;
 
     ui.text("Derived");
     ui.separator();
     ui.spacing();
 
     ui.columns(2, "##derived_cols", false);
-    ui.set_column_width(0, d_col_w);
-    ui.set_column_width(1, d_col_w);
+    ui.set_column_width(0, d_col_w_l);
+    ui.set_column_width(1, d_col_w_r);
 
     let base_dr = character.base_dr.clone();
     ui.text(format!("Max Carry Weight: {}", character.carry_wgt_max));
@@ -93,7 +95,7 @@ pub fn render_stat_calculation(
     }
     let melee_string = get_melee_str(character);
 
-    ui.text(format!("Melee Damage: {}", melee_string));
+    ui.text_wrapped(format!("Melee Damage: {}", melee_string));
 
     ui.spacing();
     ui.separator();
@@ -129,12 +131,12 @@ pub fn render_stat_calculation(
     let rows = ((active_skills.len() - 1) / 3) + 1;
 
     for i in 0..rows {
-        ui.text(format!("  {:20} {} {}  ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
+        ui.text(format!("  {:16} {} {}    ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
         ui.same_line();
-        ui.text(format!("  {:20} {} {}  ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
+        ui.text(format!("  {:16} {} {}    ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
         if active_skills.len() > i + rows * 2 {
             ui.same_line();
-            ui.text(format!("  {:20} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
+            ui.text(format!("  {:16} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
         }
     }
 

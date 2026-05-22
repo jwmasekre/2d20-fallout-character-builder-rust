@@ -78,9 +78,7 @@ pub fn render_perk_select(
     ui.checkbox("eligible only##eo", &mut state.show_eligible_only);
     ui.same_line();
     ui.checkbox("flagged only##fo", &mut state.show_flagged_only);
-    ui.same_line();
-    ui.text_disabled("|");
-    ui.same_line();
+    
     ui.text_disabled("Filter by SPECIAL:");
     ui.same_line();
 
