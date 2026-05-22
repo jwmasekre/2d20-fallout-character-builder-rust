@@ -215,7 +215,7 @@ pub fn render_window<'ui>(
         .movable(false)
         .size([w, h], imgui::Condition::Always)
         .position(
-            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + 22.0 * cfg.ui_scale + (content_h - h) * 0.5],
+            [(win_w as f32 - w) * 0.5, bar_h + 22.0 * cfg.ui_scale + (content_h - h) * 0.5],
             imgui::Condition::Always,
         )
         .begin()?;
