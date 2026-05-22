@@ -748,6 +748,17 @@ pub struct BackgroundState {
     pub consumable_selections: Vec<SlotSelection>,
     pub robot_module_selections: Vec<SlotSelection>,
     pub equipment_changed: bool,
+    pub roll_trinket: Vec<String>,
+    pub roll_food: Vec<Option<Consumable>>,
+    pub roll_forage: Vec<Option<Consumable>>,
+    pub roll_bev: Vec<Option<Consumable>>,
+    pub roll_chem: Vec<Option<Consumable>>,
+    pub roll_ammo_count: Vec<Option<AmmoInv>>,
+    pub roll_aid: Vec<Option<Consumable>>,
+    pub roll_odd: Vec<Option<(Vec<Consumable>,Vec<Gear>,Vec<String>,Vec<(bool,i32)>,Vec<RobotModule>)>>,
+    pub roll_outcast: Vec<Option<(Vec<Gear>,Vec<Consumable>,Vec<Weapon>,Vec<Apparel>,String,Vec<RobotModule>)>>,
+    pub roll_junk: Vec<i32>,
+    pub caps: i32,
 }
 impl BackgroundState {
     pub fn new(db: &Db) -> Self {
@@ -760,6 +771,17 @@ impl BackgroundState {
             consumable_selections: vec![],
             robot_module_selections: vec![],
             equipment_changed: false,
+            roll_trinket: vec![],
+            roll_food: vec![],
+            roll_forage: vec![],
+            roll_bev: vec![],
+            roll_chem: vec![],
+            roll_ammo_count: vec![],
+            roll_aid: vec![],
+            roll_odd: vec![],
+            roll_outcast: vec![],
+            roll_junk: vec![],
+            caps: 0,
         }
     }
     pub fn reset(&mut self) {
@@ -770,6 +792,17 @@ impl BackgroundState {
         self.consumable_selections = vec![];
         self.robot_module_selections = vec![];
         self.equipment_changed = false;
+        self.roll_trinket = vec![];
+        self.roll_food = vec![];
+        self.roll_forage = vec![];
+        self.roll_bev = vec![];
+        self.roll_chem = vec![];
+        self.roll_ammo_count = vec![];
+        self.roll_aid = vec![];
+        self.roll_odd = vec![];
+        self.roll_outcast = vec![];
+        self.roll_junk = vec![];
+        self.caps = 0;
     }
     pub fn origin_backgrounds(&self, character: Character) -> Vec<(usize, &BackgroundRow)> {
         self.all_backgrounds.iter()
@@ -790,6 +823,17 @@ impl BackgroundState {
         self.consumable_selections.clear();
         self.robot_module_selections.clear();
         self.equipment_changed = true;
+        self.roll_trinket = vec![];
+        self.roll_food = vec![];
+        self.roll_forage = vec![];
+        self.roll_bev = vec![];
+        self.roll_chem = vec![];
+        self.roll_ammo_count = vec![];
+        self.roll_aid = vec![];
+        self.roll_odd = vec![];
+        self.roll_outcast = vec![];
+        self.roll_junk = vec![];
+        self.caps = 0;
     }
     pub fn load_background(&mut self, db: &Db, index: usize) {
         let bg_id = self.all_backgrounds[index].id;
@@ -799,7 +843,8 @@ impl BackgroundState {
         self.apparel_selections = default_apparel_selections(&background.apparel_slots);
         self.consumable_selections = default_selections(&background.consumable_slots);
         self.robot_module_selections = default_selections(&background.robot_module_slots);
-        self.current_background = Some(background);
+        self.current_background = Some(background.clone());
+        self.caps = background.caps;
     }
     pub fn is_complete(&mut self, equipment: &mut EquipmentState, db: &Db, character: &Character, review: &mut ReviewState) -> bool {
         let complete = self.selected_index.is_some() && selections_complete(&self.weapon_selections) && selections_complete(&self.apparel_selections) && selections_complete(&self.consumable_selections) && selections_complete(&self.robot_module_selections);

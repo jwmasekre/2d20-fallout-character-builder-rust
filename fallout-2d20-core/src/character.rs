@@ -38,6 +38,7 @@ pub struct Character {
     pub base_dr: BaseDR,
     pub poison_dr: i32,
     pub limb_dr: Limbs,
+    pub caps: i32,
     pub weapons: Vec<Weapon>,
     pub ammo: Vec<AmmoInv>,
     pub apparel: Vec<Apparel>,
@@ -85,6 +86,7 @@ impl Character {
             base_dr: BaseDR::new(),
             poison_dr: 0,
             limb_dr: Limbs::new(),
+            caps: 0,
             weapons: vec![],
             ammo: vec![],
             apparel: vec![],
@@ -127,6 +129,7 @@ impl Character {
         self.base_dr = BaseDR::new();
         self.poison_dr = 0;
         self.limb_dr = Limbs::new();
+        self.caps = 0;
         self.weapons = vec![];
         self.ammo = vec![];
         self.apparel = vec![];

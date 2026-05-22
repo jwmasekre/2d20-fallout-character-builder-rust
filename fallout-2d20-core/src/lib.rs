@@ -541,7 +541,7 @@ pub fn roll_cd(roll_str: &str) -> i32 {
     result
 }
 
-pub fn _roll_d20(num: u32) -> i32 {
+pub fn roll_d20(num: u32) -> i32 {
     let mut result = 0;
     for _ in 0..num {
         result += rand::random_range(0..20);
@@ -561,6 +561,33 @@ pub fn _roll_location() -> String {
         _ => "",
     };
     format!("{} - {}", roll, target)
+}
+
+pub fn roll_trinket() -> String {
+    let roll = roll_d20(1) + 1;
+    match roll {
+        1 => "A gold pocket watch".to_string(),
+        2 => "A garbled holodisk".to_string(),
+        3 => "A brightly colored bandanna".to_string(),
+        4 => "A silver locket".to_string(),
+        5 => "Medal".to_string(),
+        6 => "Potted plant".to_string(),
+        7 => "Tickets to a pre-war event".to_string(),
+        8 => "Wedding ring".to_string(),
+        9 => "Pre-war party invitation".to_string(),
+        10 => "An engraved flip lighter".to_string(),
+        11 => "Loaded casino dice".to_string(),
+        12 => "Id card".to_string(),
+        13 => "Cosmetics case".to_string(),
+        14 => "Musical Instrument".to_string(),
+        15 => "Broken eyeglasses".to_string(),
+        16 => "Necklace made of junk".to_string(),
+        17 => "Pages of an unfinished story".to_string(),
+        18 => "Overdue library book".to_string(),
+        19 => "A postcard with an address".to_string(),
+        20 => "A pre-war neck-tie".to_string(),
+        _ => "".to_string(),
+    }
 }
 
 pub fn equip_bg_apparel(

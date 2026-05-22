@@ -375,6 +375,67 @@ fn main() -> Result<()> {
                     character.gear = equipment.gear.clone();
                     character.junk = equipment.junk.clone();
                     character.misc = equipment.misc.clone();
+                    character.caps = background.caps;
+                    for item in background.roll_aid.clone() {
+                        if item.is_some() { character.consumables.push(item.unwrap())}
+                    }
+                    for item in background.roll_ammo_count.clone() {
+                        if item.is_some() { character.ammo.push(item.unwrap())}
+                    }
+                    for item in background.roll_bev.clone() {
+                        if item.is_some() { character.consumables.push(item.unwrap())}
+                    }
+                    for item in background.roll_chem.clone() {
+                        if item.is_some() { character.consumables.push(item.unwrap())}
+                    }
+                    for item in background.roll_food.clone() {
+                        if item.is_some() { character.consumables.push(item.unwrap())}
+                    }
+                    for item in background.roll_forage.clone() {
+                        if item.is_some() { character.consumables.push(item.unwrap())}
+                    }
+                    for item in background.roll_junk.clone() {
+                        character.junk.common += item;
+                    }
+                    for item in background.roll_odd.clone() {
+                        if item.is_some() { 
+                            if !item.clone().unwrap().0.is_empty() {
+                                character.consumables.push(item.unwrap().0[0].clone());
+                            } else if !item.clone().unwrap().1.is_empty() {
+                                character.gear.push(item.unwrap().1[0].clone());
+                            } else if !item.clone().unwrap().2.is_empty() {
+                                character.misc.push(item.unwrap().2[0].clone());
+                            } else if !item.clone().unwrap().3.is_empty() {
+                                if item.clone().unwrap().3[0].0 {
+                                    character.misc.push(format!("{} pre-war dollars", item.clone().unwrap().3[0].1));
+                                } else {
+                                    character.caps += item.clone().unwrap().3[0].1;
+                                }
+                            } else if !item.clone().unwrap().4.is_empty() {
+                                character.robot_modules.push(item.unwrap().4[0].clone());
+                            }
+                        }
+                    }
+                    for item in background.roll_outcast.clone() {
+                        if item.is_some() { 
+                            if !item.clone().unwrap().0.is_empty() {
+                                character.gear.push(item.unwrap().0[0].clone());
+                            } else if !item.clone().unwrap().1.is_empty() {
+                                character.consumables.push(item.unwrap().1[0].clone());
+                            } else if !item.clone().unwrap().2.is_empty() {
+                                character.weapons.push(item.unwrap().2[0].clone());
+                            } else if !item.clone().unwrap().3.is_empty() {
+                                character.apparel.push(item.unwrap().3[0].clone());
+                            } else if !item.clone().unwrap().4.is_empty() {
+                                character.misc.push(item.unwrap().4);
+                            } else if !item.clone().unwrap().5.is_empty() {
+                                character.robot_modules.push(item.unwrap().5[0].clone());
+                            }
+                        }
+                    }
+                    for item in background.roll_trinket.clone() {
+                        if item != String::new() { character.misc.push(item) }
+                    }
                     sheet.new_character(character);
                     sync_derived_weapons(character, db);
                     let mut success = false;

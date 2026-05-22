@@ -4,16 +4,6 @@ use uuid::Uuid;
 use std::{collections::HashSet, str::FromStr};
 
 use crate::{
-    equip_apparel,
-    parse_damage_type,
-    perk_description,
-    resolve_apparel_covers,
-    resolve_apparel_type,
-    resolve_consumable_type,
-    resolve_mod_effect,
-    resolve_prerelease,
-    resolve_weapon_slot,
-    roll_cd,
     background_slots::{
         ApparelSelSlot,
         ConsumableSelSlot,
@@ -25,42 +15,12 @@ use crate::{
         resolve_consumable_slots,
         resolve_robot_module_slots,
         resolve_weapon_slots,
-    },
-    character::{
-        AmmoData,
-        AmmoInv,
-        Apparel,
-        Background,
-        BaseDR,
-        Character,
-        CompanionType,
-        Consumable,
-        Gear,
-        Junk,
-        Limbs,
-        MeleeModifiers,
-        MutantType,
-        Origin,
-        Party,
-        Perk,
-        Player,
-        RobotModule,
-        RobotType,
-        Skill,
-        SkillBlock,
-        Skills,
-        Special,
-        SpecialBlock,
-        TagType,
-        Trait,
-        Weapon,
-        WeaponMods,
-    },
-    states::OriginState,
-    structs::{Version,
+    }, character::{
+        AmmoData, AmmoInv, Apparel, Background, BaseDR, Character, CompanionType, Consumable, ConsumableType, Gear, Junk, Limbs, MeleeModifiers, MutantType, Origin, Party, Perk, Player, RobotModule, RobotType, Skill, SkillBlock, Skills, Special, SpecialBlock, TagType, Trait, Weapon, WeaponMods
+    }, equip_apparel, parse_damage_type, perk_description, resolve_apparel_covers, resolve_apparel_type, resolve_consumable_type, resolve_mod_effect, resolve_prerelease, resolve_weapon_slot, roll_cd, roll_d20, states::OriginState, structs::{Version,
         WeaponEffect,
         WeaponQuality
-    },
+    }
 };
 
 pub struct Db {
@@ -215,11 +175,11 @@ impl Db {
                     thrust_inj, lt_inj, rt_inj, wheel_inj,
                     party_id, misc, junk_c, junk_u, junk_r, notes,
                     version_maj, version_min, version_pat,
-                    prerelease, prerelease_ver
+                    prerelease, prerelease_ver, caps
                 ) VALUES (
                     ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,
                     ?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,
-                    ?28,?29,?30,?31,?32,?33,?34,?35
+                    ?28,?29,?30,?31,?32,?33,?34,?35,?36
                 )"#,
                 id, player_id,
                 character.name,
@@ -255,6 +215,7 @@ impl Db {
                 character.version.patch,
                 prerelease_str,
                 character.version.prerelease_ver,
+                character.caps,
             ).execute(&mut *tx).await
                 .map_err(|e| sqlx::Error::Protocol(format!("INSERT char: {e}")))?;
 
@@ -1166,6 +1127,7 @@ impl Db {
                 base_dr: BaseDR::new(),
                 poison_dr:       0,
                 limb_dr: Limbs::new(),
+                caps: row.caps.unwrap_or(0) as i32,
                 weapons,
                 ammo,
                 apparel,
@@ -1374,6 +1336,39 @@ impl Db {
             })
         })
     }
+    pub fn get_apparel_by_id(&self, id: i32) -> anyhow::Result<Apparel> {
+        self.block_on(async {
+            let row = sqlx::query!(
+                r#"SELECT
+                    id, name, type as atype, phys_dr, enrg_dr, rads_dr, wgt, eff
+                FROM apparel a
+                WHERE a.id = ?"#,
+                id
+            )
+            .fetch_one(&self.pool).await?;
+            let cover_list: Vec<i64> = sqlx::query!(
+                    "SELECT ac.location_id AS cid
+                    FROM apparel_covers ac
+                    WHERE ac.apparel_id = ?",
+                    row.id
+                ).fetch_all(&self.pool).await
+                .unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
+            Ok(Apparel {
+                id: row.id as i32,
+                name: row.name.clone().unwrap_or_default(),
+                prefix: String::new(),
+                apparel_type: resolve_apparel_type(row.atype.unwrap_or(0)),
+                ph_dr: row.phys_dr.unwrap_or(0) as i32,
+                en_dr: row.enrg_dr.unwrap_or(0) as i32,
+                rd_dr: row.rads_dr.unwrap_or(0) as i32,
+                wgt: row.wgt.unwrap_or(0) as i32,
+                effects: serde_json::from_str(&row.eff.clone().unwrap_or_default()).ok().unwrap(),
+                covers: resolve_apparel_covers(cover_list),
+                equipped: false,
+                db_id: 0,
+            })
+        })
+    }
     pub fn get_all_apparel(&self) -> anyhow::Result<Vec<Apparel>> {
         self.block_on(async {
             let rows = sqlx::query!(
@@ -1475,11 +1470,510 @@ impl Db {
             }).collect())
         })
     }
-    /*
-    pub fn roll_ammo(&self) -> AmmoInv {
-
+    pub fn roll_ammo_core(&self) -> Vec<AmmoInv> {
+        let roll_value = roll_d20(2) + 2;
+        let mut result: Vec<AmmoInv> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT a.id, a.name, a.roll_quantity, a.wgt
+                FROM core_ammo_loot cal
+                JOIN ammo a ON cal.ammo_id = a.id
+                WHERE cal.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                let quantity = roll_cd(&r.roll_quantity.as_ref().unwrap_or(&"1".to_string()));
+                AmmoInv {
+                    quantity,
+                    ammo: AmmoData {
+                        id: r.id as i32,
+                        name: r.name.clone().unwrap_or_default(),
+                        wgt: r.wgt.unwrap_or(0) as i32,
+                    }
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving ammo loot roll: {e}"),
+        }
+        result
     }
-     */
+    pub fn roll_armor_core(&self) -> Vec<Apparel> {
+        //if you're calling this, you should be rolling against limbs as well to resolve what specific armor you found; this will return every part that particular set of armor covers, but you should only be getting one limb
+        let roll_value = roll_d20(2) + 2;
+        let mut result: Vec<Apparel> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT a.id, a.name, a.type as a_type, a.phys_dr, a.enrg_dr, a.rads_dr, a.wgt, a.eff
+                FROM core_armor_loot cal
+                JOIN apparel a ON cal.apparel_id = a.id
+                WHERE cal.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => {
+                result = row.iter().map(|r| {
+                    let cover_list: Vec<i64> = self.block_on(async {
+                        sqlx::query!(
+                            r#"SELECT
+                                ac.location_id AS cid
+                            FROM apparel_covers ac
+                            WHERE ac.apparel_id = ?
+                            "#,
+                            r.id
+                        ).fetch_all(&self.pool).await
+                    }).unwrap_or_default().iter().map(|c| c.cid.unwrap()).collect();
+                    Apparel {
+                        id: r.id as i32,
+                        name: r.name.clone().unwrap_or_default(),
+                        prefix: "".to_string(),
+                        apparel_type: resolve_apparel_type(r.a_type.unwrap_or(0)),
+                        ph_dr: r.phys_dr.unwrap_or(0) as i32,
+                        en_dr: r.enrg_dr.unwrap_or(0) as i32,
+                        rd_dr: r.rads_dr.unwrap_or(0) as i32,
+                        wgt: r.wgt.unwrap_or(0) as i32,
+                        effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                        covers: resolve_apparel_covers(cover_list),
+                        equipped: false,
+                        db_id: 0,
+                    }
+                }).collect()
+            },
+            Err(e) => eprintln!("error retrieving armor loot roll: {e}"),
+        }
+        result
+    }
+    pub fn roll_bevs_core(&self) -> Vec<Consumable> {
+        let roll_value = roll_d20(2) + 2;
+        let mut result: Vec<Consumable> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                FROM core_beverage_loot cbl
+                JOIN consumables c ON cbl.consumable_id = c.id
+                WHERE cbl.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                Consumable {
+                    id: r.id as i32,
+                    name: r.name.clone().unwrap_or_default(),
+                    consumable_type: ConsumableType::Beverage,
+                    health: r.heals.unwrap_or(0) as i32,
+                    effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                    rads: r.rads.unwrap_or(0) as i32,
+                    wgt: r.wgt.unwrap_or(0) as i32,
+                    duration: r.duration.clone().unwrap_or("0".to_string()),
+                    addiction: r.addiction.unwrap_or(0) as i32,
+                    quantity: 1,
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving beverage loot roll: {e}"),
+        }
+        result
+    }
+    pub fn roll_chem_core(&self) -> Vec<Consumable> {
+        let roll_value = roll_d20(2) + 2;
+        let mut result: Vec<Consumable> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                FROM core_chem_loot ccl
+                JOIN consumables c ON ccl.consumable_id = c.id
+                WHERE ccl.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                Consumable {
+                    id: r.id as i32,
+                    name: r.name.clone().unwrap_or_default(),
+                    consumable_type: ConsumableType::Chem,
+                    health: r.heals.unwrap_or(0) as i32,
+                    effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                    rads: r.rads.unwrap_or(0) as i32,
+                    wgt: r.wgt.unwrap_or(0) as i32,
+                    duration: r.duration.clone().unwrap_or("0".to_string()),
+                    addiction: r.addiction.unwrap_or(0) as i32,
+                    quantity: 1,
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving chem loot roll: {e}"),
+        }
+        result
+    }
+    pub fn roll_food_core(&self) -> Vec<Consumable> {
+        let roll_value = roll_d20(2) + 2;
+        let mut result: Vec<Consumable> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                FROM core_food_loot cfl
+                JOIN consumables c ON cfl.consumable_id = c.id
+                WHERE cfl.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                Consumable {
+                    id: r.id as i32,
+                    name: r.name.clone().unwrap_or_default(),
+                    consumable_type: ConsumableType::Food,
+                    health: r.heals.unwrap_or(0) as i32,
+                    effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                    rads: r.rads.unwrap_or(0) as i32,
+                    wgt: r.wgt.unwrap_or(0) as i32,
+                    duration: r.duration.clone().unwrap_or("0".to_string()),
+                    addiction: r.addiction.unwrap_or(0) as i32,
+                    quantity: 1,
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving food loot roll: {e}"),
+        }
+        result
+    }
+    pub fn roll_forage_core(&self) -> Vec<Consumable> {
+        let roll_value = roll_d20(1) + 1;
+        let mut result: Vec<Consumable> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                FROM core_foraging_loot cfl
+                JOIN consumables c ON cfl.consumable_id = c.id
+                WHERE cfl.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                Consumable {
+                    id: r.id as i32,
+                    name: r.name.clone().unwrap_or_default(),
+                    consumable_type: ConsumableType::Food,
+                    health: r.heals.unwrap_or(0) as i32,
+                    effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                    rads: r.rads.unwrap_or(0) as i32,
+                    wgt: r.wgt.unwrap_or(0) as i32,
+                    duration: r.duration.clone().unwrap_or("0".to_string()),
+                    addiction: r.addiction.unwrap_or(0) as i32,
+                    quantity: 1,
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving forage loot roll: {e}"),
+        }
+        result
+    }
+    pub fn roll_nuka_core(&self) -> (Vec<Consumable>,i32) {
+        let roll_value = roll_d20(1) + 1;
+        let mut result: Vec<Consumable> = vec![];
+        match roll_value {
+            9..13 => { return (result,roll_cd("1+2CD") * 2)},
+            13..21 => {},
+            _ => { return (result,0)},
+        }
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                FROM core_beverage_loot cbl
+                JOIN consumables c ON cbl.consumable_id = c.id
+                WHERE cbl.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                Consumable {
+                    id: r.id as i32,
+                    name: r.name.clone().unwrap_or_default(),
+                    consumable_type: ConsumableType::Beverage,
+                    health: r.heals.unwrap_or(0) as i32,
+                    effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                    rads: r.rads.unwrap_or(0) as i32,
+                    wgt: r.wgt.unwrap_or(0) as i32,
+                    duration: r.duration.clone().unwrap_or("0".to_string()),
+                    addiction: r.addiction.unwrap_or(0) as i32,
+                    quantity: 1,
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving beverage loot roll: {e}"),
+        }
+        (result,0)
+    }
+    pub fn roll_pubs_core(&self) -> Vec<Consumable> {
+        let roll_value = roll_d20(2) + 2;
+        let mut result: Vec<Consumable> = vec![];
+        let rows = self.block_on(async {
+            sqlx::query!(
+                "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                FROM core_beverage_loot cbl
+                JOIN consumables c ON cbl.consumable_id = c.id
+                WHERE cbl.roll_value = ?
+                ", roll_value
+            ).fetch_all(&self.pool).await
+        });
+        match rows {
+            Ok(row) => result = row.iter().map(|r| {
+                Consumable {
+                    id: r.id as i32,
+                    name: r.name.clone().unwrap_or_default(),
+                    consumable_type: ConsumableType::Publication,
+                    health: r.heals.unwrap_or(0) as i32,
+                    effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                    rads: r.rads.unwrap_or(0) as i32,
+                    wgt: r.wgt.unwrap_or(0) as i32,
+                    duration: r.duration.clone().unwrap_or("0".to_string()),
+                    addiction: r.addiction.unwrap_or(0) as i32,
+                    quantity: 1,
+                }
+            }).collect(),
+            Err(e) => eprintln!("error retrieving beverage loot roll: {e}"),
+        }
+        result
+    }
+    pub fn roll_random_core(&self) -> (Vec<Consumable>,Vec<Gear>,Vec<String>,Vec<(bool,i32)>,Vec<RobotModule>) {
+        let roll_value = roll_d20(3) + 3;
+        let mut result = (vec![],vec![],vec![],vec![],vec![]);
+        match roll_value {
+            38 | 46 | 58 | 59 => {
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT c.id, c.name, c.heals, c.eff, c.rads, c.wgt, c.duration, c.addiction
+                        FROM core_random_loot_consumables crlc
+                        JOIN consumables c ON crlc.consumable_id = c.id
+                        WHERE crlc.roll_value = ?
+                        ", roll_value
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.0 = row.iter().map(|r| {
+                        Consumable {
+                            id: r.id as i32,
+                            name: r.name.clone().unwrap_or_default(),
+                            consumable_type: ConsumableType::Other,
+                            health: r.heals.unwrap_or(0) as i32,
+                            effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                            rads: r.rads.unwrap_or(0) as i32,
+                            wgt: r.wgt.unwrap_or(0) as i32,
+                            duration: r.duration.clone().unwrap_or("0".to_string()),
+                            addiction: r.addiction.unwrap_or(0) as i32,
+                            quantity: 1,
+                        }
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving random consumable loot roll: {e}"),
+                }
+            },
+            13..=14 | 20..=23 | 27 | 30 | 33..=35 | 37 | 39..=41 | 45 | 47..=48 | 55..=57 => {
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT g.id, g.name, g.eff, g.wgt, crlg.quantity
+                        FROM core_random_loot_gear crlg
+                        JOIN gear g ON crlg.gear_id = g.id
+                        WHERE crlg.roll_value = ?
+                        ", roll_value
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.1 = row.iter().map(|r| {
+                        Gear {
+                            id: r.id as i32,
+                            name: r.name.clone().unwrap_or_default(),
+                            effect: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                            wgt: r.wgt.unwrap_or(0) as i32,
+                            quantity: if r.quantity.is_some() { roll_cd(&r.quantity.clone().unwrap()) } else { 1 },
+                        }
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving random gear loot roll: {e}"),
+                }
+            },
+            15 | 18 | 36 | 44 | 52..=54 => {
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT item
+                        FROM core_random_loot_misc crlm
+                        WHERE crlm.roll_value = ?
+                        ", roll_value
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.2 = row.iter().map(|r| r.item.clone().unwrap_or("".to_string())).collect(),
+                    Err(e) => eprintln!("error retrieving random misc loot roll: {e}"),
+                }
+            },
+            5..=9 | 16..=17 | 24..=25 | 28..=29 | 31..=32 => {
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT prewar, d20s
+                        FROM core_random_loot_money crlm
+                        WHERE crlm.roll_value = ?
+                        ", roll_value
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.3 = row.iter().map(|r| {
+                        (r.prewar.unwrap_or(0) != 0, roll_d20(r.d20s.unwrap_or(0) as u32))
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving random misc money roll: {e}"),
+                }
+
+            },
+            3..=4 | 10..=12 | 19 | 26 | 42..=43 | 49..=51 | 60 => {
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT m.id, m.name, m.eff, m.wgt
+                        FROM core_random_loot_robot_modules crlr
+                        JOIN robot_modules m ON crlr.robot_module_id = m.id
+                        WHERE crlr.roll_value = ?
+                        ", roll_value
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.4 = row.iter().map(|r| {
+                        RobotModule {
+                            id: r.id as i32,
+                            name: r.name.clone().unwrap_or_default(),
+                            effect: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                            wgt: r.wgt.unwrap_or(0) as i32,
+                            installed: false,
+                            db_id: 0,
+                        }
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving random robot module loot roll: {e}"),
+                }
+            },
+            _ => {}
+        }
+        result
+    }
+    pub fn roll_random_outcast(&self, character: &Character) -> (Vec<Gear>,Vec<Consumable>,Vec<Weapon>,Vec<Apparel>,String,Vec<RobotModule>) {
+        let mut result = (vec![],vec![],vec![],vec![],"".to_string(),vec![]);
+        let roll = roll_d20(1) + 1;
+        match roll {
+            1..=2 | 6 | 13 | 20 => {
+                let gid = match roll {
+                    1 => 4,
+                    2 => 8,
+                    6 => 17,
+                    13 => 2,
+                    20 => 16,
+                    _ => 0,
+                };
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT id, name, eff, wgt
+                        FROM gear g
+                        WHERE g.id = ?
+                        ", gid
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.0 = row.iter().map(|r| {
+                        Gear {
+                            id: r.id as i32,
+                            name: r.name.clone().unwrap_or_default(),
+                            effect: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                            wgt: r.wgt.unwrap_or(0) as i32,
+                            quantity: 1,
+                        }
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving outcast gear roll: {e}"),
+                }
+            },
+            3..=4 | 9 | 16 => {
+                let cid = match roll {
+                    3 => 233,
+                    4 => 159,
+                    9 => 185,
+                    16 => 182,
+                    _ => 0,
+                };
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT id, name, heals, eff, rads, wgt, duration, addiction, type as ctype
+                        FROM consumables c
+                        WHERE c.id = ?
+                        ", cid
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.1 = row.iter().map(|r| {
+                        Consumable {
+                            id: r.id as i32,
+                            name: r.name.clone().unwrap_or_default(),
+                            consumable_type: resolve_consumable_type(r.ctype.unwrap_or(0)),
+                            health: r.heals.unwrap_or(0) as i32,
+                            effects: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                            rads: r.rads.unwrap_or(0) as i32,
+                            wgt: r.wgt.unwrap_or(0) as i32,
+                            duration: r.duration.clone().unwrap_or("0".to_string()),
+                            addiction: r.addiction.unwrap_or(0) as i32,
+                            quantity: 1,
+                        }
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving outcast consumable roll: {e}"),
+                }
+            },
+            5 | 14..=15 | 17..=18 => {
+                let wid = match roll {
+                    5 => 66,
+                    14 => 33,
+                    15 => 17,
+                    17 => 9,
+                    18 => 56,
+                    _ => 0
+                };
+                let weap = self.get_weapon_by_id(wid, character);
+                match weap {
+                    Ok(weapon) => result.2 = vec![weapon],
+                    Err(e) => eprintln!("error retrieving outcast weapon roll: {e}"),
+                }
+            },
+            7 | 10..=11 | 19 => {
+                let aid = match roll {
+                    7 => 90,
+                    10 => 93,
+                    11 => 91,
+                    19 => 95,
+                    _ => 0,
+                };
+                let app = self.get_apparel_by_id(aid);
+                match app {
+                    Ok(apparel) => result.3 = vec![apparel],
+                    Err(e) => eprintln!("error retrieving outcast apparel roll: {e}"),
+                }
+            },
+            8 => result.4 = "A map to an old world survivalist cache".to_string(),
+            12 => {
+                let rows = self.block_on(async {
+                    sqlx::query!(
+                        "SELECT id, name, eff, wgt
+                        FROM robot_modules m
+                        WHERE m.id = 11
+                        "
+                    ).fetch_all(&self.pool).await
+                });
+                match rows {
+                    Ok(row) => result.5 = row.iter().map(|r| {
+                        RobotModule {
+                            id: r.id as i32,
+                            name: r.name.clone().unwrap_or_default(),
+                            effect: serde_json::from_str(&r.eff.clone().unwrap_or_default()).ok().unwrap(),
+                            wgt: r.wgt.unwrap_or(0) as i32,
+                            installed: false,
+                            db_id: 0,
+                        }
+                    }).collect(),
+                    Err(e) => eprintln!("error retrieving outcast robot module roll: {e}"),
+                }
+            }
+            _ => {}
+        }
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
