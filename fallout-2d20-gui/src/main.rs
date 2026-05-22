@@ -5,7 +5,10 @@ mod crt;
 #[macro_use]
 mod debug;
 
-use std::os::raw::c_void;
+use std::{
+    time::Instant,
+    os::raw::c_void,
+};
 use glow::HasContext;
 use sdl2::video::{ GLProfile,Window };
 use imgui_sdl2::ImguiSdl2;
@@ -249,6 +252,10 @@ fn main() -> Result<()> {
     //we hide the os cursor so that we can apply the crt shader to a custom one
     sdl_context.mouse().show_cursor(false);
 
+    //for some reason, delta_time isn't being set properly
+    //this causes an issue where the cursor blinks repeatedly and keys like backspace and enter repeat every frame
+    //we're basically forcing delta_time to be correct now
+    let mut last_frame = Instant::now();
     //start the render loop
     'main: loop {
         //function for handling the tabbed windows for the builder:
@@ -461,7 +468,14 @@ fn main() -> Result<()> {
 
         //listen for events and handle them
         for event in event_pump.poll_iter() {
-            imgui_sdl2.handle_event(&mut imgui, &event);
+            let is_repeat = matches!(
+                &event,
+                sdl2::event::Event::KeyDown { repeat: true, .. }
+            );
+            if !is_repeat {
+                imgui_sdl2.handle_event(&mut imgui, &event);
+            }
+            //imgui_sdl2.handle_event(&mut imgui, &event);
             match event {
                 sdl2::event::Event::Quit { .. } => break 'main,
                 sdl2::event::Event::Window { win_event: sdl2::event::WindowEvent::Resized(w, h), .. } => crt.resize(&gl, w, h),
@@ -478,6 +492,11 @@ fn main() -> Result<()> {
         imgui.io_mut()
             .config_flags
             .insert(imgui::ConfigFlags::NO_MOUSE_CURSOR_CHANGE);
+        //checking to make sure delta time is setting properly
+        let now = Instant::now();
+        let delta = now.duration_since(last_frame).as_secs_f32();
+        last_frame = now;
+        imgui.io_mut().delta_time = delta.max(0.0001);
         //create the frame for rendering stuff
         imgui_sdl2.prepare_frame(imgui.io_mut(), &window, &event_pump.mouse_state());
         let ui = imgui.frame();

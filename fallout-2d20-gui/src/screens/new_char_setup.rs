@@ -17,8 +17,6 @@ use fallout_2d20_core::{
     structs::{AppConfig, AppScreen},
 };
 
-
-
 pub fn render_new_character_setup(
     ui: &Ui,
     window: &Window,
