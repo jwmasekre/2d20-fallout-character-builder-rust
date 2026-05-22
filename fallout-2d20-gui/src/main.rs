@@ -377,25 +377,25 @@ fn main() -> Result<()> {
                     character.misc = equipment.misc.clone();
                     character.caps = background.caps;
                     for item in background.roll_aid.clone() {
-                        if item.is_some() { character.consumables.push(item.unwrap())}
+                        if item.is_some() { character.consumables.push(item.unwrap()) } else { character.misc.push("aid roll".to_string()) }
                     }
                     for item in background.roll_ammo_count.clone() {
-                        if item.is_some() { character.ammo.push(item.unwrap())}
+                        if item.is_some() { character.ammo.push(item.unwrap()) } else { character.misc.push("ammo roll".to_string()) }
                     }
                     for item in background.roll_bev.clone() {
-                        if item.is_some() { character.consumables.push(item.unwrap())}
+                        if item.is_some() { character.consumables.push(item.unwrap()) } else { character.misc.push("bev roll".to_string()) }
                     }
                     for item in background.roll_chem.clone() {
-                        if item.is_some() { character.consumables.push(item.unwrap())}
+                        if item.is_some() { character.consumables.push(item.unwrap()) } else { character.misc.push("chem roll".to_string()) }
                     }
                     for item in background.roll_food.clone() {
-                        if item.is_some() { character.consumables.push(item.unwrap())}
+                        if item.is_some() { character.consumables.push(item.unwrap()) } else { character.misc.push("food roll".to_string()) }
                     }
                     for item in background.roll_forage.clone() {
-                        if item.is_some() { character.consumables.push(item.unwrap())}
+                        if item.is_some() { character.consumables.push(item.unwrap()) } else { character.misc.push("forage roll".to_string()) }
                     }
                     for item in background.roll_junk.clone() {
-                        character.junk.common += item;
+                        if item > 0 { character.junk.common += item } else { character.misc.push("junk roll".to_string()) }
                     }
                     for item in background.roll_odd.clone() {
                         if item.is_some() { 
@@ -414,7 +414,7 @@ fn main() -> Result<()> {
                             } else if !item.clone().unwrap().4.is_empty() {
                                 character.robot_modules.push(item.unwrap().4[0].clone());
                             }
-                        }
+                        } else { character.misc.push("oddities roll".to_string()) }
                     }
                     for item in background.roll_outcast.clone() {
                         if item.is_some() { 
@@ -431,10 +431,10 @@ fn main() -> Result<()> {
                             } else if !item.clone().unwrap().5.is_empty() {
                                 character.robot_modules.push(item.unwrap().5[0].clone());
                             }
-                        }
+                        } else { character.misc.push("outcast roll".to_string()) }
                     }
                     for item in background.roll_trinket.clone() {
-                        if item != String::new() { character.misc.push(item) }
+                        if item != String::new() { character.misc.push(item) } else { character.misc.push("trinket roll".to_string()) }
                     }
                     sheet.new_character(character);
                     sync_derived_weapons(character, db);
