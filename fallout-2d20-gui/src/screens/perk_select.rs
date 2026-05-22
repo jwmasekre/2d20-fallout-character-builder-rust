@@ -102,8 +102,8 @@ pub fn render_perk_select(
 
     let col_name = 0.0 * cfg.ui_scale;
     let col_reqs = 240.0 * cfg.ui_scale;
-    let col_ranks = 540.0 * cfg.ui_scale;
-    let col_btns = 620.0 * cfg.ui_scale;
+    let col_ranks = 490.0 * cfg.ui_scale;
+    let col_btns = 530.0 * cfg.ui_scale;
 
     //filtering perks
     let filtered: Vec<usize> = (0..state.perks.len())
@@ -206,11 +206,6 @@ pub fn render_perk_select(
             let _g2 = true.then(|| ui.begin_disabled(true));
             ui.button(format!("Drop##drop_{}", id));
             drop(_g2);
-            if adrenaline_rush {
-                ui.same_line();
-                ui.set_cursor_pos([ui.cursor_pos()[0], ui.cursor_pos()[1] - 7.0 * cfg.ui_scale]);
-                ui.text_wrapped("This perk will have no effect...");
-            }
         } else if at_cap {
             let _g = true.then(|| ui.begin_disabled(true));
             ui.button(format!("Rank+##rankp_{}", id));
@@ -272,6 +267,10 @@ pub fn render_perk_select(
             if ui.button(format!("Flag##flag_{}", id)) {
                 character.flagged_perks.push(id);
             }
+        }
+        if adrenaline_rush {
+            //ui.set_cursor_pos([col_btns, ui.cursor_pos()[1] + 7.0 * cfg.ui_scale]);
+            ui.text_wrapped("    This perk will have no effect...");
         }
         //description
         let y = ui.cursor_pos()[1];
