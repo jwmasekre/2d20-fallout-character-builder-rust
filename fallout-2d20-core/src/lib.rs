@@ -840,7 +840,7 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character, cfg:
         }
         let headers    = ["Weapon", "Skill", "TN", "Tag", "Dmg", "Effects", "Type", "Rate", "Rng", "Qualities", "Ammo", "Wgt"];
 
-        ui.columns(headers.len() as i32, "##weap_hdr", true);
+        ui.columns(headers.len() as i32, "##weap_hdr", false);
         for (i, (hdr, cw)) in headers.iter().zip(col_widths.iter()).enumerate() {
             ui.set_column_width(i as i32, *cw);
             ui.text_disabled( hdr);
