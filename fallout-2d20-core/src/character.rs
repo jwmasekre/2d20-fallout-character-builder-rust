@@ -266,6 +266,10 @@ impl Character {
             rd_dr,
         };
     }
+    pub fn set_base_points(&mut self) {
+        self.hp = self.hp_max;
+        self.luck_points = self.luck_points_max;
+    }
     pub fn calculate_combat_stats(&mut self) {
         let agi = self.special.agility.value;
         let per = self.special.perception.value;

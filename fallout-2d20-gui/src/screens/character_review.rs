@@ -78,7 +78,9 @@ pub fn render_character_review(
     ui.text(format!("{}",origin_name));
     ui.text_disabled(format!("{:14}", "Background"));
     ui.same_line();
-    ui.text(format!("{}",character.background.clone().unwrap().name));
+    if character.background.is_some() {
+        ui.text(format!("{}",character.background.clone().unwrap().name));
+    } else { ui.text(""); }
 
     ui.next_column();
 

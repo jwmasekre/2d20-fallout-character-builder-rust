@@ -862,12 +862,20 @@ pub fn render_character_sheet(
                         ui.separator();
                         ui.spacing();
 
+                        //our version of imgui doesn't support this yet
+                        /*
+                        let flags = imgui::InputTextFlags::from_bits_truncate(
+                            imgui::sys::ImGuiInputTextFlags_WordWrap as u32
+                        );
+                        */
                         let text_h = nh - 96.0 * cfg.ui_scale;
                         ui.input_text_multiline(
                             "##notes_input",
                             &mut state.notes_buf,
                             [ui.content_region_avail()[0], text_h],
-                        ).build();
+                        )
+                            //.flags(flags)
+                            .build();
 
                         ui.spacing();
                         ui.separator();

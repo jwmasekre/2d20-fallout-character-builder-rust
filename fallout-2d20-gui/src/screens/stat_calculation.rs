@@ -38,6 +38,7 @@ pub fn render_stat_calculation(
     let nocturnal = character.compute_stats();
     let char_spec = character.special.special_block();
     let char_skills = character.skills.skill_block();
+    character.set_base_points();
 
     ui.text("STATS");
     ui.separator();
