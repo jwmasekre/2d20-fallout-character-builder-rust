@@ -1777,7 +1777,10 @@ pub fn render_character_sheet(
                         ui.spacing();
                         if ui.button_with_size("Done##inv_done", [80.0 * cfg.ui_scale, 0.0]) {
                             inv.open = false;
-                            // db.save_character(character).ok();
+                            match db.save_character(character) {
+                                Ok(_) => {},
+                                Err(e) => eprintln!("Failed to save character: {e}"),
+                            }
                         }
                     });
             });
