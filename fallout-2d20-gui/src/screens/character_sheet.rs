@@ -70,7 +70,7 @@ pub fn render_character_sheet(
     ui.set_cursor_pos([(w - xp_lvl_w) / 2.0, first_line]);
     ui.text(xp_lvl);
     //export button
-    ui.same_line_with_pos(w - 58.0 * cfg.ui_scale);
+    ui.same_line_with_pos(w - 58.0 * cfg.ui_scale - 16.0);
     if ui.button("Export##export") {
         let default_name = format!("{}.json", sanitize_filename(&character.name));
         if let Some(path) = rfd::FileDialog::new()
@@ -132,7 +132,7 @@ pub fn render_character_sheet(
         state.xp_amount = 0;
     }
     //notes button
-    ui.same_line_with_pos(w - 50.0 * cfg.ui_scale);
+    ui.same_line_with_pos(w - 50.0 * cfg.ui_scale - 16.0);
     if ui.button("Notes##notes_open") {
         state.notes_open = true;
         state.notes_buf = character.notes.clone();
@@ -619,6 +619,7 @@ pub fn render_character_sheet(
     draw_list.add_line(debug_skill_cursor, [debug_skill_cursor[0] + 268.0, debug_skill_cursor[1]], debug_color[5]).build();
     */
 
+    ui.set_cursor_pos([skill_cursor[0],skill_cursor[1] + new_line * 19.25]);
     ui.separator();
     ui.spacing();
     ui.separator();

@@ -221,7 +221,7 @@ pub fn render_window<'ui>(
         )
         .begin()?;
 
-    let close_x = w - 20.0 * cfg.ui_scale;
+    let close_x = w - 20.0 * cfg.ui_scale - 16.0;
     ui.text(title);
     ui.same_line_with_pos(close_x);
     if ui.button_with_size(format!("X##{}_close", title), [16.0 * cfg.ui_scale, 0.0]) {

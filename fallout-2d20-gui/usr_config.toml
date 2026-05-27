@@ -1,7 +1,7 @@
 theme_index=4
 db_path="C:\\Users\\owner\\2d20-fallout-character-builder-rust\\target\\debug\\fallout_2d20.db"
 font_path=None
-font_size=32
+font_size=20
 crt_distortion=0.031
 crt_scanline_strength=0.024
 crt_vignette_multiplier=16.856

@@ -870,12 +870,20 @@ impl Db {
 
             let weapon_rows = sqlx::query!(
                 r#"
+                SELECT cw.id AS cw_id, w.*, w.type as skill
+                FROM character_weapons cw
+                JOIN weapons w ON w.id = cw.weapon_id
+                WHERE cw.character_id = ?
+                "#,
+                /*
+                r#"
                 SELECT cw.id AS cw_id, w.*, a.name as aname, w.type as skill
                 FROM character_weapons cw
                 JOIN weapons w ON w.id = cw.weapon_id
                 JOIN ammo a ON a.id = w.ammo
                 WHERE cw.character_id = ?
                 "#,
+                */
                 character_id
             ).fetch_all(&self.pool).await
                 .map_err(|e| sqlx::Error::Protocol(format!("load weapons: {e}")))?;
@@ -883,6 +891,16 @@ impl Db {
             let mut weapons: Vec<Weapon> = vec![];
             for wrow in weapon_rows {
                 let weapon_id = wrow.id;
+                //grab ammo, if present
+                let ammo_row = sqlx::query!(
+                    r#"SELECT a.name as aname
+                    FROM ammo a
+                    JOIN weapons w on w.ammo = a.id
+                    WHERE w.id = ?
+                    "#,
+                    weapon_id
+                ).fetch_optional(&self.pool).await
+                    .map_err(|e| sqlx::Error::Protocol(format!("load weapon ammo: {e}")))?;
                 //grab qualities
                 let qual_rows = sqlx::query!(
                         r#"SELECT q.name, wq.qual_val
@@ -919,7 +937,7 @@ impl Db {
                 let mut mod_wgt = 0;
                 let name = wrow.name.clone().unwrap_or_default();
                 let mut prefix = String::new();
-                let ammo_name = wrow.aname.clone().unwrap_or("".to_string());
+                let ammo_name = if ammo_row.is_some() {ammo_row.unwrap().aname.unwrap_or("".to_string())} else { "".to_string() };
 
                 let (spec_index, skill_index, skill) = match wrow.skill.unwrap_or(0) {
                     8 => (0,7,Skill::MeleeWeapons),
