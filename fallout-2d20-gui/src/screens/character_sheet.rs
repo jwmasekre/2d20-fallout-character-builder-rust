@@ -1,6 +1,6 @@
 
 use fallout_2d20_core::{
-    apply_level_change, character::{
+    apply_level_change, calculate_inventory_height, character::{
         AmmoInv,
         ApparelType,
         Character,
@@ -28,7 +28,7 @@ use imgui::Ui;
 use sdl2::video::Window;
 use crate::{
     AppScreen,
-    theme::{render_expandable_block, render_window},
+    theme::{center_wrapped_text, render_expandable_block, render_window},
 };
 
 pub fn render_character_sheet(
@@ -52,43 +52,25 @@ pub fn render_character_sheet(
     //log_on_change!(character);
 
     //could probably do columns here with wrapping
-    ui.text(format!("{} --- {} ({})", character.name, character.player.name, character.party.name));
-    ui.same_line();
-    ui.text(format!("                {:4}xp", character.xp));
-    ui.same_line();
-    let mut char_clone = character.clone();
-    char_clone.calculate_level();
-    if char_clone.level < character.level {
-        if ui.button("Delevel##level_down") {
-            state.up = false;
-            state.level = true;
-        }
-    } else if character.xp_next > 0 {
-        ui.text(format!(" ({} to next) ", character.xp_next))
+    let first_line = ui.cursor_pos()[1];
+    //aligning the player and party centered on each other
+    let char_player = format!("{} --- {}", character.name, character.player.name);
+    let char_party = character.party.name.clone();
+    let char_player_w = ui.calc_text_size(char_player.clone())[0];
+    let char_party_w = ui.calc_text_size(char_party.clone())[0];
+    if char_player_w > char_party_w {
+        ui.text(char_player);
     } else {
-        if ui.button("Level Up##level_up") {
-            state.skill_choice = i32::MAX;
-            state.perk_choice = i32::MAX;
-            state.perks = load_perks(db);
-            state.up = true;
-            state.level = true;
-        }
+        ui.set_cursor_pos([(char_party_w - char_player_w) / 2.0, first_line]);
+        ui.text(char_player);
     }
-    ui.same_line();
-    ui.text(format!("Lv {}", character.level));
-    ui.same_line();
-    if ui.button("Add/Remove XP##xp_open") {
-        state.xp_open = true;
-        state.xp_amount = 0;
-    }
-    ui.same_line_with_pos(w - 140.0 * cfg.ui_scale);
-    if ui.button("Notes##notes_open") {
-        state.notes_open = true;
-        state.notes_buf = character.notes.clone();
-    }
-    ui.same_line_with_pos(w - 88.0 * cfg.ui_scale);
-    ui.text_disabled("|");
-    ui.same_line_with_pos(w - 80.0 * cfg.ui_scale);
+    //printing xp and level on the first line
+    let xp_lvl = format!("{}xp | Lv {}", character.xp, character.level);
+    let xp_lvl_w = ui.calc_text_size(xp_lvl.clone())[0];
+    ui.set_cursor_pos([(w - xp_lvl_w) / 2.0, first_line]);
+    ui.text(xp_lvl);
+    //export button
+    ui.same_line_with_pos(w - 58.0 * cfg.ui_scale);
     if ui.button("Export##export") {
         let default_name = format!("{}.json", sanitize_filename(&character.name));
         if let Some(path) = rfd::FileDialog::new()
@@ -102,16 +84,69 @@ pub fn render_character_sheet(
             };
         }
     }
+
+    //second line, party centered on player or vice versa
+    let second_line = ui.cursor_pos()[1];
+    if char_player_w < char_party_w {
+        ui.text_disabled(char_party);
+    } else {
+        ui.set_cursor_pos([(char_player_w - char_party_w) / 2.0, second_line]);
+        ui.text_disabled(char_party);
+    }
+
+    //xp remaining OR level buttons
+    let mut char_clone = character.clone();
+    char_clone.calculate_level();
+    let mut _leveling_text = String::new();
+    if char_clone.level < character.level {
+        _leveling_text = "Delevel".to_string();
+        let leveling_w = ui.calc_text_size(_leveling_text.clone())[0];
+        ui.set_cursor_pos([w / 2.0 - leveling_w, second_line]);
+        if ui.button(format!("{}##level_down", _leveling_text)) {
+            state.up = false;
+            state.level = true;
+        }
+    } else if character.xp_next > 0 {
+        _leveling_text = format!("({} to next)", character.xp_next);
+        let leveling_w = ui.calc_text_size(_leveling_text.clone())[0] + 8.0 * cfg.ui_scale;
+        ui.set_cursor_pos([w / 2.0 - leveling_w, second_line]);
+        ui.text_disabled(_leveling_text);
+    } else {
+        _leveling_text = "Level Up".to_string();
+        let leveling_w = ui.calc_text_size(_leveling_text.clone())[0] + 8.0 * cfg.ui_scale;
+        ui.set_cursor_pos([w / 2.0 - leveling_w, second_line]);
+        if ui.button(format!("{}##level_up", _leveling_text)) {
+            state.skill_choice = i32::MAX;
+            state.perk_choice = i32::MAX;
+            state.perks = load_perks(db);
+            state.up = true;
+            state.level = true;
+        }
+    }
+    //add/remove xp button
+    ui.same_line();
+    //let add_rem_xp_w = ui.calc_text_size("Add/Remove XP")[0] + 8.0 * cfg.ui_scale;
+    ui.set_cursor_pos([w / 2.0, second_line]);
+    if ui.button("Add/Remove XP##xp_open") {
+        state.xp_open = true;
+        state.xp_amount = 0;
+    }
+    //notes button
+    ui.same_line_with_pos(w - 50.0 * cfg.ui_scale);
+    if ui.button("Notes##notes_open") {
+        state.notes_open = true;
+        state.notes_buf = character.notes.clone();
+    }
     ui.separator();
     ui.spacing();
 
     let Some(_scroll) = ui.child_window("##sheet_scroll")
-        .size([w - 16.0 * cfg.ui_scale, h - 92.0 * cfg.ui_scale])
+        .size([w - 8.0 * cfg.ui_scale, h - 100.0 * cfg.ui_scale])
         .begin()
     else { return h };
     
-    let o_padding = 16.0 * cfg.ui_scale;
-    let o_block_w = w - o_padding * 2.0;
+    let o_padding = 4.0 * cfg.ui_scale;
+    let o_block_w = w - o_padding * 6.0;
     let o_gap = 8.0 * cfg.ui_scale;
     let o_col_w = (o_block_w - o_gap) / 2.0;
     let o_collapse_h = 44.0 * cfg.ui_scale;
@@ -119,7 +154,7 @@ pub fn render_character_sheet(
 
     let origin_h = if state.origin_expanded { o_expanded_h } else { o_collapse_h };
     let background_h = if state.background_expanded { o_expanded_h } else { o_collapse_h };
-    let total_h = origin_h.max(background_h) + 16.0 * cfg.ui_scale;
+    let total_h = origin_h.max(background_h) + 8.0 * cfg.ui_scale;
 
     ui.set_cursor_pos([o_padding, ui.cursor_pos()[1]]);
     ui.child_window("##ob_block")
@@ -155,8 +190,25 @@ pub fn render_character_sheet(
 
     for i in 0..7 {
         ui.text(format!("   {}:{:4}   ",SPECIAL_LABELS[i].chars().next().unwrap(), character.special.special_block()[i].value));
-        ui.same_line();
+        if i < 6 {
+            ui.same_line();
+        }
     }
+    ui.separator();
+    ui.spacing();
+    ui.separator();
+    ui.spacing();
+
+    let skill_cursor = ui.cursor_pos();
+    //let debug_skill_cursor = ui.cursor_screen_pos();
+    //let debug_diff = [debug_skill_cursor[0] - skill_cursor[0], debug_skill_cursor[1] - skill_cursor[1]];
+    let skill_table = "T  Skill          Ranks";
+    let sk_tb_w = ui.calc_text_size(skill_table)[0];
+    ui.text(skill_table);
+    let lp_w = if character.luck_points_max < 10 {40.0 * cfg.ui_scale} else {56.0 * cfg.ui_scale};
+    let lp_rp_w = if character.origin.as_ref().map(|o| o.id).unwrap_or(0) == 13 { lp_w + 160.0 * cfg.ui_scale } else { lp_w + 60.0 * cfg.ui_scale };
+    ui.same_line_with_pos(sk_tb_w + (w - sk_tb_w - lp_rp_w) / 2.0);
+    
     if ui.button("-##lp_dec") {
         if character.luck_points > 0 {
             character.luck_points -= 1;
@@ -179,6 +231,10 @@ pub fn render_character_sheet(
        
     if character.origin.as_ref().map(|o| o.id).unwrap_or(0) == 13 {
         ui.same_line();
+        ui.text_disabled("|");
+        ui.same_line();
+        ui.text("RP");
+        ui.same_line();
         if ui.button("-##rp_dec") {
             if character.rad_points > 0 {
                 character.rad_points -= 1;
@@ -196,47 +252,37 @@ pub fn render_character_sheet(
         }
         if character.rad_points < 0 { character.rad_points = 0 };
         if character.rad_points > 5 { character.luck_points = 5 };
-        ui.same_line();
-        ui.text("RP");
     }
-    ui.separator();
-    ui.spacing();
-    ui.separator();
-    ui.spacing();
-
-    let skill_cursor = ui.cursor_pos();
-    //let debug_skill_cursor = ui.cursor_screen_pos();
-    //let debug_diff = [debug_skill_cursor[0] - skill_cursor[0], debug_skill_cursor[1] - skill_cursor[1]];
-    ui.text("T  Skill              Ranks");
     ui.separator();
     for (i, skill) in character.skills.skill_block().iter().enumerate() {
-        ui.text(format!("{}  {:.<20} {}", if skill.is_tagged() {"*"} else {" "}, SKILLS[i], skill.total));
+        ui.text(format!("{}  {:.<16} {}", if skill.is_tagged() {"*"} else {" "}, SKILLS[i], skill.total));
     }
 
-    let block_w = (w - 300.0 * cfg.ui_scale) / 5.0;
-    let off_1 = skill_cursor[0] + 230.0 * cfg.ui_scale;
-    let off_2 = skill_cursor[0] + 230.0 * cfg.ui_scale + block_w + 8.0 * cfg.ui_scale;
-    let off_3 = skill_cursor[0] + 230.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 2.0;
-    let off_4 = skill_cursor[0] + 230.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 3.0;
-    let off_5 = skill_cursor[0] + 230.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 4.0;
+    let block_w = (w - 270.0 * cfg.ui_scale) / 5.0;
+    let off_1 = skill_cursor[0] + 200.0 * cfg.ui_scale;
+    let off_2 = skill_cursor[0] + 200.0 * cfg.ui_scale + block_w + 8.0 * cfg.ui_scale;
+    let off_3 = skill_cursor[0] + 200.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 2.0;
+    let off_4 = skill_cursor[0] + 200.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 3.0;
+    let off_5 = skill_cursor[0] + 200.0 * cfg.ui_scale + (block_w + 8.0 * cfg.ui_scale) * 4.0;
 
     let def_str = format!("Defense: {}", character.defense);
     let init_str = format!("Initiative: {}", character.initiative);
-    let hp_str1 = format!("HP:");
+    let hp_str1 = format!("HP");
     let hp_str2 = format!("{}/{}", character.hp, character.hp_max);
     let melee_str = format!("Melee: {}", get_melee_str(character));
     let poison_str = format!("Poison DR: {}", if character.poison_dr < 99 {character.poison_dr.to_string()} else {"Immune".to_string()});
     let def_size = ui.calc_text_size(def_str.clone());
     let init_size = ui.calc_text_size(init_str.clone());
-    let hp_size = ui.calc_text_size(hp_str1.clone())[0] + ui.calc_text_size(hp_str2.clone())[0] + 20.0 * cfg.ui_scale;
+    let hp_size = ui.calc_text_size(hp_str1.clone())[0] + ui.calc_text_size(hp_str2.clone())[0] + 32.0 * cfg.ui_scale;
     let melee_size = ui.calc_text_size(melee_str.clone());
     let poison_size = ui.calc_text_size(poison_str.clone());
-    let new_line = def_size[1] + 8.0 * cfg.ui_scale;
-    let pos_1 = [off_1 + (block_w - def_size[0]) / 2.0, skill_cursor[1] + new_line];
-    let pos_3 = [off_3 + (block_w - init_size[0]) / 2.0, skill_cursor[1] + new_line];
-    let pos_5 = [off_5 + (block_w - hp_size) / 2.0, skill_cursor[1] + new_line];
-    let pos_2 = [off_2 + (block_w - melee_size[0]) / 2.0, skill_cursor[1] + new_line * 2.0];
-    let pos_4 = [off_4 + (block_w - poison_size[0]) / 2.0, skill_cursor[1] + new_line * 2.0];
+    let new_line = def_size[1] + 3.0 * cfg.ui_scale;
+    //let new_line = def_size[1] + 8.0 * cfg.ui_scale;
+    let pos_1 = [off_1 + (block_w - def_size[0]) / 2.0, skill_cursor[1] + new_line * 1.25];
+    let pos_3 = [off_3 + (block_w - init_size[0]) / 2.0, skill_cursor[1] + new_line * 1.25];
+    let pos_5 = [off_5 + (block_w - hp_size) / 2.0, skill_cursor[1] + new_line * 1.25];
+    let pos_2 = [off_2 + (block_w - melee_size[0]) / 2.0, skill_cursor[1] + new_line * 2.25];
+    let pos_4 = [off_4 + (block_w - poison_size[0]) / 2.0, skill_cursor[1] + new_line * 2.25];
     ui.set_cursor_pos(pos_1);
     ui.text(def_str);
     ui.set_cursor_pos(pos_3);
@@ -266,22 +312,14 @@ pub fn render_character_sheet(
     ui.set_cursor_pos(pos_4);
     ui.text(poison_str);
 
-    let head_p1 = [off_3, skill_cursor[1] + new_line * 3.0];
-    //let head_p2 = [off_3 + block_w, skill_cursor[1] + new_line * 6.0];
-    let a1_p1 = [off_2, skill_cursor[1] + new_line * 6.5];
-    //let a1_p2 = [off_2 + block_w, skill_cursor[1] + new_line * 9.5];
-    let a2_p1 = [off_3, skill_cursor[1] + new_line * 6.5];
-    //let a2_p2 = [off_3 + block_w, skill_cursor[1] + new_line * 9.5];
-    let a3_p1 = [off_4, skill_cursor[1] + new_line * 6.5];
-    //let a3_p2 = [off_4 + block_w, skill_cursor[1] + new_line * 9.5];
-    let body_p1 = [off_3, skill_cursor[1] + new_line * 10.0];
-    //let body_p2 = [off_3 + block_w, skill_cursor[1] + new_line * 13.0];
-    let l1_p1 = [off_2, skill_cursor[1] + new_line * 13.5];
-    //let l1_p2 = [off_2 + block_w, skill_cursor[1] + new_line * 16.5];
-    let l2_p1 = [off_3, skill_cursor[1] + new_line * 13.5];
-    //let l2_p2 = [off_3 + block_w, skill_cursor[1] + new_line * 16.5];
-    let l3_p1 = [off_4, skill_cursor[1] + new_line * 13.5];
-    //let l3_p2 = [off_4 + block_w, skill_cursor[1] + new_line * 16.5];
+    let head_p1 = [off_3, skill_cursor[1] + new_line * 3.25];
+    let a1_p1 = [off_2, skill_cursor[1] + new_line * 7.25];
+    let a2_p1 = [off_3, skill_cursor[1] + new_line * 7.25];
+    let a3_p1 = [off_4, skill_cursor[1] + new_line * 7.25];
+    let body_p1 = [off_3, skill_cursor[1] + new_line * 11.25];
+    let l1_p1 = [off_2, skill_cursor[1] + new_line * 15.25];
+    let l2_p1 = [off_3, skill_cursor[1] + new_line * 15.25];
+    let l3_p1 = [off_4, skill_cursor[1] + new_line * 15.25];
 
     let (head_str, head_dr, head_eq) = if character.robot == RobotType::Handy {
         let limb = character.limb_dr.optics.clone();
@@ -302,7 +340,6 @@ pub fn render_character_sheet(
     };
     let head_size = ui.calc_text_size(head_str);
     let head_dr_size = ui.calc_text_size(head_dr.clone());
-    let head_eq_size = ui.calc_text_size(head_eq.clone());
     let (a1_str, a1_dr, a1_eq) = if character.robot == RobotType::Handy {
         let limb = character.limb_dr.arm_1.clone();
         let equipped: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
@@ -322,7 +359,6 @@ pub fn render_character_sheet(
     };
     let a1_size = ui.calc_text_size(a1_str);
     let a1_dr_size = ui.calc_text_size(a1_dr.clone());
-    let a1_eq_size = ui.calc_text_size(a1_eq.clone());
     let (a2_str, a2_dr, a2_eq) = if character.robot == RobotType::Handy {
         let limb = character.limb_dr.arm_2.clone();
         let equipped: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
@@ -333,7 +369,6 @@ pub fn render_character_sheet(
         )} else { (None, None, None) };
     let a2_size = if a2_str.is_some() { Some(ui.calc_text_size(a2_str.clone().unwrap())) } else { None };
     let a2_dr_size = if a2_dr.is_some() { Some(ui.calc_text_size(a2_dr.clone().unwrap())) } else { None };
-    let a2_eq_size = if a2_eq.is_some() { Some(ui.calc_text_size(a2_eq.clone().unwrap())) } else { None };
     let (a3_str, a3_dr, a3_eq) = if character.robot == RobotType::Handy {
         let limb = character.limb_dr.arm_3.clone();
         let equipped: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
@@ -353,7 +388,6 @@ pub fn render_character_sheet(
     };
     let a3_size = ui.calc_text_size(a3_str);
     let a3_dr_size = ui.calc_text_size(a3_dr.clone());
-    let a3_eq_size = ui.calc_text_size(a3_eq.clone());
     let (body_str, body_dr, body_eq) = if character.is_robot() {
         let limb = character.limb_dr.body.clone();
         let equipped: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
@@ -373,7 +407,6 @@ pub fn render_character_sheet(
     };
     let body_size = ui.calc_text_size(body_str);
     let body_dr_size = ui.calc_text_size(body_dr.clone());
-    let body_eq_size = ui.calc_text_size(body_eq.clone());
     let (l1_str, l1_dr, l1_eq) = match character.robot {
         RobotType::Handy | RobotType::Securitron => (None, None, None),
         RobotType::Robobrain => {
@@ -397,7 +430,6 @@ pub fn render_character_sheet(
     };
     let l1_size = if l1_str.is_some() { Some(ui.calc_text_size(l1_str.clone().unwrap()))} else { None };
     let l1_dr_size = if l1_dr.is_some() { Some(ui.calc_text_size(l1_dr.clone().unwrap()))} else { None };
-    let l1_eq_size = if l1_eq.is_some() { Some(ui.calc_text_size(l1_eq.clone().unwrap()))} else { None };
     let (l2_str, l2_dr, l2_eq) = match character.robot {
         RobotType::Handy => {
             let limb = character.limb_dr.thruster.clone();
@@ -421,7 +453,6 @@ pub fn render_character_sheet(
     };
     let l2_size = if l2_str.is_some() { Some(ui.calc_text_size(l2_str.clone().unwrap()))} else { None };
     let l2_dr_size = if l2_dr.is_some() { Some(ui.calc_text_size(l2_dr.clone().unwrap()))} else { None };
-    let l2_eq_size = if l2_eq.is_some() { Some(ui.calc_text_size(l2_eq.clone().unwrap()))} else { None };
     let (l3_str, l3_dr, l3_eq) = match character.robot {
         RobotType::Handy | RobotType::Securitron => (None, None, None),
         RobotType::Robobrain => {
@@ -445,20 +476,30 @@ pub fn render_character_sheet(
     };
     let l3_size = if l3_str.is_some() { Some(ui.calc_text_size(l3_str.clone().unwrap()))} else { None };
     let l3_dr_size = if l3_dr.is_some() { Some(ui.calc_text_size(l3_dr.clone().unwrap()))} else { None };
-    let l3_eq_size = if l3_eq.is_some() { Some(ui.calc_text_size(l3_eq.clone().unwrap()))} else { None };
 
     ui.set_cursor_pos([head_p1[0] + (block_w - head_size[0]) / 2.0, head_p1[1]]);
     ui.text(head_str);
     ui.set_cursor_pos([head_p1[0] + (block_w - head_dr_size[0]) / 2.0, head_p1[1] + new_line]);
     ui.text(head_dr);
-    ui.set_cursor_pos([head_p1[0] + (block_w - head_eq_size[0]) / 2.0, head_p1[1] + new_line * 2.0]);
-    ui.text_disabled(head_eq);
+
+    let _d = ui.begin_disabled(true);
+    let mut _wrap_start = head_p1[0] - block_w / 2.0;
+    ui.set_cursor_pos([_wrap_start, head_p1[1] + new_line * 2.0]);
+    center_wrapped_text(ui, &head_eq, _wrap_start, block_w * 2.0);
+    drop(_d);
+
     ui.set_cursor_pos([a1_p1[0] + (block_w - a1_size[0]) / 2.0, a1_p1[1]]);
     ui.text(a1_str);
     ui.set_cursor_pos([a1_p1[0] + (block_w - a1_dr_size[0]) / 2.0, a1_p1[1] + new_line]);
     ui.text(a1_dr);
-    ui.set_cursor_pos([a1_p1[0] + (block_w - a1_eq_size[0]) / 2.0, a1_p1[1] + new_line * 2.0]);
-    ui.text_disabled(a1_eq);
+
+    let _d = ui.begin_disabled(true);
+        _wrap_start = a1_p1[0] - block_w / 2.0;
+        ui.set_cursor_pos([_wrap_start, a1_p1[1] + new_line * 2.0]);
+
+    center_wrapped_text(ui, &a1_eq, _wrap_start, block_w * 2.0);
+    drop(_d);
+
     if a2_str.is_some() {
         ui.set_cursor_pos([a2_p1[0] + (block_w - a2_size.unwrap()[0]) / 2.0, a2_p1[1]]);
         ui.text(a2_str.unwrap());
@@ -468,21 +509,36 @@ pub fn render_character_sheet(
         ui.text(a2_dr.unwrap());
     }
     if a2_eq.is_some() {
-        ui.set_cursor_pos([a2_p1[0] + (block_w - a2_eq_size.unwrap()[0]) / 2.0, a2_p1[1] + new_line * 2.0]);
-        ui.text_disabled(a2_eq.unwrap());
+
+        let _d = ui.begin_disabled(true);
+        _wrap_start = a2_p1[0] - block_w / 2.0;
+        ui.set_cursor_pos([_wrap_start, a2_p1[1] + new_line * 2.0]);
+        center_wrapped_text(ui, &a2_eq.unwrap(), _wrap_start, block_w * 2.0);
+        drop(_d);
+
     }
     ui.set_cursor_pos([a3_p1[0] + (block_w - a3_size[0]) / 2.0, a3_p1[1]]);
     ui.text(a3_str);
     ui.set_cursor_pos([a3_p1[0] + (block_w - a3_dr_size[0]) / 2.0, a3_p1[1] + new_line]);
     ui.text(a3_dr);
-    ui.set_cursor_pos([a3_p1[0] + (block_w - a3_eq_size[0]) / 2.0, a3_p1[1] + new_line * 2.0]);
-    ui.text_disabled(a3_eq);
+
+    let _d = ui.begin_disabled(true);
+    _wrap_start = a3_p1[0] - block_w / 2.0;
+    ui.set_cursor_pos([_wrap_start, a3_p1[1] + new_line * 2.0]);
+    center_wrapped_text(ui, &a3_eq, _wrap_start, block_w * 2.0);
+    drop(_d);
+
     ui.set_cursor_pos([body_p1[0] + (block_w - body_size[0]) / 2.0, body_p1[1]]);
     ui.text(body_str);
     ui.set_cursor_pos([body_p1[0] + (block_w - body_dr_size[0]) / 2.0, body_p1[1] + new_line]);
     ui.text(body_dr);
-    ui.set_cursor_pos([body_p1[0] + (block_w - body_eq_size[0]) / 2.0, body_p1[1] + new_line * 2.0]);
-    ui.text_disabled(body_eq);
+
+    let _d = ui.begin_disabled(true);
+    _wrap_start = body_p1[0] - block_w / 2.0; 
+    ui.set_cursor_pos([_wrap_start, body_p1[1] + new_line * 2.0]);
+    center_wrapped_text(ui, &body_eq, _wrap_start, block_w * 2.0);
+    drop(_d);
+
     if l1_str.is_some() {
         ui.set_cursor_pos([l1_p1[0] + (block_w - l1_size.unwrap()[0]) / 2.0, l1_p1[1]]);
         ui.text(l1_str.unwrap());
@@ -492,8 +548,13 @@ pub fn render_character_sheet(
         ui.text(l1_dr.unwrap());
     }
     if l1_eq.is_some() {
-        ui.set_cursor_pos([l1_p1[0] + (block_w - l1_eq_size.unwrap()[0]) / 2.0, l1_p1[1] + new_line * 2.0]);
-        ui.text_disabled(l1_eq.unwrap());
+
+        let _d = ui.begin_disabled(true);
+        _wrap_start = l1_p1[0] - block_w / 2.0;
+        ui.set_cursor_pos([_wrap_start, l1_p1[1] + new_line * 2.0]);
+        center_wrapped_text(ui, &l1_eq.unwrap(), _wrap_start, block_w * 2.0);
+        drop(_d);
+
     }
     if l2_str.is_some() {
         ui.set_cursor_pos([l2_p1[0] + (block_w - l2_size.unwrap()[0]) / 2.0, l2_p1[1]]);
@@ -504,8 +565,13 @@ pub fn render_character_sheet(
         ui.text(l2_dr.unwrap());
     }
     if l2_eq.is_some() {
-        ui.set_cursor_pos([l2_p1[0] + (block_w - l2_eq_size.unwrap()[0]) / 2.0, l2_p1[1] + new_line * 2.0]);
-        ui.text_disabled(l2_eq.unwrap());
+
+        let _d = ui.begin_disabled(true);
+        _wrap_start = l2_p1[0] - block_w / 2.0;
+        ui.set_cursor_pos([_wrap_start, l2_p1[1] + new_line * 2.0]);
+        center_wrapped_text(ui, &l2_eq.unwrap(), _wrap_start, block_w * 2.0);
+        drop(_d);
+
     }
     if l3_str.is_some() {
         ui.set_cursor_pos([l3_p1[0] + (block_w - l3_size.unwrap()[0]) / 2.0, l3_p1[1]]);
@@ -516,8 +582,13 @@ pub fn render_character_sheet(
         ui.text(l3_dr.unwrap());
     }
     if l3_eq.is_some() {
-        ui.set_cursor_pos([l3_p1[0] + (block_w - l3_eq_size.unwrap()[0]) / 2.0, l3_p1[1] + new_line * 2.0]);
-        ui.text_disabled(l3_eq.unwrap());
+
+        let _d = ui.begin_disabled(true);
+        _wrap_start = l3_p1[0] - block_w / 2.0;
+        ui.set_cursor_pos([_wrap_start, l3_p1[1] + new_line * 2.0]);
+        center_wrapped_text(ui, &l3_eq.unwrap(), _wrap_start, block_w * 2.0);
+        drop(_d);
+
     }
 
     /*
@@ -565,9 +636,21 @@ pub fn render_character_sheet(
 
     let inv_cursor = ui.cursor_pos().clone();
 
+    let inv_h = calculate_inventory_height(
+        ui,
+        &character.ammo,
+        &character.apparel,
+        &character.consumables,
+        &character.robot_modules,
+        &character.gear,
+        &character.junk,
+        &character.misc,
+        cfg,
+    );
+
     ui.child_window("##inv_block")
         //not sure how we go about calculating this
-        .size([290.0 * cfg.ui_scale, 400.0 * cfg.ui_scale])
+        .size([290.0 * cfg.ui_scale, inv_h])
         .border(false)
         .build(|| {
             render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character, db, cfg);
@@ -582,8 +665,8 @@ pub fn render_character_sheet(
             }
     });
 
-    let t_padding = 16.0 * cfg.ui_scale;
-    let t_block_w = w - t_padding * 2.0 - 300.0 * cfg.ui_scale;
+    let t_padding = 4.0 * cfg.ui_scale;
+    let t_block_w = w - t_padding * 6.0 - 308.0 * cfg.ui_scale;
     let t_gap = 8.0 * cfg.ui_scale;
     let p_col_w = (t_block_w - t_gap) / 2.0;
     let t_col_w = if character.traits.len() > 1 { p_col_w } else { t_block_w };
@@ -1286,8 +1369,8 @@ pub fn render_character_sheet(
             .position([0.0, 0.0], imgui::Condition::Always)
             .bg_alpha(0.6)
             .build(|| {
-                let iw = 960.0 * cfg.ui_scale;
-                let ih = 600.0 * cfg.ui_scale;
+                let iw = (960.0 * cfg.ui_scale).min(win_w as f32);
+                let ih = (600.0 * cfg.ui_scale).min(win_h as f32);
                 let inv = &mut state.inventory;
                 ui.set_cursor_pos([(win_w as f32 - iw) * 0.5, (win_h as f32 - ih) * 0.5]);
                 ui.child_window("##inv_modal")

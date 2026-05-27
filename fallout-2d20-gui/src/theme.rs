@@ -6,7 +6,8 @@ use fallout_2d20_core::{
 };
     
 use crate::{
-    crt::CrtEffect
+    crt::CrtEffect,
+    //log_on_change
 };
 
 pub struct Theme {
@@ -220,10 +221,10 @@ pub fn render_window<'ui>(
         )
         .begin()?;
 
-    let close_x = w - 40.0 * cfg.ui_scale;
+    let close_x = w - 20.0 * cfg.ui_scale;
     ui.text(title);
     ui.same_line_with_pos(close_x);
-    if ui.button(format!("X##{}_close", title)) {
+    if ui.button_with_size(format!("X##{}_close", title), [16.0 * cfg.ui_scale, 0.0]) {
         character.reset();
         origin.reset();
         special.reset();
@@ -273,6 +274,29 @@ pub fn render_text_wrapped(disabled: bool, colored: bool, ui: &Ui, text: &str, i
     }
 }
 
+pub fn center_wrapped_text(ui: &Ui, text: &str, wrap_start: f32, wrap_width: f32) {
+    let words: Vec<&str> = text.split(' ').collect();
+    let mut lines: Vec<String> = vec![];
+    let mut i = 0;
+    for word in words {
+        let line_w = if lines.len() > i { ui.calc_text_size(lines[i].clone())[0] } else { 0.0_f32 };
+        let word_w = ui.calc_text_size(" ".to_string() + word)[0];
+        if lines.len() == 0 {
+            lines.push(word.to_string());
+        }
+        else if line_w + word_w > wrap_width {
+            i += 1;
+            lines.push(word.to_string());
+        } else {
+            lines[i] = lines[i].to_string() + " " + word;
+        }
+    }
+    for line in lines {
+        let line_w = ui.calc_text_size(line.clone())[0];
+        ui.set_cursor_pos([wrap_start + (wrap_width - line_w) / 2.0, ui.cursor_pos()[1]]);
+        ui.text(line);
+    }
+}
 
 pub fn render_expandable_block(
     ui: &Ui,

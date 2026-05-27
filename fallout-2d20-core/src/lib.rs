@@ -1015,6 +1015,49 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character, cfg:
     }
 }
 
+pub fn calculate_inventory_height(
+    ui: &Ui,
+    ammo: &[AmmoInv],
+    apparel: &[Apparel],
+    consumables: &[Consumable],
+    modules: &[RobotModule],
+    gear: &[Gear],
+    junk: &Junk,
+    misc: &[String],
+    cfg: &AppConfig,
+) -> f32 {
+    let line_h = ui.text_line_height_with_spacing();
+    let section_overhead = line_h * 2.0 + 8.0;
+    let mut h = 0.0;
+
+    let ammo_actual: Vec<&AmmoInv> = ammo.iter().filter(|a| a.quantity > 0).collect();
+    if !ammo_actual.is_empty() {
+        h += section_overhead + line_h * ammo_actual.len() as f32;
+    }
+    if !apparel.is_empty() {
+        h += section_overhead + line_h * apparel.len() as f32;
+    }
+    if !consumables.is_empty() {
+        h += section_overhead + line_h * consumables.len() as f32;
+    }
+    if !modules.is_empty() {
+        h += section_overhead + line_h * modules.len() as f32;
+    }
+    if !gear.is_empty() {
+        h += section_overhead + line_h * gear.len() as f32;
+    }
+    if junk.common > 0 {
+        h += line_h + 8.0;
+    }
+    let misc_actual: Vec<&String> = misc.iter().filter(|s| !s.is_empty()).collect();
+    if !misc_actual.is_empty() {
+        h += line_h + line_h * misc_actual.len() as f32 + 8.0;
+    }
+
+    h += 8.0 + line_h * 2.0 + line_h * 2.0;
+    h.max(120.0 * cfg.ui_scale)
+}
+
 pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, consumables: Vec<Consumable>, modules: Vec<RobotModule>, gear: Vec<Gear>, junk: Junk, misc: Vec<String>, character: &mut Character, db: &Db, cfg: &AppConfig) {
     let name_w = 150.0 * cfg.ui_scale;
     let wgt_w = 55.0 * cfg.ui_scale;
