@@ -1147,7 +1147,6 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
             } else { None };
             if ui.button(&label) {
                 toggle_apparel(character, item.id, item.db_id, db);
-                //does not save yet
             }
             drop(_d);
             if blocked && ui.is_item_hovered() {
@@ -1389,7 +1388,7 @@ pub enum EquipBlock {
 }
 pub fn can_equip(character: &Character, apparel_id: i32) -> EquipBlock {
     let Some(item) = character.apparel.iter().find(|a| a.id == apparel_id) else {
-        return EquipBlock::WouldBlock("item not found".into());
+        return EquipBlock::WouldBlock("Cannot equip/unequip in review page".into());
     };
     if item.equipped { return EquipBlock::Free }
     match item.apparel_type {
