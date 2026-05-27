@@ -1227,6 +1227,17 @@ impl Db {
             ).execute(&self.pool).await
         }).ok();
     }
+    pub fn update_caps(&self, character: &Character) {
+        let id: &str = &character.id.to_string();
+        self.block_on(async {
+            sqlx::query!(
+                "UPDATE characters
+                SET caps = ?1
+                WHERE id = ?2",
+                character.caps, id
+            ).execute(&self.pool).await
+        }).ok();
+    }
     pub fn update_notes(&self, character: &Character) {
         let id: &str = &character.id.to_string();
         self.block_on(async {

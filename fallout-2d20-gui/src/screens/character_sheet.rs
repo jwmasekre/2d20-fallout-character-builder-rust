@@ -656,6 +656,11 @@ pub fn render_character_sheet(
         .size([290.0 * cfg.ui_scale, inv_h])
         .border(false)
         .build(|| {
+            ui.text(format!("{}{:16}", "Caps", character.caps));
+            ui.same_line();
+            if ui.button("Add/Remove Caps##caps_open") {
+                state.caps_open = true;
+            }
             render_inventory(ui, character.ammo.clone(), character.apparel.clone(), character.consumables.clone(), character.robot_modules.clone(), character.gear.clone(), character.junk.clone(), character.misc.clone(), character, db, cfg);
             if ui.button("Add/Remove Items##inv_open") {
                 state.inventory.open = true;
@@ -1774,6 +1779,77 @@ pub fn render_character_sheet(
                         }
                     });
             });
+    }
+    if state.caps_open {
+        let (win_w, win_h) = window.size();
+        ui.window("##overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .scrollable(false)
+            .size([win_w as f32, win_h as f32], imgui::Condition::Always)
+            .position([0.0, 0.0], imgui::Condition::Always)
+            .bg_alpha(0.6)
+            .build(|| {
+                let cw = 280.0 * cfg.ui_scale;
+                let ch = 160.0 * cfg.ui_scale;
+                ui.set_cursor_pos( [(win_w as f32 - cw) * 0.5, (win_h as f32 - ch) * 0.5]);
+                ui.child_window("##caps")
+                    .size([cw, ch])
+                    .border(true)
+                    .build(|| {
+                        ui.text("Caps");
+                        let close_x = ui.content_region_avail()[0] - 20.0 * cfg.ui_scale;
+                        ui.same_line_with_pos(close_x);
+                        if ui.button("X##caps_close") {
+                            state.xp_open = false;
+                        }
+                        ui.separator();
+                        ui.spacing();
+
+                        ui.text(format!("Current Caps: {}", character.caps));
+                        ui.spacing();
+
+                        ui.set_next_item_width(ui.content_region_avail()[0]);
+                        ui.input_int("##caps_amount", &mut state.caps_amount).build();
+
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
+
+                        // Add button
+                        let c = ui.push_style_color(imgui::StyleColor::Button, [0.1, 0.45, 0.1, 1.0]);
+                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.15, 0.6, 0.15, 1.0]);
+                        if ui.button_with_size("Add##caps_add", [80.0 * cfg.ui_scale, 0.0]) {
+                            if state.caps_amount > 0 {
+                                character.caps += state.caps_amount;
+                                db.update_caps(character);
+                                state.caps_open = false;
+                            }
+                        }
+                        drop(c); drop(c2);
+
+                        ui.same_line();
+
+                        // Remove button
+                        let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
+                        let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
+                        if ui.button_with_size("Remove##caps_remove", [80.0 * cfg.ui_scale, 0.0]) {
+                            if state.caps_amount > 0 {
+                                character.caps = (character.caps - state.caps_amount).max(0);
+                                db.update_caps(character);
+                                state.caps_open = false;
+                            }
+                        }
+                        drop(c); drop(c2);
+
+                        ui.same_line();
+
+                        if ui.button_with_size("Cancel##caps_cancel", [80.0 * cfg.ui_scale, 0.0]) {
+                            state.caps_open = false;
+                        }
+                });
+        });
     }
 
     h

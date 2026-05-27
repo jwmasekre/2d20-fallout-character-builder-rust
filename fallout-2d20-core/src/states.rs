@@ -994,6 +994,8 @@ pub struct SheetState {
     pub weapon_filter: String,
     pub weapon_selected: Option<i32>,
     pub inventory: InventoryState,
+    pub caps_open: bool,
+    pub caps_amount: i32,
 }
 impl SheetState {
     pub fn new() -> Self {
@@ -1016,6 +1018,8 @@ impl SheetState {
             weapon_filter: String::new(),
             weapon_selected: None,
             inventory: InventoryState::new(),
+            caps_open: false,
+            caps_amount: 0,
         }
     }
     pub fn new_character(&mut self, character: &Character) {
