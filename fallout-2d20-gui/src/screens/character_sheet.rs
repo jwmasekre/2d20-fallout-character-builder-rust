@@ -488,13 +488,14 @@ pub fn render_character_sheet(
     center_wrapped_text(ui, &head_eq, _wrap_start, block_w * 2.0);
     drop(_d);
 
-    ui.set_cursor_pos([a1_p1[0] + (block_w - a1_size[0]) / 2.0, a1_p1[1]]);
+    let a1_pos = if a2_str.is_some() { a1_p1[0] - block_w / 2.0 } else { a1_p1[0] };
+    ui.set_cursor_pos([a1_pos + (block_w - a1_size[0]) / 2.0, a1_p1[1]]);
     ui.text(a1_str);
-    ui.set_cursor_pos([a1_p1[0] + (block_w - a1_dr_size[0]) / 2.0, a1_p1[1] + new_line]);
+    ui.set_cursor_pos([a1_pos + (block_w - a1_dr_size[0]) / 2.0, a1_p1[1] + new_line]);
     ui.text(a1_dr);
 
     let _d = ui.begin_disabled(true);
-        _wrap_start = a1_p1[0] - block_w / 2.0;
+        _wrap_start = a1_pos - block_w / 2.0;
         ui.set_cursor_pos([_wrap_start, a1_p1[1] + new_line * 2.0]);
 
     center_wrapped_text(ui, &a1_eq, _wrap_start, block_w * 2.0);
@@ -517,13 +518,15 @@ pub fn render_character_sheet(
         drop(_d);
 
     }
-    ui.set_cursor_pos([a3_p1[0] + (block_w - a3_size[0]) / 2.0, a3_p1[1]]);
+
+    let a3_pos = if a2_str.is_some() { a3_p1[0] + block_w / 2.0 } else { a3_p1[0] };
+    ui.set_cursor_pos([a3_pos + (block_w - a3_size[0]) / 2.0, a3_p1[1]]);
     ui.text(a3_str);
-    ui.set_cursor_pos([a3_p1[0] + (block_w - a3_dr_size[0]) / 2.0, a3_p1[1] + new_line]);
+    ui.set_cursor_pos([a3_pos + (block_w - a3_dr_size[0]) / 2.0, a3_p1[1] + new_line]);
     ui.text(a3_dr);
 
     let _d = ui.begin_disabled(true);
-    _wrap_start = a3_p1[0] - block_w / 2.0;
+    _wrap_start = a3_pos - block_w / 2.0;
     ui.set_cursor_pos([_wrap_start, a3_p1[1] + new_line * 2.0]);
     center_wrapped_text(ui, &a3_eq, _wrap_start, block_w * 2.0);
     drop(_d);

@@ -1015,6 +1015,14 @@ pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character, cfg:
     }
 }
 
+pub fn measure_wrapped_item_height(ui: &Ui, name: &str, name_w: f32) -> f32 {
+    let line_h = ui.text_line_height_with_spacing();
+    let text_size = ui.calc_text_size_with_opts(name, false, name_w);
+    // round up to nearest line and ensure at least one line
+    let lines = (text_size[1] / ui.text_line_height()).ceil().max(1.0);
+    lines * line_h
+}
+
 pub fn calculate_inventory_height(
     ui: &Ui,
     ammo: &[AmmoInv],
@@ -1028,30 +1036,49 @@ pub fn calculate_inventory_height(
 ) -> f32 {
     let line_h = ui.text_line_height_with_spacing();
     let section_overhead = line_h * 2.0 + 8.0;
+    let name_w = 150.0 * cfg.ui_scale;
     let mut h = 0.0;
 
     let ammo_actual: Vec<&AmmoInv> = ammo.iter().filter(|a| a.quantity > 0).collect();
     if !ammo_actual.is_empty() {
-        h += section_overhead + line_h * ammo_actual.len() as f32;
+        let rows_h: f32 = ammo_actual.iter()
+            .map(|a| measure_wrapped_item_height(ui, &a.ammo.name, name_w))
+            .sum();
+        h += section_overhead + rows_h;
     }
     if !apparel.is_empty() {
-        h += section_overhead + line_h * apparel.len() as f32;
+        let rows_h: f32 = apparel.iter()
+            .map(|a| measure_wrapped_item_height(ui, &a.name, name_w))
+            .sum();
+        h += section_overhead + rows_h;
     }
     if !consumables.is_empty() {
-        h += section_overhead + line_h * consumables.len() as f32;
+        let rows_h: f32 = consumables.iter()
+            .map(|c| measure_wrapped_item_height(ui, &c.name, name_w))
+            .sum();
+        h += section_overhead + rows_h;
     }
     if !modules.is_empty() {
-        h += section_overhead + line_h * modules.len() as f32;
+        let rows_h: f32 = modules.iter()
+            .map(|m| measure_wrapped_item_height(ui, &m.name, name_w))
+            .sum();
+        h += section_overhead + rows_h;
     }
     if !gear.is_empty() {
-        h += section_overhead + line_h * gear.len() as f32;
+        let rows_h: f32 = gear.iter()
+            .map(|g| measure_wrapped_item_height(ui, &g.name, name_w))
+            .sum();
+        h += section_overhead + rows_h;
     }
     if junk.common > 0 {
         h += line_h + 8.0;
     }
     let misc_actual: Vec<&String> = misc.iter().filter(|s| !s.is_empty()).collect();
     if !misc_actual.is_empty() {
-        h += line_h + line_h * misc_actual.len() as f32 + 8.0;
+        let rows_h: f32 = misc_actual.iter()
+            .map(|s| measure_wrapped_item_height(ui, s, name_w))
+            .sum();
+        h += line_h + rows_h + 8.0;
     }
 
     h += 8.0 + line_h * 2.0 + line_h * 2.0;
@@ -1081,7 +1108,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
         ui.next_column();
         ui.separator();
         for item in ammo_actual.clone() {
-            ui.text(format!("{}", item.ammo.name));
+            ui.text_wrapped(format!("{}", item.ammo.name));
             ui.next_column();
             ui.text(format!("{}", item.ammo.wgt));
             ui.next_column();
@@ -1111,7 +1138,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
             };
             let block = can_equip(character, item.id);
             let blocked = matches!(block, EquipBlock::WouldBlock(_));
-            ui.text(format!("{}", item.name));
+            ui.text_wrapped(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
             ui.next_column();
@@ -1146,7 +1173,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
         ui.next_column();
         ui.separator();
         for item in consumables.clone() {
-            ui.text(format!("{}", item.name));
+            ui.text_wrapped(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
             ui.next_column();
@@ -1176,7 +1203,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
             };
             let installed = character.robot_modules.iter().filter(|m| m.installed).count();
             let blocked = installed >= 3;
-            ui.text(format!("{}", item.name));
+            ui.text_wrapped(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
             ui.next_column();
@@ -1209,7 +1236,7 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
         ui.next_column();
         ui.separator();
         for item in gear.clone() {
-            ui.text(format!("{}", item.name));
+            ui.text_wrapped(format!("{}", item.name));
             ui.next_column();
             ui.text(format!("{}", item.wgt));
             ui.next_column();
