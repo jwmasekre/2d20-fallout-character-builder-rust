@@ -1203,8 +1203,8 @@ pub fn render_character_sheet(
             .position([0.0, 0.0], imgui::Condition::Always)
             .bg_alpha(0.6)
             .build(|| {
-                let ww = 700.0 * cfg.ui_scale;
-                let wh = 600.0 * cfg.ui_scale;
+                let ww = (960.0 * cfg.ui_scale).min(win_w as f32);
+                let wh = (600.0 * cfg.ui_scale).min(win_h as f32);
                 ui.set_cursor_pos([(win_w as f32 - ww) * 0.5, (win_h as f32 - wh) * 0.5]);
                 ui.child_window("##weapons_modal")
                     .size([ww, wh])
@@ -1247,10 +1247,11 @@ pub fn render_character_sheet(
                                     ui.same_line_with_pos(half - 96.0 * cfg.ui_scale);
                                     ui.text_disabled(&w.range);
 
-                                    ui.same_line_with_pos(half - 96.0 * cfg.ui_scale + 42.0 * cfg.ui_scale);
+                                    //ui.same_line_with_pos(half - 96.0 * cfg.ui_scale + 42.0 * cfg.ui_scale);
+                                    ui.same_line_with_pos(half - 60.0 * cfg.ui_scale);
                                     let c = ui.push_style_color(imgui::StyleColor::Button, [0.55, 0.1, 0.1, 1.0]);
                                     let c2 = ui.push_style_color(imgui::StyleColor::ButtonHovered, [0.75, 0.15, 0.15, 1.0]);
-                                    if ui.button(format!("Rem##wrem_{}", i)) {
+                                    if ui.button(format!("Remove##wrem_{}", i)) {
                                         to_remove = Some(i);
                                     }
                                     drop(c); drop(c2);
@@ -1444,7 +1445,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, a) in character.ammo.iter_mut().enumerate() {
                                         ui.text(format!("{}x {}", a.quantity, a.ammo.name));
-                                        ui.same_line_with_pos(half - 100.0 * cfg.ui_scale);
+                                        ui.same_line_with_pos(half - 112.0 * cfg.ui_scale);
                                         if ui.button(format!("-##ammo_dec_{}", i)) {
                                             a.quantity -= 1;
                                         }
@@ -1593,7 +1594,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, c) in character.consumables.iter_mut().enumerate() {
                                         ui.text(format!("{}x {}", c.quantity, c.name));
-                                        ui.same_line_with_pos(half - 104.0 * cfg.ui_scale);
+                                        ui.same_line_with_pos(half - 112.0 * cfg.ui_scale);
                                         if ui.button(format!("-##con_dec_{}", i)) { c.quantity = (c.quantity - 1).max(1); }
                                         ui.same_line();
                                         if ui.button(format!("+##con_inc_{}", i)) { c.quantity += 1; }
@@ -1692,7 +1693,7 @@ pub fn render_character_sheet(
                                     let mut to_remove = None;
                                     for (i, g) in character.gear.iter_mut().enumerate() {
                                         ui.text(format!("{}x {}", g.quantity, g.name));
-                                        ui.same_line_with_pos(half - 104.0 * cfg.ui_scale);
+                                        ui.same_line_with_pos(half - 112.0 * cfg.ui_scale);
                                         if ui.button(format!("-##gear_dec_{}", i)) { g.quantity = (g.quantity - 1).max(1); }
                                         ui.same_line();
                                         if ui.button(format!("+##gear_inc_{}", i)) { g.quantity += 1; }
