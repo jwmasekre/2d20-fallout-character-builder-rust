@@ -388,7 +388,7 @@ pub fn render_character_sheet(
     };
     let a3_size = ui.calc_text_size(a3_str);
     let a3_dr_size = ui.calc_text_size(a3_dr.clone());
-    let (body_str, body_dr, body_eq) = if character.is_robot() {
+    let (body_str, body_dr, body_eq) = if character.is_robot() && !character.is_synth() {
         let limb = character.limb_dr.body.clone();
         let equipped: Vec<String> = limb.equipped.iter().map(|a| a.name.clone()).collect();
         (
@@ -488,7 +488,7 @@ pub fn render_character_sheet(
     center_wrapped_text(ui, &head_eq, _wrap_start, block_w * 2.0);
     drop(_d);
 
-    let a1_pos = if a2_str.is_some() { a1_p1[0] - block_w / 2.0 } else { a1_p1[0] };
+    let a1_pos = if a2_str.is_some() { a1_p1[0] - block_w / 1.5 } else { a1_p1[0] };
     ui.set_cursor_pos([a1_pos + (block_w - a1_size[0]) / 2.0, a1_p1[1]]);
     ui.text(a1_str);
     ui.set_cursor_pos([a1_pos + (block_w - a1_dr_size[0]) / 2.0, a1_p1[1] + new_line]);
@@ -519,7 +519,7 @@ pub fn render_character_sheet(
 
     }
 
-    let a3_pos = if a2_str.is_some() { a3_p1[0] + block_w / 2.0 } else { a3_p1[0] };
+    let a3_pos = if a2_str.is_some() { a3_p1[0] + block_w / 1.5 } else { a3_p1[0] };
     ui.set_cursor_pos([a3_pos + (block_w - a3_size[0]) / 2.0, a3_p1[1]]);
     ui.text(a3_str);
     ui.set_cursor_pos([a3_pos + (block_w - a3_dr_size[0]) / 2.0, a3_p1[1] + new_line]);

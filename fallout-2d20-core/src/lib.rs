@@ -1327,10 +1327,10 @@ pub fn toggle_apparel(character: &mut Character, apparel_id: i32, _db_id: i64, d
     } else {
         match item.apparel_type {
             ApparelType::RobotArmor => {
-                if !character.is_robot() { return; }
+                if !character.is_robot() || character.is_synth() { return; }
             }
             _ => {
-                if character.is_robot() { return; }
+                if character.is_robot() && !character.is_synth() { return; }
             }
         }
         for loc in &item.covers {
@@ -1392,8 +1392,8 @@ pub fn can_equip(character: &Character, apparel_id: i32) -> EquipBlock {
     };
     if item.equipped { return EquipBlock::Free }
     match item.apparel_type {
-        ApparelType::RobotArmor if !character.is_robot() => return EquipBlock::WouldBlock("only robots can wear robot armor".into()),
-        ApparelType::Clothing | ApparelType::Headgear | ApparelType::Outfit | ApparelType::Armor if character.is_robot() => return EquipBlock::WouldBlock("robots cannot wear clothing, outfits, or standard armor".into()),
+        ApparelType::RobotArmor if !character.is_robot() || character.is_synth() => return EquipBlock::WouldBlock("only robots can install robot armor".into()),
+        ApparelType::Clothing | ApparelType::Headgear | ApparelType::Outfit | ApparelType::Armor if character.is_robot() && !character.is_synth() => return EquipBlock::WouldBlock("robots cannot wear clothing, outfits, or standard armor".into()),
         _ => {}
     }
     for loc in &item.covers {

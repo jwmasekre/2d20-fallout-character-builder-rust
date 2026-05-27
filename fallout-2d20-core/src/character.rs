@@ -151,6 +151,9 @@ impl Character {
     pub fn is_robot(&self) -> bool {
         self.robot != RobotType::None
     }
+    pub fn is_synth(&self) -> bool {
+        self.robot == RobotType::Synth
+    }
     pub fn total_skill(&self) -> i32 {
         self.skills.skill_block().iter().map(|s| s.total).sum()
     }
@@ -866,7 +869,7 @@ impl Limbs {
                 self.track_left = Limb::new_inactive();
                 self.track_right = Limb::new_inactive();
             },
-            RobotType::None => {
+            RobotType::None | RobotType::Synth => {
                 self.head = Limb::new_active();
                 self.torso = Limb::new_active();
                 self.body = Limb::new_inactive();
