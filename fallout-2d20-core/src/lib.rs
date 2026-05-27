@@ -606,7 +606,7 @@ pub fn equip_bg_apparel(
     let headgear: Vec<(usize,&Apparel)> = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::Headgear).collect();
     let mut armored_limbs: Vec<BodyLocation> = vec![];
 
-    if character.is_robot() {
+    if character.is_robot() && !character.is_synth() {
         _armor = apparel.iter().enumerate().filter(|(_,a)| a.apparel_type == ApparelType::RobotArmor).collect();
 
         if !headgear.is_empty() {
@@ -820,7 +820,6 @@ pub fn equip_apparel(character: &mut Character) {
     }
     character.limb_dr.update_dr(character.base_dr.clone(), character.perk_ranks(144), character.junk.common + character.junk.uncommon + character.junk.rare, character.perk_ranks(172));
 }
-
 
 pub fn render_weapons(ui: &Ui, weapons: Vec<Weapon>, character: &Character, cfg: &AppConfig) {
     if weapons.is_empty() {
@@ -1211,7 +1210,6 @@ pub fn render_inventory(ui: &Ui, ammo: Vec<AmmoInv>, apparel: Vec<Apparel>, cons
             } else { None };
             if ui.button(&label) {
                 toggle_module(character, item.id, item.db_id, db);
-                //does not save yet
             }
             drop(_d);
             if blocked && ui.is_item_hovered() {
@@ -1311,7 +1309,7 @@ pub fn toggle_module(character: &mut Character, module_id: i32, _db_id: i64, db:
     let Some(index) = character.robot_modules.iter().position(|m| m.id == module_id) else { return };
     let installed = character.robot_modules[index].installed;
     character.robot_modules[index].installed = !installed;
-    equip_apparel(character);
+    //equip_apparel(character);
     match db.save_character(character) {
         Ok(_) => {},
         Err(e) => eprintln!("Failed to save character: {e}"),
