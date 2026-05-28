@@ -135,7 +135,7 @@ pub fn render_character_review(
             active_skills.push((SKILLS[i],character.skills.skill_block()[i].total, if character.skills.skill_block()[i].is_tagged() {"(Tag)"} else {"-----"}))
         }
     }
-    let rows = ((active_skills.len() - 1) / 3) + 1;
+    let rows = if active_skills.len() > 0 {((active_skills.len() - 1) / 3) + 1} else {0};
 
     for i in 0..rows {
         ui.text(format!("  {:16} {} {}    ", active_skills[i].0, active_skills[i].1, active_skills[i].2));

@@ -8,11 +8,11 @@ pub const CONFIG_FILE: &str = "usr_config.toml";
 pub const VERSION: Version = Version {
     major: 0,
     minor: 6,
-    patch: 0,
+    patch: 2,
     prerelease: PreRelease::Alpha,
     prerelease_ver: 0,
 };
-pub const DATE: &str = "20260518";
+pub const DATE: &str = "20260528";
 pub const BUILD_SCREENS: &[(AppScreen, &str)] = &[
     (AppScreen::OriginSelect, "Origin"),
     (AppScreen::SpecialAssignment, "SPECIAL"),

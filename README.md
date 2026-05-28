@@ -47,11 +47,11 @@ the db and its architecture was 100% designed and crafted by myself. the design,
         * ~~0.5.1 - add/remove items~~
         * ~~0.5.2 - add/remove weapons~~
         * ~~0.5.3 - apply perk modifiers~~
-    * 0.6.0 - inventory management `<- YOU ARE HERE`
-        * 0.6.1 - scale to font size
-        * 0.6.2 - "reactive" (960px - 1920px)
-        * 0.6.3 - high dpi considerations
-        * 0.6.4 - rehome functions and structs
+    * ~~0.6.0 - inventory management~~
+        * ~~0.6.1 - scale to font size~~
+        * 0.6.2 - rehome functions and structs `<- YOU ARE HERE`
+        * 0.6.3 - "reactive" (960px - 1920px)
+        * 0.6.4 - high dpi considerations
     * 0.7.0 - ui cleanup - ready for testing
         * 0.7.0-beta.0
         * 0.7.1-rc.0
