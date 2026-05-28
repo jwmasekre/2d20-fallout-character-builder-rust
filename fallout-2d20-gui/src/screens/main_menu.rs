@@ -1,9 +1,10 @@
+use fallout_2d20_core::states::ImportState;
+use fallout_2d20_core::states::LoadCharacterState;
+use fallout_2d20_core::structs::AppConfig;
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::AppScreen;
 use crate::NewCharacterSetupState;
-use crate::screens::load_character::LoadCharacterState;
-use crate::screens::import_character::ImportState;
 
 pub fn render_main_menu(
     ui: &Ui,
@@ -14,11 +15,12 @@ pub fn render_main_menu(
     nc_setup: &mut NewCharacterSetupState,
     load_state: &mut LoadCharacterState,
     import_state: &mut ImportState,
+    cfg: &AppConfig,
 ) {
     //get window dimmensions
     let (win_w, win_h) = window.size();
-    let menu_w = 340.0_f32;
-    let menu_h = 320.0_f32;
+    let menu_w = 340.0 * cfg.ui_scale;
+    let menu_h = 320.0 * cfg.ui_scale;
 
     ui.window("##main_menu")
         .title_bar(false)
@@ -35,7 +37,7 @@ pub fn render_main_menu(
             let title = "fallout 2d20 companion";
             let title_w = ui.calc_text_size(title)[0];
             //center the text on the top of the menu
-            ui.set_cursor_pos([(menu_w - title_w) * 0.5, 24.0]);
+            ui.set_cursor_pos([(menu_w - title_w) * 0.5, 24.0 * cfg.ui_scale]);
             ui.text(title);
 
             ui.separator();
@@ -65,14 +67,14 @@ pub fn render_main_menu(
                 };
 
                 //align the buttons centered
-                let item_w = menu_w - 40.0;
+                let item_w = menu_w - 40.0 * cfg.ui_scale;
                 let cursor_x = (menu_w - item_w) * 0.5;
                 let y = ui.cursor_pos()[1];
                 ui.set_cursor_pos([cursor_x, y]);
 
                 if ui.selectable_config(&display)
                     .selected(is_selected)
-                    .size([item_w, 36.0])
+                    .size([item_w, 36.0 * cfg.ui_scale])
                     .build() {
                     *selected = i as i32;
                     handle_selection(i as i32, screen, nc_setup, load_state, import_state);
@@ -91,7 +93,7 @@ pub fn render_main_menu(
 
             let hint = "arrow/hover select | enter/space confirm";
             let hint_w = ui.calc_text_size(hint)[0];
-            ui.set_cursor_pos([(menu_w - hint_w) * 0.5, menu_h - 28.0]);
+            ui.set_cursor_pos([(menu_w - hint_w) * 0.5, menu_h - 28.0 * cfg.ui_scale]);
             ui.text_disabled(hint);
         });
 }

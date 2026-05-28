@@ -1,47 +1,10 @@
-use std::path::PathBuf;
 use imgui::Ui;
 use sdl2::video::Window;
 use uuid::Uuid;
-use crate::{AppScreen, character::Character, db::Db};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ImportStep {
-    Idle,
-    Confirm(Character),      // file loaded, ask about overwrite
-    Done,
-    Error(String),
-}
-
-pub struct ImportState {
-    pub step: ImportStep,
-}
-
-impl ImportState {
-    pub fn new() -> Self {
-        Self { step: ImportStep::Idle }
-    }
-
-    pub fn reset(&mut self) {
-        self.step = ImportStep::Idle;
-    }
-
-    /// Returns true if the character id already exists in the db
-    fn id_exists(db: &Db, id: &str) -> bool {
-        db.block_on(async {
-            sqlx::query_scalar!(
-                "SELECT COUNT(*) FROM characters WHERE id = ?", id
-            ).fetch_one(&db.pool).await
-        }).unwrap_or(0) > 0
-    }
-
-    /// Try to load a json file into a Character struct
-    pub fn load_from_file(path: &PathBuf) -> Result<Character, String> {
-        let raw = std::fs::read_to_string(path)
-            .map_err(|e| format!("Could not read file: {e}"))?;
-        serde_json::from_str::<Character>(&raw)
-            .map_err(|e| format!("Invalid character JSON: {e}"))
-    }
-}
+use fallout_2d20_core::{
+    db::Db, states::{ImportState, ImportStep}, structs::{AppConfig, AppScreen}
+};
 
 pub fn render_import_character(
     ui: &Ui,
@@ -49,6 +12,7 @@ pub fn render_import_character(
     state: &mut ImportState,
     screen: &mut AppScreen,
     db: &Db,
+    cfg: &AppConfig,
 ) {
     let (win_w, win_h) = window.size();
 
@@ -88,8 +52,8 @@ pub fn render_import_character(
 
         // ── Overwrite confirmation ────────────────────────────────────
         ImportStep::Confirm(_) => {
-            let w = 440.0_f32;
-            let h = 160.0_f32;
+            let w = 440.0 * cfg.ui_scale;
+            let h = 160.0 * cfg.ui_scale;
 
             // clone name out before mutable borrow below
             let char_name = if let ImportStep::Confirm(c) = &state.step {
@@ -152,8 +116,8 @@ pub fn render_import_character(
 
         // ── Error display ─────────────────────────────────────────────
         ImportStep::Error(msg) => {
-            let w = 440.0_f32;
-            let h = 140.0_f32;
+            let w = 440.0 * cfg.ui_scale;
+            let h = 140.0 * cfg.ui_scale;
             let msg = msg.clone();
 
             ui.window("##import_error")

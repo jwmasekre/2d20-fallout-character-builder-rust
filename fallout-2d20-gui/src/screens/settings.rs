@@ -1,10 +1,9 @@
+use fallout_2d20_core::structs::{AppConfig, AppScreen};
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::{
-    AppScreen,
-    config::{AppConfig, save_config},
+    config::{save_config},
     crt::CrtEffect,
-    //theme::THEMES,
 };
 
 pub fn render_settings(
@@ -16,8 +15,8 @@ pub fn render_settings(
     _current_theme: &mut usize,
 ) {
     let (win_w, win_h) = window.size();
-    let w = (win_w as f32 - 80.0).min(860.0);
-    let h = win_h as f32 - 80.0;
+    let w = (win_w as f32 - 80.0 * cfg.ui_scale).min(860.0);
+    let h = win_h as f32 - 80.0 * cfg.ui_scale;
 
     ui.window("##settings")
         .title_bar(false)
@@ -31,7 +30,7 @@ pub fn render_settings(
         .build(|| {
             // Header
             ui.text("Settings");
-            ui.same_line_with_pos(w - 84.0);
+            ui.same_line_with_pos(w - 84.0 * cfg.ui_scale);
             if ui.button("< Back##settings_back") {
                 *screen = AppScreen::MainMenu;
             }
@@ -45,7 +44,9 @@ pub fn render_settings(
 
             ui.text("Database:");
             ui.same_line();
-            ui.text_disabled(cfg.db_path.to_string_lossy().as_ref());
+            let _db = ui.begin_disabled(true);
+            ui.text_wrapped(cfg.db_path.to_string_lossy().as_ref());
+            drop(_db);
             ui.same_line();
             if ui.button("Browse##db_browse") {
                 // rfd file dialog (see note below)
@@ -92,6 +93,7 @@ pub fn render_settings(
             if ui.button("-##font_dec") {
                 if cfg.font_size > 12.0 {
                     cfg.font_size -= 0.5;
+                    cfg.set_ui_scale();
                     save_config(cfg);
                 }
             }
@@ -101,6 +103,7 @@ pub fn render_settings(
             if ui.button("+##font_inc") {
                 if cfg.font_size < 32.0 {
                     cfg.font_size += 0.5;
+                    cfg.set_ui_scale();
                     save_config(cfg);
                 }
             }
@@ -115,11 +118,11 @@ pub fn render_settings(
             ui.separator();
             ui.spacing();
 
-            let slider_w = w - 200.0;
+            let slider_w = w - 200.0 * cfg.ui_scale;
             ui.text_disabled("Note: CTRL+Click allows you to manually input a value.");
             ui.spacing();
 
-            ui.text("Distortion:    ");
+            ui.text("Distortion:           ");
             ui.same_line();
             ui.set_next_item_width(slider_w);
             if ui.slider("##crt_dist", 0.0_f32, 0.3, &mut crt.distortion) {
@@ -127,7 +130,7 @@ pub fn render_settings(
                 save_config(cfg);
             }
 
-            ui.text("Scanlines:     ");
+            ui.text("Scanlines:            ");
             ui.same_line();
             ui.set_next_item_width(slider_w);
             if ui.slider("##crt_scan", 0.0_f32, 0.15, &mut crt.scanline_strength) {
@@ -135,7 +138,7 @@ pub fn render_settings(
                 save_config(cfg);
             }
 
-            ui.text("Vignette Size: ");
+            ui.text("Vignette Size:        ");
             ui.same_line();
             ui.set_next_item_width(slider_w);
             if ui.slider("##crt_vig_m", 1.0_f32, 20.0, &mut crt.vignette_multiplier) {
@@ -143,7 +146,7 @@ pub fn render_settings(
                 save_config(cfg);
             }
 
-            ui.text("Vignette Soft: ");
+            ui.text("Vignette Soft:        ");
             ui.same_line();
             ui.set_next_item_width(slider_w);
             if ui.slider("##crt_vig_e", 0.01_f32, 0.6, &mut crt.vignette_exponent) {
@@ -151,7 +154,7 @@ pub fn render_settings(
                 save_config(cfg);
             }
 
-            ui.text("Roll Speed:    ");
+            ui.text("Roll Speed:           ");
             ui.same_line();
             ui.set_next_item_width(slider_w);
             if ui.slider("##crt_roll", 0.0_f32, 0.4, &mut crt.roll_speed) {
@@ -159,7 +162,7 @@ pub fn render_settings(
                 save_config(cfg);
             }
 
-            ui.text("Tint Strength: ");
+            ui.text("Tint Strength:        ");
             ui.same_line();
             ui.set_next_item_width(slider_w);
             if ui.slider("##crt_tint", 0.0_f32, 0.4, &mut crt.tint_strength) {

@@ -1,105 +1,21 @@
 use imgui::Ui;
 use sdl2::video::Window;
 use uuid::Uuid;
-use crate::{AppScreen, character::{Character, Party, Player}, db::Db};
-
-const NULL_PARTY: &str = "00000000-0000-0000-0000-000000000000";
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum PlayerChoice {
-    Unset,
-    New,
-    Existing(String), // uuid
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum PartyChoice {
-    Unset,
-    None,             // joins null party
-    New,
-    Existing(String), // uuid
-}
-
-pub struct NewCharacterSetupState {
-    // step 0 = player, step 1 = party
-    pub step: usize,
-
-    // player
-    pub player_choice: PlayerChoice,
-    pub new_player_name: String,
-    pub players: Vec<(String, String)>, // (id, username)
-    pub player_list_loaded: bool,
-
-    // party
-    pub party_choice: PartyChoice,
-    pub new_party_name: String,
-    pub parties: Vec<(String, String)>, // (id, name)
-    pub party_list_loaded: bool,
-}
-
-impl NewCharacterSetupState {
-    pub fn new() -> Self {
-        Self {
-            step: 0,
-            player_choice: PlayerChoice::Unset,
-            new_player_name: String::new(),
-            players: vec![],
-            player_list_loaded: false,
-            party_choice: PartyChoice::Unset,
-            new_party_name: String::new(),
-            parties: vec![],
-            party_list_loaded: false,
-        }
-    }
-    pub fn reset(&mut self) {
-        self.step = 0;
-        self.player_choice = PlayerChoice::Unset;
-        self.new_player_name = String::new();
-        self.players = vec![];
-        self.player_list_loaded = false;
-        self.party_choice = PartyChoice::Unset;
-        self.new_party_name = String::new();
-        self.parties = vec![];
-        self.party_list_loaded = false;
-    }
-
-    pub fn load_players(&mut self, db: &Db) {
-        if self.player_list_loaded { return; }
-        let rows = db.block_on(async {
-            sqlx::query!("SELECT id, username FROM players ORDER BY username")
-                .fetch_all(&db.pool).await
-        }).unwrap_or_default();
-        self.players = rows.into_iter()
-            .map(|r| (
-                r.id.unwrap_or_default(),
-                r.username.unwrap_or_else(|| "(unnamed)".to_string()),
-            ))
-            .collect();
-        self.player_list_loaded = true;
-    }
-
-    pub fn load_parties(&mut self, db: &Db) {
-        if self.party_list_loaded { return; }
-        let rows = db.block_on(async {
-            sqlx::query!(
-                r#"SELECT id, name
-                FROM parties
-                WHERE id != ?
-                ORDER BY name
-                "#,
-                NULL_PARTY
-            ).fetch_all(&db.pool).await
-        }).unwrap_or_default();
-        self.parties = rows.into_iter()
-            .map(|r| (
-                r.id.unwrap_or_default(),
-                r.name.unwrap_or_else(|| "(unnamed)".to_string()),
-            ))
-            .collect();
-        self.party_list_loaded = true;
-    }
-
-}
+use fallout_2d20_core::{
+    character::{
+        Character,
+        Party,
+        Player,
+    },
+    constants::NULL_PARTY,
+    db::Db,
+    states::{
+        NewCharacterSetupState,
+        PartyChoice,
+        PlayerChoice,
+    },
+    structs::{AppConfig, AppScreen},
+};
 
 pub fn render_new_character_setup(
     ui: &Ui,
@@ -111,10 +27,11 @@ pub fn render_new_character_setup(
     out_player_name: &mut Option<String>,
     out_party_name: &mut Option<String>,
     character: &mut Character,
+    cfg: &AppConfig,
 ) {
     let (win_w, win_h) = window.size();
-    let w = 480.0_f32;
-    let h = 360.0_f32;
+    let w = 480.0 * cfg.ui_scale;
+    let h = 360.0 * cfg.ui_scale;
 
     ui.window("##nc_setup")
         .title_bar(false)
@@ -164,9 +81,9 @@ pub fn render_new_character_setup(
                     } else {
                         ui.text("Existing players:");
                         ui.spacing();
-                        let list_h = (h - 180.0).max(80.0);
+                        let list_h = (h - 180.0 * cfg.ui_scale).max(80.0 * cfg.ui_scale);
                         ui.child_window("##player_list")
-                            .size([w - 32.0, list_h])
+                            .size([w - 32.0 * cfg.ui_scale, list_h])
                             .build(|| {
                                 for (id, name) in &state.players {
                                     let is_sel = state.player_choice == PlayerChoice::Existing(id.clone());
@@ -224,7 +141,7 @@ pub fn render_new_character_setup(
                     }
                     if state.party_choice == PartyChoice::New {
                         ui.same_line();
-                        ui.set_next_item_width(w - 160.0);
+                        ui.set_next_item_width(w - 160.0 * cfg.ui_scale);
                         ui.input_text("##party_name", &mut state.new_party_name).build();
                     }
                     ui.spacing();
@@ -233,9 +150,9 @@ pub fn render_new_character_setup(
                     if !state.parties.is_empty() {
                         ui.text("Existing parties:");
                         ui.spacing();
-                        let list_h = (h - 220.0).max(60.0);
+                        let list_h = (h - 220.0 * cfg.ui_scale).max(60.0 * cfg.ui_scale);
                         ui.child_window("##party_list")
-                            .size([w - 32.0, list_h])
+                            .size([w - 32.0 * cfg.ui_scale, list_h])
                             .build(|| {
                                 for (id, name) in &state.parties {
                                     let is_sel = state.party_choice == PartyChoice::Existing(id.clone());

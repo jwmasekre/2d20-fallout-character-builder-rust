@@ -1,52 +1,14 @@
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, character::Character, db::Db, screens::character_sheet::SheetState};
-
-pub struct LoadCharacterState {
-    pub characters: Vec<(String, String, String)>, // (id, name, player_name)
-    pub loaded: bool,
-    pub selected: Option<usize>,
-    pub error: Option<String>,
-    pub confirm_delete: Option<usize>,
-}
-
-impl LoadCharacterState {
-    pub fn new() -> Self {
-        Self {
-            characters: vec![],
-            loaded: false,
-            selected: None,
-            error: None,
-            confirm_delete: None,
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.characters = vec![];
-        self.loaded = false;
-        self.selected = None;
-        self.error = None;
-    }
-
-    pub fn load_list(&mut self, db: &Db) {
-        if self.loaded { return; }
-        let rows = db.block_on(async {
-            sqlx::query!(
-                r#"SELECT c.id, c.character_name, p.username
-                   FROM characters c
-                   JOIN players p ON p.id = c.player_id
-                   ORDER BY p.username, c.character_name"#
-            ).fetch_all(&db.pool).await
-        }).unwrap_or_default();
-
-        self.characters = rows.into_iter().map(|r| (
-            r.id.unwrap_or_default(),
-            r.character_name.unwrap_or_else(|| "(unnamed)".to_string()),
-            r.username.unwrap_or_else(|| "(unknown player)".to_string()),
-        )).collect();
-        self.loaded = true;
-    }
-}
+use fallout_2d20_core::{
+    character::Character,
+    db::Db,
+    states::{
+        LoadCharacterState,
+        SheetState
+    },
+    structs::{AppConfig, AppScreen}
+};
 
 pub fn render_load_character(
     ui: &Ui,
@@ -56,12 +18,13 @@ pub fn render_load_character(
     db: &Db,
     character: &mut Character,
     sheet_state: &mut SheetState,
+    cfg: &AppConfig,
 ) {
     state.load_list(db);
 
     let (win_w, win_h) = window.size();
-    let w = 480.0_f32;
-    let h = 360.0_f32;
+    let w = 480.0 * cfg.ui_scale;
+    let h = 360.0 * cfg.ui_scale;
 
     ui.window("##load_character")
         .title_bar(false)
@@ -80,16 +43,16 @@ pub fn render_load_character(
             if state.characters.is_empty() {
                 ui.text_disabled("No saved characters found.");
             } else {
-                let list_h = h - 120.0;
+                let list_h = h - 120.0 * cfg.ui_scale;
                 ui.child_window("##char_list")
-                    .size([w - 32.0, list_h])
+                    .size([w - 32.0 * cfg.ui_scale, list_h])
                     .build(|| {
                         for (i, (_, name, player)) in state.characters.iter().enumerate() {
                             let is_sel = state.selected == Some(i);
                             let label = format!("{} ({})", name, player);
                             if ui.selectable_config(&format!("{}##char_{}", label, i))
                                 .selected(is_sel)
-                                .size([w - 180.0, 0.0])
+                                .size([w - 180.0 * cfg.ui_scale, 0.0])
                                 .build()
                             {
                                 state.selected = Some(i);
@@ -118,8 +81,8 @@ pub fn render_load_character(
                 let id = id.clone();
                 let name = name.clone();
 
-                let pw = 340.0_f32;
-                let ph = 160.0_f32;
+                let pw = 340.0 * cfg.ui_scale;
+                let ph = 160.0 * cfg.ui_scale;
                 ui.window("##confirm_delete")
                     .title_bar(false)
                     .resizable(false)

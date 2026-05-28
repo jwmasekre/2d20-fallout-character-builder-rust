@@ -1,48 +1,23 @@
+use fallout_2d20_core::{
+    character::Character,
+    constants::{
+        SKILLS,
+        SPECIAL_LABELS
+    },
+    get_melee_str,
+    states::{
+        BackgroundState,
+        EquipmentState,
+        OriginState,
+        PerkState,
+        SkillState,
+        SpecialState
+    },
+    structs::{AppConfig, AppScreen}
+};
 use imgui::Ui;
 use sdl2::video::Window;
-use crate::{AppScreen, character::Character, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::{SKILLS, SkillState}, special_assignment::{SPECIAL_LABELS, SpecialState}}, theme::{render_text_wrapped, render_window}};
-
-pub fn get_staggered_bonus(val: i32) -> i32 {
-    match val {
-        7..9 => 1,
-        9..11 => 2,
-        11.. => 3,
-        _ => 0,
-    }
-}
-
-pub fn get_melee_str(character: &Character) -> String {
-    let mut melee_string_vec: Vec<String> = vec![format!("+{}CD", character.melee_mod.melee)];
-    if character.melee_mod.unarmed > 0 {
-        melee_string_vec.push(format!("+{}CD unarmed", character.melee_mod.melee + character.melee_mod.unarmed))
-    }
-    if character.melee_mod.sneak > 0 {
-        melee_string_vec.push(format!("+{}CD sneak", character.melee_mod.melee + character.melee_mod.sneak))
-    }
-    if character.melee_mod.unarmed > 0 && character.melee_mod.sneak > 0 {
-        melee_string_vec.push(format!("+{}CD unarmed sneak", character.melee_mod.melee + character.melee_mod.sneak + character.melee_mod.unarmed))
-    }
-    melee_string_vec.join(", ")
-}
-
-pub fn compute_stats(character: &mut Character) -> bool {
-    //carry weight
-    character.calculate_carry_weight();
-    //poison dr
-    character.calculate_poison_dr();
-    //base dr
-    character.calculate_base_dr();
-    //combat stats
-    character.calculate_combat_stats();
-    let is_nocturnal = character.has_perk(111);
-    //melee damage
-    character.melee_mod.calculate(character.clone());
-    //max luck points
-    character.calculate_lp();
-    //companion
-    character.set_companion();
-    is_nocturnal
-}
+use crate::{ theme::{render_text_wrapped, render_window}};
 
 pub fn render_stat_calculation(
     ui: &Ui,
@@ -55,13 +30,15 @@ pub fn render_stat_calculation(
     perk: &mut PerkState,
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
+    cfg: &AppConfig,
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen, origin, special, skill, perk, background, equipment, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##stat_calculation", "Calculated Stats", screen, origin, special, skill, perk, background, equipment, character, cfg)
         else { return 0.0 };
 
-    let nocturnal = compute_stats(character);
+    let nocturnal = character.compute_stats();
     let char_spec = character.special.special_block();
     let char_skills = character.skills.skill_block();
+    character.set_base_points();
 
     ui.text("STATS");
     ui.separator();
@@ -72,27 +49,29 @@ pub fn render_stat_calculation(
     if !skill.is_complete(character) {issues.push("!! Skills need attention !!")}
     if !issues.is_empty() {
         for issue in issues {
-            render_text_wrapped(false, true, ui, issue, 36.0, w - 36.0);
+            render_text_wrapped(false, true, ui, issue, 36.0 * cfg.ui_scale, w - 36.0 * cfg.ui_scale);
         }
         ui.spacing();
         ui.separator();
         ui.spacing();
     }
 
-    let list_h = h - 80.0;
+    let list_h = h - 80.0 * cfg.ui_scale;
     let Some(_child) = ui.child_window("##stats_scroll")
-        .size([w - 16.0, list_h])
+        .size([w - 16.0 * cfg.ui_scale, list_h])
         .begin()
     else { return h };
-    let d_col_w = (w - 24.0) * 0.5;
+    let d_col_w = (w - 24.0 * cfg.ui_scale) * 0.5;
+    let d_col_w_l = (w - 24.0 * cfg.ui_scale) * 0.5 + 50.0 * cfg.ui_scale;
+    let d_col_w_r = (w - 24.0 * cfg.ui_scale) * 0.5 - 50.0 * cfg.ui_scale;
 
     ui.text("Derived");
     ui.separator();
     ui.spacing();
 
     ui.columns(2, "##derived_cols", false);
-    ui.set_column_width(0, d_col_w);
-    ui.set_column_width(1, d_col_w);
+    ui.set_column_width(0, d_col_w_l);
+    ui.set_column_width(1, d_col_w_r);
 
     let base_dr = character.base_dr.clone();
     ui.text(format!("Max Carry Weight: {}", character.carry_wgt_max));
@@ -117,7 +96,7 @@ pub fn render_stat_calculation(
     }
     let melee_string = get_melee_str(character);
 
-    ui.text(format!("Melee Damage: {}", melee_string));
+    ui.text_wrapped(format!("Melee Damage: {}", melee_string));
 
     ui.spacing();
     ui.separator();
@@ -153,12 +132,12 @@ pub fn render_stat_calculation(
     let rows = ((active_skills.len() - 1) / 3) + 1;
 
     for i in 0..rows {
-        ui.text(format!("  {:20} {} {}  ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
+        ui.text(format!("  {:16} {} {}    ", active_skills[i].0, active_skills[i].1, active_skills[i].2));
         ui.same_line();
-        ui.text(format!("  {:20} {} {}  ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
+        ui.text(format!("  {:16} {} {}    ", active_skills[i+rows].0, active_skills[i+rows].1, active_skills[i+rows].2));
         if active_skills.len() > i + rows * 2 {
             ui.same_line();
-            ui.text(format!("  {:20} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
+            ui.text(format!("  {:16} {} {}", active_skills[i+rows*2].0, active_skills[i+rows*2].1, active_skills[i+rows*2].2));
         }
     }
 
@@ -179,11 +158,11 @@ pub fn render_stat_calculation(
         ui.text(&perk.name);
         if perk.desc.len() > 1 {
             for i in 0..(perk.ranks as usize) {
-                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0);
+                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), 0.0, d_col_w - 6.0 * cfg.ui_scale);
             }
             ui.spacing();
         } else {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), 0.0, d_col_w - 6.0);
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), 0.0, d_col_w - 6.0 * cfg.ui_scale);
             ui.spacing();
         }
     }
@@ -192,11 +171,11 @@ pub fn render_stat_calculation(
         ui.text(&perk.name);
         if perk.desc.len() > 1 {
             for i in 0..(perk.ranks as usize) {
-                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0, w - 6.0);
+                render_text_wrapped(false, true, ui, &format!("  {:2}  {}", i+1, perk.desc[i]), d_col_w + 6.0 * cfg.ui_scale, w - 6.0 * cfg.ui_scale);
             }
             ui.spacing();
         } else {
-            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), d_col_w + 6.0, w - 6.0);
+            render_text_wrapped(false, true, ui, &format!("  {:2}  {}", perk.ranks, perk.desc[0]), d_col_w + 6.0 * cfg.ui_scale, w - 6.0 * cfg.ui_scale);
             ui.spacing();
         }
         ui.spacing();

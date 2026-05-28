@@ -1,7 +1,14 @@
 use imgui::{ Ui, WindowToken };
 use sdl2::video::Window;
 
-use crate::{AppScreen, character::Character, crt::CrtEffect, screens::{background_select::{BackgroundState, EquipmentState}, origin_select::OriginState, perk_select::PerkState, skill_assignment::SkillState, special_assignment::SpecialState}};
+use fallout_2d20_core::{
+    character::Character, states::{BackgroundState, EquipmentState, OriginState, PerkState, SkillState, SpecialState}, structs::{AppConfig, AppScreen}
+};
+    
+use crate::{
+    crt::CrtEffect,
+    //log_on_change
+};
 
 pub struct Theme {
     pub name: &'static str,
@@ -194,10 +201,11 @@ pub fn render_window<'ui>(
     background: &mut BackgroundState,
     equipment: &mut EquipmentState,
     character: &mut Character,
+    cfg: &AppConfig,
 ) -> Option<(f32, f32, WindowToken<'ui>)> {
     let (win_w, win_h) = window.size();
-    let bar_h = BAR_HEIGHT;
-    let foot_h = FOOT_HEIGHT;
+    let bar_h = BAR_HEIGHT * cfg.ui_scale;
+    let foot_h = FOOT_HEIGHT * cfg.ui_scale;
     let content_h = win_h as f32 - bar_h - foot_h;
     let w = (win_w as f32 * 0.95).min(1200.0);
     let h = content_h * 0.95;
@@ -208,15 +216,15 @@ pub fn render_window<'ui>(
         .movable(false)
         .size([w, h], imgui::Condition::Always)
         .position(
-            [(win_w as f32 - w) * 0.5, BAR_HEIGHT + 22.0 + (content_h - h) * 0.5],
+            [(win_w as f32 - w) * 0.5, bar_h + 22.0 * cfg.ui_scale + (content_h - h) * 0.5],
             imgui::Condition::Always,
         )
         .begin()?;
 
-    let close_x = w - 40.0;
+    let close_x = w - 20.0 * cfg.ui_scale - 16.0;
     ui.text(title);
     ui.same_line_with_pos(close_x);
-    if ui.button(format!("X##{}_close", title)) {
+    if ui.button_with_size(format!("X##{}_close", title), [16.0 * cfg.ui_scale, 0.0]) {
         character.reset();
         origin.reset();
         special.reset();
@@ -264,4 +272,78 @@ pub fn render_text_wrapped(disabled: bool, colored: bool, ui: &Ui, text: &str, i
             ui.text_wrapped(trimmed);
         }
     }
+}
+
+pub fn center_wrapped_text(ui: &Ui, text: &str, wrap_start: f32, wrap_width: f32) {
+    let words: Vec<&str> = text.split(' ').collect();
+    let mut lines: Vec<String> = vec![];
+    let mut i = 0;
+    for word in words {
+        let line_w = if lines.len() > i { ui.calc_text_size(lines[i].clone())[0] } else { 0.0_f32 };
+        let word_w = ui.calc_text_size(" ".to_string() + word)[0];
+        if lines.len() == 0 {
+            lines.push(word.to_string());
+        }
+        else if line_w + word_w > wrap_width {
+            i += 1;
+            lines.push(word.to_string());
+        } else {
+            lines[i] = lines[i].to_string() + " " + word;
+        }
+    }
+    for line in lines {
+        let line_w = ui.calc_text_size(line.clone())[0];
+        ui.set_cursor_pos([wrap_start + (wrap_width - line_w) / 2.0, ui.cursor_pos()[1]]);
+        ui.text(line);
+    }
+}
+
+pub fn render_expandable_block(
+    ui: &Ui,
+    id: &str,
+    w: f32,
+    h: f32,
+    expanded: &mut bool,
+    title: &str,
+    contents: Option<&str>,
+    cfg: &AppConfig,
+) {
+    ui.child_window(id)
+        .size([w,h])
+        .border(true)
+        .build(|| {
+            ui.set_cursor_pos([8.0 * cfg.ui_scale, 8.0 * cfg.ui_scale]);
+
+            let arrow = if *expanded { "v" } else { ">" };
+            let header = format!("{} {}##hdr_{}", arrow, title, id);
+            let c1 = ui.push_style_color(
+                imgui::StyleColor::Button,
+                ui.style_color(imgui::StyleColor::ChildBg)
+            );
+            let c2 = ui.push_style_color(
+                imgui::StyleColor::ButtonHovered,
+                ui.style_color(imgui::StyleColor::FrameBgHovered)
+            );
+            let c3 = ui.push_style_color(
+                imgui::StyleColor::ButtonActive,
+                ui.style_color(imgui::StyleColor::FrameBgActive)
+            );
+            if ui.button_with_size(&header, [w - 16.0 * cfg.ui_scale, 28.0 * cfg.ui_scale]) {
+                *expanded = !*expanded;
+            }
+            drop(c1);
+            drop(c2);
+            drop(c3);
+
+            if *expanded {
+                ui.spacing();
+                ui.separator();
+                ui.spacing();
+
+                let desc = contents.unwrap_or("no description");
+                let text_w = w - 24.0 * cfg.ui_scale;
+                ui.set_next_item_width(text_w);
+                ui.text_wrapped(desc);
+            }
+        });
 }

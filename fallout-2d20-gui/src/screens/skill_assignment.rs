@@ -1,129 +1,25 @@
+use fallout_2d20_core::{
+    character::{
+        Character,
+        TagType,
+    },
+    constants::SKILLS,
+    db::Db,
+    states::{
+        BackgroundState,
+        EquipmentState,
+        OriginState,
+        PerkState,
+        SkillState,
+        SpecialState,
+    }, structs::AppConfig,
+};
 use imgui::Ui;
 use sdl2::video::Window;
 use crate::AppScreen;
-use crate::db::Db;
-use crate::character::{Character, TagType};
-use crate::screens::background_select::{BackgroundState, EquipmentState};
-use crate::screens::origin_select::OriginState;
-use crate::screens::perk_select::PerkState;
-use crate::screens::special_assignment::SpecialState;
 use crate::theme::{render_text_wrapped, render_window};
 //use crate::log_on_change;
 
-pub const SKILLS: [&str; 17] = [
-    "Athletics", "Barter", "Big Guns", "Energy Weapons", "Explosives",
-    "Lockpick", "Medicine", "Melee Weapons", "Pilot", "Repair",
-    "Science", "Small Guns", "Sneak", "Speech", "Survival",
-    "Throwing", "Unarmed",
-];
-
-#[derive(Debug)]
-pub struct SkillState {
-    pub extra_trait_options: Vec<usize>,
-    pub extra_tags: Vec<usize>,
-    //these are exclusively if the player picks both educated and good natured
-    pub x_extra_trait_options: Vec<usize>,
-    pub x_extra_tags: Vec<usize>,
-    pub extra_trait_count: i32,
-    pub forced_trait: bool,
-    pub assigned_points: i32,
-    pub available_points: i32,
-    pub max_assignable: i32,
-    pub total_points: i32,
-}
-
-impl SkillState {
-    pub fn new(character: Character) -> Self {
-        let total_points = character.total_skill();
-        let extra_trait_options = if character.has_any_trait(vec![1,24]) {
-            vec![3,9,10]
-        } else if character.has_any_trait(vec![5,11,21]) {
-            vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
-        } else if character.has_trait(2) {
-            vec![14]
-        } else if character.has_trait(12) {
-            vec![3,11]
-        } else if character.has_trait(13) {
-            vec![1,6,9,10,13]
-        } else { vec![] };
-        let x_extra_trait_options = if character.has_trait(5) && character.has_trait(13) {
-            vec![1,6,9,10,13]
-        } else {vec![]};
-        let extra_trait_count = if character.has_trait(5) && character.has_trait(13) { 3 } else if character.has_any_trait(vec![1, 2, 5, 11, 12, 21, 24]) { 1 } else if character.has_trait(13) { 2 } else { 0 };
-        let forced_trait = character.has_trait(2);
-        let assigned_points = character.total_skill_ranks();
-        let max_assignable = 9 + character.special.intelligence.value + character.level - 1;
-        let available_points = max_assignable - assigned_points;
-        Self {
-            extra_trait_options,
-            extra_tags: vec![],
-            x_extra_trait_options,
-            x_extra_tags: vec![],
-            extra_trait_count,
-            forced_trait,
-            assigned_points,
-            available_points,
-            max_assignable,
-            total_points,
-        }
-    }
-    pub fn reset(&mut self, character: &mut Character) {
-        self.total_points = character.total_skill();
-        self.extra_trait_options = if character.has_any_trait(vec![1,24]) {
-            vec![3,9,10]
-        } else if character.has_any_trait(vec![5,11,21]) {
-            vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
-        } else if character.has_trait(2) {
-            vec![14]
-        } else if character.has_trait(12) {
-            vec![3,11]
-        } else if character.has_trait(13) {
-            vec![1,6,9,10,13]
-        } else { vec![] };
-        self.x_extra_trait_options = if character.has_trait(5) && character.has_trait(13) {
-            vec![1,6,9,10,13]
-        } else {vec![]};
-        self.extra_trait_count = if character.has_trait(5) && character.has_trait(13) { 3 } else if character.has_any_trait(vec![1, 2, 5, 11, 12, 21, 24]) { 1 } else if character.has_trait(13) { 2 } else { 0 };
-        self.forced_trait = character.has_trait(2);
-        self.assigned_points = character.total_skill_ranks();
-        self.max_assignable = 9 + character.special.intelligence.value + character.level - 1;
-        self.available_points = self.max_assignable - self.assigned_points;
-        self.extra_tags = vec![];
-        self.x_extra_tags = vec![];
-        for skill in character.skills.mut_skill_block() {
-            if skill.tagged == TagType::Trait {skill.tagged = TagType::None}
-        }
-    }
-    pub fn update(&mut self, character: &Character) {
-        self.total_points = character.total_skill();
-        self.extra_trait_options = if character.has_any_trait(vec![1,24]) {
-            vec![3,9,10]
-        } else if character.has_any_trait(vec![5,11,21]) {
-            vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
-        } else if character.has_trait(2) {
-            vec![14]
-        } else if character.has_trait(12) {
-            vec![3,11]
-        } else if character.has_trait(13) {
-            vec![1,6,9,10,13]
-        } else { vec![] };
-        self.x_extra_trait_options = if character.has_trait(5) && character.has_trait(13) {
-            vec![1,6,9,10,13]
-        } else {vec![]};
-        self.extra_trait_count = if character.has_trait(5) && character.has_trait(13) { 3 } else if character.has_any_trait(vec![1, 2, 5, 11, 12, 21, 24]) { 1 } else if character.has_trait(13) { 2 } else { 0 };
-        if !(character.has_trait(5) && character.has_trait(13)) {
-            self.x_extra_tags = vec![];
-        }
-        self.forced_trait = character.has_trait(2);
-        self.assigned_points = character.total_skill_ranks();
-        self.max_assignable = 9 + character.special.intelligence.value + character.level - 1;
-        self.available_points = self.max_assignable - self.assigned_points;
-    }
-    pub fn is_complete(&self, character: &Character) -> bool {
-        let std_tag_count = character.skills.standard_tags();
-        self.available_points == 0 && (self.extra_tags.len() + self.x_extra_tags.len()) as i32 == self.extra_trait_count && std_tag_count == 3
-    }
-}
 
 pub fn render_skill_assignment(
     ui: &Ui,
@@ -137,8 +33,9 @@ pub fn render_skill_assignment(
     perk_state: &mut PerkState,
     background_state: &mut BackgroundState,
     equipment_state: &mut EquipmentState,
+    cfg: &AppConfig
 ) -> f32 {
-    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen, origin_state, special_state, state, perk_state, background_state, equipment_state, character)
+    let Some((w, h, _token)) = render_window(ui, window, "##skill_assignment", "Skill Assignment", screen, origin_state, special_state, state, perk_state, background_state, equipment_state, character, cfg)
         else { return 0.0 };
 
     ui.text("SKILLS");
@@ -168,7 +65,7 @@ pub fn render_skill_assignment(
     let x_trait = state.x_extra_trait_options.len() > 0;
     if x_trait {
         //ui.text_wrapped(format!("state: {:?}", state));
-        let x_col = 330.0_f32;
+        let x_col = 330.0 * cfg.ui_scale;
         ui.text(format!("Educated ({}/1)", state.extra_tags.len()));
         ui.same_line_with_pos(x_col);
         ui.text(format!("Good Natured ({}/2)", state.x_extra_tags.len()));
@@ -292,10 +189,10 @@ pub fn render_skill_assignment(
     if tags_traits != state.extra_trait_count {
         ui.text_disabled("Select extra tags to continue...");
     } else {
-        let col_ranks  = 175.0_f32;
-        let col_tag    = 270.0_f32;
-        let col_total  = 330.0_f32;
-        let col_max    = 400.0_f32;
+        let col_ranks  = 175.0 * cfg.ui_scale;
+        let col_tag    = 270.0 * cfg.ui_scale;
+        let col_total  = 330.0 * cfg.ui_scale;
+        let col_max    = 400.0 * cfg.ui_scale;
         //let col_debug  = 450.0_f32;
 
         ui.text_disabled("Skill");
